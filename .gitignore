@@ -1,0 +1,23 @@
+# Build output
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+
+# Visual Studio / Rider IDE
+.vs/
+*.user
+*.suo
+.idea/
+
+# Claude Code local settings (machine-specific; shared settings.json is tracked)
+.claude/settings.local.json
+
+# OS cruft
+.DS_Store
+Thumbs.db
+
+# Secrets / local config (don't commit AWS keys, connection strings, etc.)
+appsettings.*.local.json
+*.env
+.env
