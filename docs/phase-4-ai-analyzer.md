@@ -19,11 +19,16 @@ nice-to-have skills, seniority level, and a short summary.
    detail that matters: code the analyzer against `IChatClient`, and
    swapping between Ollama (local, free) and a hosted API (cloud,
    deployed) becomes a config change, not a rewrite.
-3. New endpoint: `POST /applications/{id}/analyze`
-   - Reads the stored `JobDescription` field.
-   - Prompts the model to return **JSON only**: matched skills list,
-     seniority level, 2-3 sentence summary.
-   - Parses the JSON, saves results to `AiExtractedSkills` on the record.
+3. New endpoint: `POST /applications/{id}/analyze` (and/or a GraphQL
+   `analyzeApplication` mutation — the app now exposes both surfaces).
+   - Reads the posting's `Description` field.
+   - Prompts the model to return **JSON only**: skills list, seniority
+     level, 2-3 sentence summary.
+   - Parses the JSON and saves it into the Phase-2 relational model:
+     the summary/seniority/model go into an `ai_analyses` row (1:1 with the
+     posting), and each extracted skill becomes a `posting_skills` row with
+     `Source = AiExtracted` (reusing the shared `skills` table). There is no
+     flat `AiExtractedSkills` list any more — that was the old Phase-1 shape.
 4. For the deployed (Lambda) version, swap the `IChatClient` to point at
    a cheap hosted model instead of Ollama, since Lambda can't run a
    persistent local model server.
