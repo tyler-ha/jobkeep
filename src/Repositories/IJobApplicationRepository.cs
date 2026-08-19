@@ -1,6 +1,6 @@
-using JobTracker.Models;
+using Jobkeep.Models;
 
-namespace JobTracker.Repositories;
+namespace Jobkeep.Repositories;
 
 // Phase 1 implements this in memory. Phase 2 swaps in a DynamoDB
 // implementation behind the same interface — the API endpoints

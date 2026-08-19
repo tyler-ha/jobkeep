@@ -1,4 +1,4 @@
-namespace JobTracker.Models;
+namespace Jobkeep.Models;
 
 // This shape mirrors what we'll later store in DynamoDB, so moving
 // to AWS in Phase 2 won't require rethinking the data model.

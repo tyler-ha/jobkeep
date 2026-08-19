@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
-using JobTracker.Models;
+using Jobkeep.Models;
 
-namespace JobTracker.Repositories;
+namespace Jobkeep.Repositories;
 
 // Zero-cost, zero-setup storage for local development.
 // Data resets every time you stop the app — that's expected for Phase 1.

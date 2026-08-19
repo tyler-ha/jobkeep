@@ -1,5 +1,5 @@
-using JobTracker.Models;
-using JobTracker.Repositories;
+using Jobkeep.Models;
+using Jobkeep.Repositories;
 
 var builder = WebApplication.CreateBuilder(args);
 

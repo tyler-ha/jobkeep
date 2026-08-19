@@ -1,4 +1,4 @@
-# Job Application Tracker
+# Jobkeep
 
 A personal job-application tracker with AI-powered job description
 analysis and ATS compatibility checking. Built as a portfolio project:
@@ -46,7 +46,7 @@ curl http://localhost:5080/applications
 ## Project structure
 
 ```
-JobTracker/
+Jobkeep/
 ├── CLAUDE.md              # Context file for Claude Code
 ├── README.md              # This file
 ├── docs/                  # One doc per build phase
@@ -57,7 +57,7 @@ JobTracker/
 │   ├── phase-5-ats-check.md
 │   └── phase-6-frontend.md
 └── src/                   # The actual .NET project
-    ├── JobTracker.csproj
+    ├── Jobkeep.csproj
     ├── Program.cs
     ├── Models/
     ├── Repositories/
