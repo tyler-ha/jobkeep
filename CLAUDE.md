@@ -15,7 +15,11 @@ interview stories — see "STAR log" in the root README.
 1. **Cost stays near-zero.** Every AWS/AI choice should default to free
    tier or on-demand/serverless pricing. Never suggest always-on
    infrastructure (e.g. a provisioned EC2 instance or provisioned-capacity
-   DynamoDB) without flagging the cost tradeoff explicitly.
+   DynamoDB) without flagging the cost tradeoff explicitly. Note: storage is
+   now PostgreSQL (see Architecture), which is *not* serverless — the deployed
+   DB runs on AWS RDS **free-tier** (free for 12 months, then always-on and
+   billable). Local dev uses Postgres in Docker (free). This tradeoff was made
+   deliberately for a cleaner relational model; keep flagging it.
 2. **Each phase should end in something runnable.** The person has a
    history of abandoning projects when scope gets fuzzy. Don't let a
    phase sprawl — if a change is getting large, suggest splitting it.
@@ -25,20 +29,28 @@ interview stories — see "STAR log" in the root README.
    especially around design decisions (interfaces, AWS service choices,
    AI provider abstractions).
 4. **Local-first development.** Prefer developing against local/free
-   equivalents (DynamoDB Local, Ollama) before touching real AWS or paid
+   equivalents (Postgres in Docker, Ollama) before touching real AWS or paid
    APIs, matching the pattern already established in Phases 1-2.
 
 ## Architecture
 
 - **Backend**: ASP.NET Core 8 minimal API (`src/Program.cs`).
-- **Storage**: behind `IJobApplicationRepository` — currently in-memory
-  (Phase 1), DynamoDB planned (Phase 2). Never bypass this interface;
-  new storage backends implement it.
+- **API surfaces**: REST (minimal-API endpoints) **and** GraphQL
+  (HotChocolate, `src/GraphQL/`, served at `/graphql`). Both sit on the same
+  repository — GraphQL didn't replace REST. Added in Phase 2b.
+- **Storage**: **PostgreSQL via EF Core** (Phase 2), behind
+  `IJobApplicationRepository`. `PostgresJobApplicationRepository` is the real
+  implementation; `InMemoryJobApplicationRepository` is kept as a no-DB dev
+  fallback. Never bypass this interface; new storage backends implement it.
+  DB schema lives in `src/Data/AppDbContext.cs` (+ EF migrations in
+  `src/Migrations/`). NOTE: an earlier draft of Phase 2 used DynamoDB; that
+  was dropped in favour of a normalized relational model — see the Phase 2 doc.
 - **AI calls**: planned to go behind `Microsoft.Extensions.AI`'s
   `IChatClient` abstraction (Phase 4), so Ollama (local, free) and a
   hosted API (deployed) are swappable via config, not code changes.
-- **Deployment target**: AWS Lambda + API Gateway (serverless, pay-per-use
-  only — see Phase 3 doc).
+- **Deployment target**: AWS Lambda + API Gateway for the app (serverless,
+  pay-per-use — see Phase 3 doc), with PostgreSQL on AWS RDS free-tier. Both
+  the REST and GraphQL endpoints ride the same Lambda.
 
 ## Where things are
 
