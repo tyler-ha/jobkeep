@@ -18,6 +18,10 @@ while building demonstrable C# + AWS + AI integration experience.
 |---|---|---|
 | 1 | Local API, in-memory storage | Done — see `src/` |
 | 2 | Relational model on PostgreSQL + GraphQL | Done — local via Postgres in Docker |
+| 2.1 | Complete the write surface (skills + requirements CRUD) | Not started |
+| 2.2 | Query, filter, sort & page the list | Not started |
+| 2.3 | Analytics endpoints (skill demand, status funnel) | Not started |
+| 2.4 | Enforce the application status lifecycle | Not started |
 | 3 | Deploy to AWS Lambda + API Gateway (+ RDS) | Not started |
 | 4 | AI job-description analyzer | Not started |
 | 5 | ATS compatibility check | Not started |
@@ -70,10 +74,15 @@ Jobkeep/
 ├── docs/                  # One doc per build phase
 │   ├── phase-1-local-api.md
 │   ├── phase-2-postgres.md
+│   ├── phase-2.1-write-surface.md  # sub-phases: finish the model surface
+│   ├── phase-2.2-list-queries.md
+│   ├── phase-2.3-analytics.md
+│   ├── phase-2.4-status-rules.md
 │   ├── phase-3-aws-deploy.md
 │   ├── phase-4-ai-analyzer.md
 │   ├── phase-5-ats-check.md
-│   └── phase-6-frontend.md
+│   ├── phase-6-frontend.md
+│   └── backlog.md          # considered-but-not-committed feature candidates
 └── src/                   # The actual .NET project
     ├── Jobkeep.csproj
     ├── Program.cs                   # REST endpoints + GraphQL wiring
