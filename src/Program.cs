@@ -1,7 +1,7 @@
 using System.Text.Json.Serialization;
 using Jobkeep.Data;
+using Jobkeep.Endpoints;
 using Jobkeep.GraphQL;
-using Jobkeep.Models;
 using Jobkeep.Repositories;
 using Microsoft.EntityFrameworkCore;
 
@@ -61,58 +61,8 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-// GET /applications — list everything, newest first
-app.MapGet("/applications", async (IJobApplicationRepository repo) =>
-{
-    var all = await repo.GetAllAsync();
-    return Results.Ok(all);
-});
-
-// GET /applications/{id} — fetch one
-app.MapGet("/applications/{id:guid}", async (Guid id, IJobApplicationRepository repo) =>
-{
-    var application = await repo.GetByIdAsync(id);
-    return application is not null ? Results.Ok(application) : Results.NotFound();
-});
-
-// POST /applications — create a new entry (company + posting are created/reused
-// by the repository; skills/requirements are added later)
-app.MapPost("/applications", async (CreateJobApplicationRequest request, IJobApplicationRepository repo) =>
-{
-    if (string.IsNullOrWhiteSpace(request.Company) || string.IsNullOrWhiteSpace(request.Title))
-        return Results.BadRequest("Company and Title are required.");
-
-    var application = new JobApplication
-    {
-        Notes = request.Notes,
-        ResumeText = request.ResumeText,
-        Posting = new JobPosting
-        {
-            Title = request.Title,
-            Location = request.Location,
-            Description = request.Description,
-            SourceUrl = request.SourceUrl,
-            Company = new Company { Name = request.Company }
-        }
-    };
-
-    var created = await repo.CreateAsync(application);
-    return Results.Created($"/applications/{created.Id}", created);
-});
-
-// PATCH /applications/{id} — update status, notes, posting fields, etc.
-app.MapPatch("/applications/{id:guid}", async (Guid id, UpdateJobApplicationRequest request, IJobApplicationRepository repo) =>
-{
-    var updated = await repo.UpdateAsync(id, request);
-    return updated is not null ? Results.Ok(updated) : Results.NotFound();
-});
-
-// DELETE /applications/{id}
-app.MapDelete("/applications/{id:guid}", async (Guid id, IJobApplicationRepository repo) =>
-{
-    var deleted = await repo.DeleteAsync(id);
-    return deleted ? Results.NoContent() : Results.NotFound();
-});
+// REST routes for /applications live in Endpoints/ApplicationEndpoints.cs.
+app.MapApplicationEndpoints();
 
 // Serves POST /graphql for queries + the Nitro (Banana Cake Pop) IDE at GET /graphql.
 app.MapGraphQL();
