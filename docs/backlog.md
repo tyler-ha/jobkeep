@@ -45,6 +45,20 @@ Ordered roughly cheapest/most-Phase-2-shaped first.
 | **Audit / activity history** | "What changed and when" — a change log per entity | Medium-High — new table + write-path change on *every* mutation | Own phase | Touches everything; don't fold into an unrelated phase. `CreatedAtUtc`/`UpdatedAtUtc` exist but aren't a log. |
 | **Authentication / multi-user** | Scope all data per user; turn the tool into a real product | High — architectural, every query gets user-scoped | Own phase, tied to deploy (Phase 3+) | Deliberately *not* a Phase 2 item — would violate the small-phase priority. |
 
+## Convention / industry-standard adoptions (committed intent, unscheduled)
+
+Unlike the feature candidates above, these are **not** "maybe" — they're
+standing decisions to bring the codebase in line with common industry practice,
+deliberately deferred so they don't disrupt the current phase's runnable scope.
+The motivation is partly the STAR log: being able to speak to *why* a mainstream
+pattern was adopted (and the tradeoff vs. what was there before) is stronger
+interview material than a bespoke choice. Pull each into a numbered phase when
+its timing is right; when we do, **we apply it fully**, not half-way.
+
+| Adoption | From → To | Why deferred | STAR angle |
+|---|---|---|---|
+| **MVC Controllers** | Minimal-API endpoint files (`Endpoints/*.cs`) → attribute-routed controllers (`[HttpGet]`/`[HttpPost]`, `[ApiController]`, `MapControllers()`) | Current minimal-API + `Endpoints/` split already keeps `Program.cs` clean; switching mid-Phase-2 buys no feature and would churn working code. Do it as its own focused refactor. | "Chose the framework's convention-based routing that most teams use, and can explain the minimal-API vs. controller tradeoff — familiarity/auto-discovery vs. leanness." Supersedes the current CLAUDE.md "no controllers" convention **when applied** — update CLAUDE.md as part of that refactor. |
+
 ## Explicitly NOT backlog (already owned or out of character)
 
 - **Kanban board / drag-and-drop** — frontend, belongs to **Phase 6** (the data
