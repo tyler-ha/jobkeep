@@ -2,6 +2,10 @@
 
 **Status: Not started**
 
+> **Architecture note (2026-08-25):** build this as vertical slices under
+> `src/Modules/`, per `docs/architecture.md`. Do **not** add methods to
+> `IJobApplicationRepository` — it is retiring, not growing.
+
 ## Goal
 
 Replace the single "all applications, newest first" read with a real query

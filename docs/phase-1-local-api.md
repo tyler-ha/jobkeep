@@ -42,4 +42,6 @@ Listens on `http://localhost:5080`. See root `README.md` for `curl` examples.
 
 ## Next
 
-Phase 2 — swap storage to DynamoDB, developed locally first for free.
+Phase 2 — swap storage to PostgreSQL via EF Core, developed locally first
+for free (Postgres in Docker). *This originally read "swap storage to
+DynamoDB"; the relational model won out — see `phase-2-postgres.md`.*

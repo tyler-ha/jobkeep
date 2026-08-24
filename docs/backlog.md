@@ -10,19 +10,35 @@ grow.
 when we actually decide to build it. Committed work lives in `phase-N-*.md` and
 the README status table — not here.
 
-Last reviewed: 2026-08-21.
+Last reviewed: 2026-08-25.
 
 ## How this was sourced
 
 From a market comparison against common job trackers (Huntr, Teal) and generic
-web-app conventions. Two attributions from that analysis are **overconfident and
-should be web-verified before being repeated in an interview or a doc**:
-- "Teal does skill-demand analytics" — Teal's keyword feature is really
-  resume-vs-one-job matching (closer to our Phase 5), *not* a
-  "top skills across all tracked jobs" rollup. Treat that rollup as **our
-  differentiator**, not a feature we're copying.
-- "Simplify as a tracker benchmark" — Simplify is primarily an autofill/apply
-  tool with a tracker attached, not a tracker-first product. Don't lean on it.
+web-app conventions. This section previously flagged two attributions as
+**overconfident, pending web verification before being repeated in an interview
+or a doc**. They were verified on 2026-08-25 — the caution was correct on both
+counts, and both are now safe to state:
+
+- **Teal does *not* do skill-demand analytics.** Verified. Teal is
+  resume-first with a tracker attached, and its keyword feature is the
+  **Job Matcher**: link one resume to one saved job, get a Match Score plus
+  matched / missing / suggested keywords that update live as you edit. That is
+  resume-vs-**one**-job — our **Phase 5**, not our Phase 2.3. "Top in-demand
+  skills across **all** tracked postings" is a different question that neither
+  Teal nor Huntr answers. It stays **our differentiator**.
+- **Don't use Simplify as a tracker benchmark.** Still correct — it's an
+  autofill/apply tool with a tracker attached, not a tracker-first product.
+  **Huntr is the right comparable**: tracker-first, with a Kanban board,
+  contact/recruiter CRM, Chrome-extension autofill for Workday/Greenhouse, and
+  a map view. The CRM and Kanban rows below map directly onto its feature set,
+  which is confirmation those rows are prioritised sensibly.
+
+One more thing worth not overclaiming: **neither product exposes a public API
+or GraphQL.** Our dual REST+GraphQL surface is a portfolio decision, not an
+industry norm — say it that way.
+
+Full market context and sources: `docs/architecture.md` section 6.
 
 ## Already covered elsewhere (not backlog — here for cross-reference)
 
@@ -57,7 +73,33 @@ its timing is right; when we do, **we apply it fully**, not half-way.
 
 | Adoption | From → To | Why deferred | STAR angle |
 |---|---|---|---|
-| **MVC Controllers** | Minimal-API endpoint files (`Endpoints/*.cs`) → attribute-routed controllers (`[HttpGet]`/`[HttpPost]`, `[ApiController]`, `MapControllers()`) | Current minimal-API + `Endpoints/` split already keeps `Program.cs` clean; switching mid-Phase-2 buys no feature and would churn working code. Do it as its own focused refactor. | "Chose the framework's convention-based routing that most teams use, and can explain the minimal-API vs. controller tradeoff — familiarity/auto-discovery vs. leanness." Supersedes the current CLAUDE.md "no controllers" convention **when applied** — update CLAUDE.md as part of that refactor. |
+| **Automated tests** | No test project → xUnit + Testcontainers (real Postgres in Docker) | Not deferred for a good reason — this is simply the largest gap in the project. **Should be scheduled as its own phase, ahead of further architecture work.** Named in essentially every Melbourne .NET ad reviewed. | "Tested the EF mapping and find-or-create dedup against a real Postgres in a container, because a fake repository would have passed while the actual SQL was wrong — and that dedup is the feature the whole storage choice rests on." |
+| **CI/CD** | Manual local build → GitHub Actions (build + test on push) | Depends on tests existing to be worth much. Pair it with the testing phase. Free for public repos. | "Set up the pipeline early so a broken build was visible immediately rather than discovered at deploy time." |
+| **Response DTOs** | Endpoints/resolvers return EF entities → explicit response records | Cheap and worth folding into Phase 2.1/2.2 rather than doing standalone. Removes the `ReferenceHandler.IgnoreCycles` band-aid at the same time. | "The serializer needed a cycle-handling flag, which was the clue that I was leaking my database schema out as my API contract." |
+| **docker-compose** | Manual `docker run` in the README → one `compose.yaml` | Trivial; slot into any phase. Docker appears on nearly every ad. | Minor on its own, but it makes the quick-start a single command. |
+| ~~**MVC Controllers**~~ | ~~Minimal-API endpoint files → attribute-routed controllers~~ | **Proposed for retirement (2026-08-25)** — see below. | — |
+
+### On the MVC controllers adoption
+
+This row was committed on the reasoning that attribute-routed controllers are
+"the convention most teams use". That reasoning no longer holds up:
+
+- Controllers organise code by **technical layer** — a controller class
+  collects every action for a resource. That cuts directly across vertical
+  slices, where one file owns one use case end to end. Adopting both means
+  fighting one with the other.
+- The premise is weaker than it looked. Minimal APIs are not the niche option
+  in .NET 8+; grouped minimal-API endpoints are thoroughly mainstream, and the
+  `Endpoints/` split already demonstrates route organisation.
+
+**Recommendation: retire this adoption.** It's flagged rather than deleted
+because it was a deliberate commitment — see decision 7 in
+`docs/architecture.md`, status *Proposed*. Confirm or overturn it there.
+
+The STAR angle survives either way, and is arguably better as a reversal:
+*"I committed to adopting controllers because they were the familiar
+convention, then dropped it when I picked a slice-based structure they'd have
+worked against — and I can explain the tradeoff in both directions."*
 
 ## Explicitly NOT backlog (already owned or out of character)
 

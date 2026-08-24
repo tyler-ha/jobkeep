@@ -22,6 +22,7 @@ while building demonstrable C# + AWS + AI integration experience.
 | 2.2 | Query, filter, sort & page the list | Not started |
 | 2.3 | Analytics endpoints (skill demand, status funnel) | Not started |
 | 2.4 | Enforce the application status lifecycle | Not started |
+| 2.5 | Upgrade to .NET 10 (LTS) — .NET 8 EOL 10 Nov 2026 | Not started |
 | 3 | Deploy to AWS Lambda + API Gateway (+ RDS) | Not started |
 | 4 | AI job-description analyzer | Not started |
 | 5 | ATS compatibility check | Not started |
@@ -29,6 +30,13 @@ while building demonstrable C# + AWS + AI integration experience.
 
 Full detail for each phase, including cost notes and interview talking
 points, is in `docs/`.
+
+**How the code is shaped and why — plus the decision record, the gap
+register, and the verified market comparison — is in
+[`docs/architecture.md`](docs/architecture.md).** Read that before making
+structural changes. In short: a modular monolith with vertical slices, one
+deployable, module boundaries drawn now so services can be extracted later
+if a real trigger appears.
 
 ## Quick start (Phase 2, current state)
 
@@ -72,12 +80,14 @@ Jobkeep/
 ├── CLAUDE.md              # Context file for Claude Code
 ├── README.md              # This file
 ├── docs/                  # One doc per build phase
+│   ├── architecture.md     # HOW the code is shaped + decision record
 │   ├── phase-1-local-api.md
 │   ├── phase-2-postgres.md
 │   ├── phase-2.1-write-surface.md  # sub-phases: finish the model surface
 │   ├── phase-2.2-list-queries.md
 │   ├── phase-2.3-analytics.md
 │   ├── phase-2.4-status-rules.md
+│   ├── phase-2.5-dotnet10-upgrade.md
 │   ├── phase-3-aws-deploy.md
 │   ├── phase-4-ai-analyzer.md
 │   ├── phase-5-ats-check.md
@@ -85,7 +95,8 @@ Jobkeep/
 │   └── backlog.md          # considered-but-not-committed feature candidates
 └── src/                   # The actual .NET project
     ├── Jobkeep.csproj
-    ├── Program.cs                   # REST endpoints + GraphQL wiring
+    ├── Program.cs                   # wiring only: DI, middleware, Map* calls
+    ├── Endpoints/                   # REST routes (minimal API, grouped per resource)
     ├── appsettings.json             # empty Postgres conn (set in deploy)
     ├── appsettings.Development.json # points at local Postgres
     ├── Models/                      # relational domain model + enums + DTOs

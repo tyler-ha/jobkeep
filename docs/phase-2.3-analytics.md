@@ -2,6 +2,10 @@
 
 **Status: Not started**
 
+> **Architecture note (2026-08-25):** build this as vertical slices under
+> `src/Modules/`, per `docs/architecture.md`. Do **not** add methods to
+> `IJobApplicationRepository` — it is retiring, not growing.
+
 ## Goal
 
 Expose the analytics the relational model was *chosen for* via the API:
@@ -24,11 +28,17 @@ this sub-phase turns the phase's headline justification into an actual feature.
 
 - Result DTOs: `SkillDemand { Name, Category?, Count }`,
   `StatusCount { Status, Count }`, (optional) `CompanyRollup { Name, Count }`.
-- New repo methods returning aggregates computed **in the database** (EF
-  `GroupBy` → SQL `GROUP BY`, not in-memory over a full table scan):
-  - `GetSkillDemandAsync(int top = 20)`
-  - `GetStatusFunnelAsync()`
-  - (optional) `GetCompanyRollupAsync()`
+- One slice per query under `src/Modules/Analytics/`, each computing its
+  aggregate **in the database** (EF `GroupBy` → SQL `GROUP BY`, not in-memory
+  over a full table scan):
+  - `SkillDemand.cs` (top N, default 20)
+  - `StatusFunnel.cs`
+  - (optional) `CompanyRollup.cs`
+
+  Analytics is a **read-only** module: it reads `skills` and `posting_skills`
+  and owns no tables of its own. Handlers take `AppDbContext` directly — this
+  supersedes the earlier plan to add `GetSkillDemandAsync` /
+  `GetStatusFunnelAsync` to `IJobApplicationRepository`.
 - REST: `GET /stats/skill-demand`, `GET /stats/funnel`,
   (optional) `GET /stats/companies`.
 - GraphQL: query fields `skillDemand`, `statusFunnel`, (optional) `companyRollup`.
