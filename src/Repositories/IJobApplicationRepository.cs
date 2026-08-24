@@ -1,6 +1,6 @@
-using JobTracker.Models;
+using Jobkeep.Models;
 
-namespace JobTracker.Repositories;
+namespace Jobkeep.Repositories;
 
 // Phase 1 implements this in memory. Phase 2 swaps in a DynamoDB
 // implementation behind the same interface — the API endpoints
@@ -12,4 +12,9 @@ public interface IJobApplicationRepository
     Task<JobApplication> CreateAsync(JobApplication application);
     Task<JobApplication?> UpdateAsync(Guid id, UpdateJobApplicationRequest update);
     Task<bool> DeleteAsync(Guid id);
+
+    // Attaches a skill to an application's posting, reusing the shared Skill row
+    // when one already exists (find-or-create by name). Returns the updated
+    // application, or null if the application id isn't found.
+    Task<JobApplication?> AddSkillToPostingAsync(Guid applicationId, string skillName, string? category, bool isRequired);
 }
