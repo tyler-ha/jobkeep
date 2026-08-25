@@ -1,0 +1,125 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 680" width="980" height="680" role="img" aria-labelledby="t d">
+  <title id="t">JobKeep architecture — one deployable, two API surfaces, one data layer</title>
+  <desc id="d">HTTP requests arrive at two API surfaces, REST minimal-API endpoints and a HotChocolate GraphQL endpoint. Both surfaces sit on the same data layer, so a rule cannot be enforced differently on one than the other. Today they reach storage through IJobApplicationRepository and its Postgres and in-memory implementations; that path is retiring. New work goes into vertical slices under Modules, one file per use case, which use AppDbContext directly. Both paths converge on AppDbContext and a single PostgreSQL database.</desc>
+
+  <rect x="0" y="0" width="980" height="680" fill="#FBFCFB"/>
+
+  <defs>
+    <marker id="an" viewBox="0 0 10 8" refX="9.5" refY="4" markerWidth="8" markerHeight="7" orient="auto">
+      <polygon points="0,0 10,4 0,8" fill="#0E5F58"/>
+    </marker>
+    <marker id="am" viewBox="0 0 10 8" refX="9.5" refY="4" markerWidth="8" markerHeight="7" orient="auto">
+      <polygon points="0,0 10,4 0,8" fill="#8A9793"/>
+    </marker>
+    <marker id="ai" viewBox="0 0 10 8" refX="9.5" refY="4" markerWidth="8" markerHeight="7" orient="auto">
+      <polygon points="0,0 10,4 0,8" fill="#16211F"/>
+    </marker>
+  </defs>
+
+  <g font-family="ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace">
+
+    <!-- ============ HTTP entry ============ -->
+    <rect x="420" y="28" width="140" height="34" rx="17" fill="#FFFFFF" stroke="#C9D2CE"/>
+    <text x="490" y="50" font-size="12" fill="#16211F" text-anchor="middle">HTTP</text>
+
+    <path d="M490,62 V86 H310 V108" fill="none" stroke="#16211F" stroke-width="1.4" marker-end="url(#ai)"/>
+    <path d="M490,62 V86 H670 V108" fill="none" stroke="#16211F" stroke-width="1.4" marker-end="url(#ai)"/>
+
+    <!-- ============ surfaces ============ -->
+    <rect x="180" y="108" width="260" height="64" rx="3" fill="#FFFFFF"/>
+    <rect x="180" y="108" width="260" height="24" fill="#E8EEEB"/>
+    <rect x="180" y="108" width="260" height="64" rx="3" fill="none" stroke="#C9D2CE"/>
+    <text x="310" y="125" font-size="11" font-weight="600" fill="#16211F" text-anchor="middle">REST · minimal API</text>
+    <text x="310" y="147" font-size="10.5" fill="#16211F" text-anchor="middle">Endpoints/ApplicationEndpoints.cs</text>
+    <text x="310" y="163" font-size="10" fill="#5B6C68" text-anchor="middle">MapGroup "/applications"</text>
+
+    <rect x="540" y="108" width="260" height="64" rx="3" fill="#FFFFFF"/>
+    <rect x="540" y="108" width="260" height="24" fill="#E8EEEB"/>
+    <rect x="540" y="108" width="260" height="64" rx="3" fill="none" stroke="#C9D2CE"/>
+    <text x="670" y="125" font-size="11" font-weight="600" fill="#16211F" text-anchor="middle">GraphQL · HotChocolate</text>
+    <text x="670" y="147" font-size="10.5" fill="#16211F" text-anchor="middle">GraphQL/Query.cs · Mutation.cs</text>
+    <text x="670" y="163" font-size="10" fill="#5B6C68" text-anchor="middle">POST /graphql</text>
+
+    <!-- ============ shared bus: one data layer under both ============ -->
+    <path d="M310,172 V205" fill="none" stroke="#16211F" stroke-width="1.4"/>
+    <path d="M670,172 V205" fill="none" stroke="#16211F" stroke-width="1.4"/>
+    <line x1="310" y1="205" x2="670" y2="205" stroke="#16211F" stroke-width="1.4"/>
+    <text x="490" y="198" font-size="10" fill="#5B6C68" text-anchor="middle">one data layer — neither surface can enforce a different rule</text>
+
+    <path d="M490,205 V232 H250 V262" fill="none" stroke="#8A9793" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#am)"/>
+    <path d="M490,205 V232 H730 V262" fill="none" stroke="#0E5F58" stroke-width="1.6" marker-end="url(#an)"/>
+
+    <!-- ============ lane labels ============ -->
+    <text x="250" y="252" font-size="10" font-weight="600" fill="#8A9793" text-anchor="middle" letter-spacing="0.08em">TODAY · RETIRING</text>
+    <text x="730" y="252" font-size="10" font-weight="600" fill="#0E5F58" text-anchor="middle" letter-spacing="0.08em">NEW WORK · TARGET SHAPE</text>
+
+    <!-- ============ legacy lane ============ -->
+    <rect x="110" y="262" width="280" height="52" rx="3" fill="#FFFFFF"/>
+    <rect x="110" y="262" width="280" height="52" rx="3" fill="none" stroke="#8A9793" stroke-dasharray="5 4"/>
+    <text x="250" y="283" font-size="11.5" fill="#5B6C68" text-anchor="middle">IJobApplicationRepository</text>
+    <text x="250" y="301" font-size="9.5" fill="#8A9793" text-anchor="middle">retiring — do not add methods</text>
+
+    <path d="M250,314 V344" fill="none" stroke="#8A9793" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#am)"/>
+
+    <rect x="110" y="344" width="280" height="42" rx="3" fill="#FFFFFF"/>
+    <rect x="110" y="344" width="280" height="42" rx="3" fill="none" stroke="#8A9793" stroke-dasharray="5 4"/>
+    <text x="250" y="362" font-size="10.5" fill="#5B6C68" text-anchor="middle">PostgresJobApplicationRepository</text>
+    <text x="250" y="377" font-size="9.5" fill="#8A9793" text-anchor="middle">EF Core · AsSplitQuery</text>
+
+    <rect x="110" y="396" width="280" height="42" rx="3" fill="#FFFFFF"/>
+    <rect x="110" y="396" width="280" height="42" rx="3" fill="none" stroke="#8A9793" stroke-dasharray="5 4"/>
+    <text x="250" y="414" font-size="10.5" fill="#5B6C68" text-anchor="middle">InMemoryJobApplicationRepository</text>
+    <text x="250" y="429" font-size="9.5" fill="#8A9793" text-anchor="middle">no-DB fallback</text>
+
+    <!-- ============ target lane ============ -->
+    <rect x="590" y="262" width="280" height="52" rx="3" fill="#FFFFFF"/>
+    <rect x="590" y="262" width="280" height="52" rx="3" fill="none" stroke="#0E5F58"/>
+    <text x="730" y="283" font-size="11" fill="#16211F" text-anchor="middle">Modules/&lt;Module&gt;/&lt;UseCase&gt;.cs</text>
+    <text x="730" y="301" font-size="9.5" fill="#0E5F58" text-anchor="middle">request + handler + response, one file</text>
+
+    <path d="M730,314 V344" fill="none" stroke="#0E5F58" stroke-width="1.6" marker-end="url(#an)"/>
+
+    <rect x="590" y="344" width="280" height="94" rx="3" fill="#FFFFFF"/>
+    <rect x="590" y="344" width="280" height="94" rx="3" fill="none" stroke="#0E5F58"/>
+    <text x="606" y="362" font-size="10.5" fill="#16211F">Applications</text>
+    <text x="854" y="362" font-size="9.5" fill="#5B6C68" text-anchor="end">applications · postings · companies</text>
+    <line x1="606" y1="370" x2="854" y2="370" stroke="#E8EEEB"/>
+    <text x="606" y="385" font-size="10.5" fill="#16211F">Analytics</text>
+    <text x="854" y="385" font-size="9.5" fill="#5B6C68" text-anchor="end">read-only · aggregates in SQL</text>
+    <line x1="606" y1="393" x2="854" y2="393" stroke="#E8EEEB"/>
+    <text x="606" y="408" font-size="10.5" fill="#16211F">Ai</text>
+    <text x="854" y="408" font-size="9.5" fill="#5B6C68" text-anchor="end">ai_analyses · phase 4</text>
+    <line x1="606" y1="416" x2="854" y2="416" stroke="#E8EEEB"/>
+    <text x="606" y="431" font-size="10.5" fill="#16211F">Ats</text>
+    <text x="854" y="431" font-size="9.5" fill="#5B6C68" text-anchor="end">ats_results · phase 5</text>
+
+    <text x="730" y="456" font-size="9.5" fill="#8A9793" text-anchor="middle">a module never reads another module's tables</text>
+
+    <!-- ============ converge on AppDbContext ============ -->
+    <path d="M250,438 V478 H490 V500" fill="none" stroke="#8A9793" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#am)"/>
+    <path d="M730,438 V478 H490 V500" fill="none" stroke="#0E5F58" stroke-width="1.6" marker-end="url(#an)"/>
+
+    <rect x="340" y="500" width="300" height="56" rx="3" fill="#FFFFFF"/>
+    <rect x="340" y="500" width="300" height="22" fill="#E8EEEB"/>
+    <rect x="340" y="500" width="300" height="56" rx="3" fill="none" stroke="#C9D2CE"/>
+    <text x="490" y="515" font-size="11" font-weight="600" fill="#16211F" text-anchor="middle">Data/AppDbContext.cs</text>
+    <text x="490" y="536" font-size="10" fill="#5B6C68" text-anchor="middle">Fluent API in one place · enums as strings</text>
+    <text x="490" y="550" font-size="10" fill="#5B6C68" text-anchor="middle">delete behaviour chosen per relationship</text>
+
+    <path d="M490,556 V590" fill="none" stroke="#16211F" stroke-width="1.4" marker-end="url(#ai)"/>
+
+    <rect x="380" y="590" width="220" height="46" rx="3" fill="#FFFFFF" stroke="#C9D2CE"/>
+    <text x="490" y="609" font-size="11.5" font-weight="600" fill="#16211F" text-anchor="middle">PostgreSQL</text>
+    <text x="490" y="625" font-size="9.5" fill="#5B6C68" text-anchor="middle">Docker local · RDS free-tier deployed</text>
+
+    <!-- ============ legend ============ -->
+    <line x1="110" y1="662" x2="150" y2="662" stroke="#8A9793" stroke-width="1.4" stroke-dasharray="5 4"/>
+    <text x="160" y="666" font-size="10" fill="#5B6C68">retiring — migrate only what a phase touches</text>
+
+    <line x1="470" y1="662" x2="510" y2="662" stroke="#0E5F58" stroke-width="1.6"/>
+    <text x="520" y="666" font-size="10" fill="#5B6C68">where new code goes</text>
+
+    <text x="870" y="666" font-size="9.5" fill="#8A9793" text-anchor="end">as-built end of Phase 2 · one deployable</text>
+
+  </g>
+</svg>

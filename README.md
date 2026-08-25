@@ -38,6 +38,16 @@ structural changes. In short: a modular monolith with vertical slices, one
 deployable, module boundaries drawn now so services can be extracted later
 if a real trigger appears.
 
+![Architecture: HTTP arrives at two API surfaces, REST and GraphQL, which sit
+on one shared data layer over a single PostgreSQL database. The
+IJobApplicationRepository path is drawn dashed because it is
+retiring.](docs/diagrams/architecture.svg)
+
+REST and GraphQL are two surfaces over **one** data layer, so a rule can't be
+enforced on one and missed on the other. The dashed path is the Phase 2
+repository — it is retiring, not growing; new work goes into slices under
+`Modules/`.
+
 ## Quick start (Phase 2, current state)
 
 Storage is **PostgreSQL via EF Core**. In Development the app talks to a local
@@ -72,6 +82,20 @@ curl -X POST http://localhost:5080/graphql -H "Content-Type: application/json" \
 
 Note: `status` (and other enums) now serialize by name — `"Interviewing"` over
 REST, `INTERVIEWING` over GraphQL — not as an int.
+
+### The schema those migrations build
+
+![Entity relationship diagram of the eight-table JobKeep schema, with
+job_postings at the centre. Solid edges are ON DELETE RESTRICT, dashed edges
+are ON DELETE CASCADE.](docs/diagrams/schema-erd.svg)
+
+Eight normalized tables with `job_postings` — the job ad — at the centre. Your
+record of applying is a separate row, so one posting can carry several
+applications. Delete behaviour is chosen per relationship: derived data
+cascades, shared rows (a company, a skill) refuse to disappear underneath you.
+
+Redraw both diagrams after a schema change with the `schema-diagram` skill; it
+generates the DDL from EF rather than reading the model classes.
 
 ## Project structure
 

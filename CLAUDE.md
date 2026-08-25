@@ -127,6 +127,48 @@ See `docs/architecture.md` decision 5.
   dependency, `AsSplitQuery`, delete behaviour). Match that density; it's the
   interview material.
 
+## Commands
+
+```bash
+# Start local Postgres first — the app auto-migrates against it on startup
+docker run -d -p 5432:5432 -e POSTGRES_PASSWORD=dev -e POSTGRES_DB=jobkeep postgres:16-alpine
+
+cd src
+dotnet build
+dotnet run
+```
+
+App listens on `http://localhost:5080` (`Properties/launchSettings.json`).
+Swagger UI at `/swagger` and the GraphQL Nitro IDE at `/graphql` — both
+Development-only.
+
+EF migrations (tool pinned to 8.0.11 in `src/dotnet-tools.json`):
+```bash
+dotnet tool restore
+dotnet ef migrations add <Name>
+```
+
+There is **no test project.** Verify changes by building, then exercising the
+endpoint via Swagger, the Nitro IDE, or curl against a running local Postgres.
+If you add tests, note it here.
+
+## Gotchas
+
+- **Keep `src/` to one solution file.** Visual Studio has twice recreated a
+  stale `JobTracker.slnx` (it points at a `JobTracker.csproj` that doesn't
+  exist). With two `.slnx` files present, bare `dotnet build` / `dotnet run`
+  fail with `MSB1011: Specify which project or solution file to use`. Delete
+  the stray file, or pass `Jobkeep.slnx` / `Jobkeep.csproj` explicitly.
+- **Migrations auto-apply on startup in Development only** (`Program.cs`).
+  Deployed environments are expected to apply them as a deliberate release step.
+- **Enums serialize by name**, not int — `"Interviewing"` over REST,
+  `INTERVIEWING` over GraphQL.
+- **`ReferenceHandler.IgnoreCycles` is load-bearing.** EF navigation properties
+  (posting ↔ skills) cycle; removing it breaks REST serialization. GraphQL is
+  unaffected since it resolves only requested fields.
+- **`appsettings*.json` contain `//` comments.** ASP.NET's config reader accepts
+  them; strict JSON parsers won't. Don't "fix" them.
+
 ## Conventions
 
 - Target framework: `net8.0`. **Framework deadline: .NET 8 reaches end of
@@ -156,6 +198,16 @@ above any further architecture work.
   work matches the intended scope for that stage.
 - `docs/backlog.md` — considered-but-not-committed features, and the
   verified market comparison.
+- `docs/diagrams/` — `schema-erd.svg` and `architecture.svg`, embedded in
+  `README.md` and `docs/architecture.md`. **Committed artefacts that go stale
+  silently** — nothing fails a build when the schema moves and the picture
+  doesn't. Redraw them with the `schema-diagram` skill
+  (`.claude/skills/schema-diagram/`) in the same change that moves the schema.
+  That skill derives the schema from `dotnet ef migrations script`, not from
+  reading `Models/*.cs` — column types, precision, delete behaviour and index
+  uniqueness live in Fluent API config and the Npgsql provider, so inferring
+  them from the model classes produces a diagram that is wrong in exactly the
+  places an interviewer would probe.
 - `src/` — the actual .NET project.
 - Root `README.md` — status table and quick start.
 
