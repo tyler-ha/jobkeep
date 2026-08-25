@@ -203,13 +203,19 @@ above any further architecture work.
 
 ## Where things are
 
+- `docs/README.md` — the index: what each doc is for, and which wins.
 - `docs/architecture.md` — how the code is shaped, why, and the decision
   record. **Check this before proposing structural changes.**
-- `docs/phase-N-*.md` — the plan and status for each build phase, in
+- `docs/phases/phase-N-*.md` — the plan and status for each build phase, in
   order. Check the current phase's doc before making changes so new
   work matches the intended scope for that stage.
+- `docs/security-and-data-audit.md` — schema/config exposure, F1-F18, and the
+  phased remediation plan.
 - `docs/backlog.md` — considered-but-not-committed features, and the
   verified market comparison.
+- `docs/token-log.md` — what each phase cost to build, in tokens. Regenerate
+  with `python scripts/token-usage.py`; see "When asked to move to the next
+  phase" below.
 - `docs/diagrams/` — `schema-erd.svg` and `architecture.svg`, embedded in
   `README.md` and `docs/architecture.md`. **Committed artefacts that go stale
   silently** — nothing fails a build when the schema moves and the picture
@@ -220,15 +226,24 @@ above any further architecture work.
   uniqueness live in Fluent API config and the Npgsql provider, so inferring
   them from the model classes produces a diagram that is wrong in exactly the
   places an interviewer would probe.
+- `scripts/token-usage.py` — reads Claude Code's session transcripts and totals
+  tokens per session, or per task within a session (`--task <prefix>`). The
+  source for `docs/token-log.md`.
 - `src/` — the actual .NET project.
 - Root `README.md` — status table and quick start.
 
 ## When asked to move to the next phase
 
-Read the relevant `docs/phase-N-*.md` file first — it already has the
+Read the relevant `docs/phases/phase-N-*.md` file first — it already has the
 plan. Implement it, update that doc's "Status" field to "Done" when
 working, and add any real deviations from the plan as notes in the doc
 so it stays an accurate record (useful later for interview stories too).
+
+When the phase is done, also **log what it cost**: run
+`python scripts/token-usage.py`, add a row to the "By phase" table in
+`docs/token-log.md`, and refresh its session table. The transcripts this reads
+are local and not kept forever, so a phase that isn't logged when it ends may
+not be recoverable later.
 
 The phase docs were written before the architecture record. If a phase doc
 contradicts `docs/architecture.md`, follow `architecture.md` and fix the

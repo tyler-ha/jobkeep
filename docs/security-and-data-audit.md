@@ -135,7 +135,7 @@ name, contact details, employment history. It is duplicated per application, har
 deleted with no archive, and returned by default on every read. `Notes` and
 `job_postings.Description` have the same shape. Nothing in the repo identifies these
 as personal information. From Phase 4 onward the deployed path ships this content to
-a third-party LLM (`phase-4-ai-analyzer.md` step 4 swaps `IChatClient` off Ollama);
+a third-party LLM (`phases/phase-4-ai-analyzer.md` step 4 swaps `IChatClient` off Ollama);
 no doc records that consequence.
 
 **F3 · No TLS requirement on the database connection.**
@@ -247,7 +247,7 @@ Neither column is indexed; only the FK columns are.
 **F15** No `audit_events` table — already in `backlog.md:61`, correctly sized as
 "new table + write-path change on *every* mutation".
 
-**F16** No status-history table — `phase-2.4-status-rules.md:50` scopes it out
+**F16** No status-history table — `phases/phase-2.4-status-rules.md:50` scopes it out
 deliberately.
 
 **F17** Domain attribute gaps vs schema.org (§2) — `validThrough`, `jobLocationType`,

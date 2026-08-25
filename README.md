@@ -29,7 +29,7 @@ while building demonstrable C# + AWS + AI integration experience.
 | 6 | Front end | Not started |
 
 Full detail for each phase, including cost notes and interview talking
-points, is in `docs/`.
+points, is in [`docs/`](docs/README.md) — start with the index there.
 
 **How the code is shaped and why — plus the decision record, the gap
 register, and the verified market comparison — is in
@@ -112,20 +112,20 @@ generates the DDL from EF rather than reading the model classes.
 Jobkeep/
 ├── CLAUDE.md              # Context file for Claude Code
 ├── README.md              # This file
-├── docs/                  # One doc per build phase
+├── docs/                  # see docs/README.md for the index
+│   ├── README.md           # what each doc is for, and which one wins
 │   ├── architecture.md     # HOW the code is shaped + decision record
-│   ├── phase-1-local-api.md
-│   ├── phase-2-postgres.md
-│   ├── phase-2.1-write-surface.md  # sub-phases: finish the model surface
-│   ├── phase-2.2-list-queries.md
-│   ├── phase-2.3-analytics.md
-│   ├── phase-2.4-status-rules.md
-│   ├── phase-2.5-dotnet10-upgrade.md
-│   ├── phase-3-aws-deploy.md
-│   ├── phase-4-ai-analyzer.md
-│   ├── phase-5-ats-check.md
-│   ├── phase-6-frontend.md
-│   └── backlog.md          # considered-but-not-committed feature candidates
+│   ├── security-and-data-audit.md  # schema/config exposure + remediation plan
+│   ├── backlog.md          # considered-but-not-committed feature candidates
+│   ├── token-log.md        # what each phase cost to build, in tokens
+│   ├── phases/             # one doc per build phase, in order
+│   │   ├── phase-1-local-api.md
+│   │   ├── phase-2-postgres.md
+│   │   ├── phase-2.1-write-surface.md
+│   │   └── ...             # 2.2-2.5, 3, 4, 5, 6
+│   └── diagrams/           # committed schema ERD + architecture SVGs
+├── scripts/
+│   └── token-usage.py     # totals Claude Code session tokens for docs/token-log.md
 └── src/                   # The actual .NET project
     ├── Jobkeep.csproj
     ├── Program.cs                   # wiring only: DI, middleware, Map* calls
