@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  build-and-test:
+    # ubuntu-latest ships a working Docker daemon, which the integration tests need:
+    # they start a real postgres:16-alpine container via Testcontainers rather than
+    # substituting an in-memory provider.
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          # Both, deliberately. The projects target net8.0, so the 8.0 runtime has to be
+          # present to execute the tests; but `dotnet test` only understands the
+          # `test.runner` section in global.json from the .NET 10 SDK, which is what
+          # points it at Microsoft.Testing.Platform (the runner xunit.v3 ships).
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Restore
+        run: dotnet restore src/Jobkeep.slnx
+
+      - name: Build
+        run: dotnet build src/Jobkeep.slnx --no-restore --configuration Release
+
+      - name: Test
+        run: dotnet test --project tests/Jobkeep.Tests/Jobkeep.Tests.csproj --no-restore --configuration Release

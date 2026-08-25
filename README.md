@@ -19,10 +19,11 @@ while building demonstrable C# + AWS + AI integration experience.
 | 1 | Local API, in-memory storage | Done — see `src/` |
 | 2 | Relational model on PostgreSQL + GraphQL | Done — local via Postgres in Docker |
 | 2.1 | Complete the write surface (skills + requirements CRUD) | Done — first phase built as vertical slices |
-| 2.2 | Query, filter, sort & page the list | Not started |
-| 2.3 | Analytics endpoints (skill demand, status funnel) | Not started |
-| 2.4 | Enforce the application status lifecycle | Not started |
-| 2.5 | Upgrade to .NET 10 (LTS) — .NET 8 EOL 10 Nov 2026 | Not started |
+| 2.2 | Automated tests + CI | Done — 55 integration tests against real Postgres, plus GitHub Actions |
+| 2.3 | Query, filter, sort & page the list | Not started |
+| 2.4 | Analytics endpoints (skill demand, status funnel) | Not started |
+| 2.5 | Enforce the application status lifecycle | Not started |
+| 2.6 | Upgrade to .NET 10 (LTS) — .NET 8 EOL 10 Nov 2026 | Not started |
 | 3 | Deploy to AWS Lambda + API Gateway (+ RDS) | Not started |
 | 4 | AI job-description analyzer | Not started |
 | 5 | ATS compatibility check | Not started |
@@ -64,6 +65,22 @@ dotnet run
 
 Runs on `http://localhost:5080`. Data survives app restarts (it lives in
 Postgres, not in memory). Two API surfaces share one backend:
+
+### Tests
+
+```bash
+cd src
+dotnet test --project ../tests/Jobkeep.Tests/Jobkeep.Tests.csproj
+```
+
+55 integration tests against a **real Postgres**, started automatically by
+Testcontainers — so Docker needs to be running, but you do not need to start a
+database yourself. They use a throwaway container and never touch your dev data;
+there is a guard that refuses to run if they ever would. CI runs the same suite on
+every push (`.github/workflows/ci.yml`).
+
+Every route is also in [`src/Jobkeep.http`](src/Jobkeep.http), which runs in Visual
+Studio, VS Code and Rider with no account.
 
 **REST**
 ```bash

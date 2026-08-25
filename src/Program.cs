@@ -80,3 +80,9 @@ app.MapApplicationsModule();
 app.MapGraphQL();
 
 app.Run();
+
+// Top-level statements compile to an *internal* Program class, which
+// WebApplicationFactory<Program> in tests/Jobkeep.Tests cannot name. This marker
+// makes that generated class public without changing any behaviour. Preferred over
+// InternalsVisibleTo because it exposes exactly one type instead of every internal.
+public partial class Program { }

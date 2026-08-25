@@ -103,7 +103,7 @@ As of Phase 2.1 (2026-08-25) `src/` has both shapes at once:
   request, handler and response. `Shared/` holds `SliceResult<T>`, which is what
   a handler returns so REST and GraphQL can translate one outcome two ways.
 - `Endpoints/` + `Repositories/` — the Phase 2 create/read/update/delete path,
-  still wired up and still going through `IJobApplicationRepository`. Phase 2.2
+  still wired up and still going through `IJobApplicationRepository`. Phase 2.3
   takes the read side.
 
 The rules:
@@ -112,7 +112,7 @@ The rules:
 - **Existing** code: migrate the parts a phase actually touches. Don't do a
   sweeping refactor as a side effect of a feature.
 - `IJobApplicationRepository` is **retiring, not growing.** Do not add methods
-  to it. If a phase doc says to (Phase 2.3 does), write a slice instead and
+  to it. If a phase doc says to (Phase 2.4 does), write a slice instead and
   correct the phase doc — which is what Phase 2.1 did, and the interface came
   out of that phase smaller than it went in.
 - A slice handler takes `AppDbContext` directly, validates in the handler (not
@@ -160,9 +160,24 @@ dotnet tool restore
 dotnet ef migrations add <Name>
 ```
 
-There is **no test project.** Verify changes by building, then exercising the
-endpoint via Swagger, the Nitro IDE, or curl against a running local Postgres.
-If you add tests, note it here.
+Tests (Phase 2.2) — xUnit v3 + Testcontainers, in `tests/Jobkeep.Tests/`:
+```bash
+cd src
+dotnet test --project ../tests/Jobkeep.Tests/Jobkeep.Tests.csproj
+```
+Docker must be running. The suite starts its **own** `postgres:16-alpine` container
+and never touches the dev database — `PostgresFixture` refuses to run if the app
+ever resolves a connection string other than the container's. There is no
+`compose.yaml`; Testcontainers manages its own database.
+
+`dotnet test` needs the **repo-root `global.json`** (`test.runner` =
+`Microsoft.Testing.Platform`) and the **.NET 10 SDK** to read it — xUnit v3's runner
+is MTP, and the .NET 10 SDK refuses the old VSTest bridge. Pass the project as
+`--project <path>`, not positionally. No SDK version is pinned, so the `dotnet-ef`
+8.0.11 tool is unaffected.
+
+You can still exercise endpoints by hand via Swagger, the Nitro IDE, or
+`src/Jobkeep.http` (works in VS / VS Code / Rider, no account needed).
 
 ## Gotchas
 
@@ -185,7 +200,7 @@ If you add tests, note it here.
 
 - Target framework: `net8.0`. **Framework deadline: .NET 8 reaches end of
   support 10 Nov 2026.** The upgrade to `net10.0` (LTS to Nov 2028) is
-  Phase 2.5, before the AWS deploy. Flag this if Phase 3 starts first.
+  Phase 2.6, before the AWS deploy. Flag this if Phase 3 starts first.
 - Nullable reference types enabled — respect existing nullability
   annotations rather than suppressing warnings.
 - Enums serialize by *name* on both surfaces, and are stored as strings.
@@ -196,10 +211,19 @@ If you add tests, note it here.
 
 ## Known gaps (don't re-discover these)
 
-No tests, no CI, no `docker-compose`, no health check, no auth. These are
-**recorded**, not forgotten — see the gap register in `docs/architecture.md`.
-Automated tests + CI are the highest-value missing items for the portfolio,
-above any further architecture work.
+No `docker-compose`, no health check, no auth. These are **recorded**, not
+forgotten — see the gap register in `docs/architecture.md`.
+
+Tests and CI landed in **Phase 2.2**, scheduled straight after 2.1 because the gap
+register called them the highest-value missing items. Three findings from that phase are
+**recorded, not fixed** — don't re-discover them:
+- **Skill dedup is case-sensitive**, so `C#` and `c#` are two rows in the table whose
+  purpose is deduplication. Needs a case-insensitive natural key; own phase.
+- **Validation is surface-specific** (A4): GraphQL `createApplication` accepts a
+  blank title that REST rejects, and `PATCH` validates nothing at all. Asserted
+  as-is by the `A4_` tests in `SurfaceParityTests`; flip them when 2.3/2.5 fixes it.
+- **`src` pairs Npgsql provider 8.0.10 with EF Design 8.0.11.** Harmless today;
+  Phase 2.6 resolves it.
 
 ## Where things are
 

@@ -1,0 +1,100 @@
+### JobKeep — every route, in the order you would actually use them.
+#
+# Works in Visual Studio, VS Code (REST Client extension) and Rider with no account
+# and no external service. Committed on purpose: it is version-controlled next to the
+# routes it documents, so it moves in the same commit when a route moves.
+#
+# Start Postgres and the app first:
+#   docker run -d -p 5432:5432 -e POSTGRES_PASSWORD=dev -e POSTGRES_DB=jobkeep postgres:16-alpine
+#   cd src && dotnet run
+
+@host = http://localhost:5080
+
+### Create an application. Company and posting are created or reused by name.
+# @name create
+POST {{host}}/applications
+Content-Type: application/json
+
+{
+  "company": "Canva",
+  "title": "Backend Engineer",
+  "location": "Melbourne",
+  "description": "Build and operate .NET services on AWS.",
+  "sourceUrl": "https://example.com/jobs/123",
+  "notes": "Applied via referral"
+}
+
+### Capture the id from the response above for everything below.
+@applicationId = {{create.response.body.id}}
+
+### List every application, newest first (full eager-loaded graph).
+GET {{host}}/applications
+
+### Fetch one.
+GET {{host}}/applications/{{applicationId}}
+
+### Attach a skill. Returns 200, not 201 — and re-sending is a no-op, not an error.
+POST {{host}}/applications/{{applicationId}}/skills
+Content-Type: application/json
+
+{
+  "skillName": "C#",
+  "category": "Language",
+  "isRequired": true
+}
+
+### Attach a requirement. Requirement text is NOT deduplicated.
+POST {{host}}/applications/{{applicationId}}/requirements
+Content-Type: application/json
+
+{
+  "text": "5+ years .NET",
+  "kind": "Qualification",
+  "isMustHave": true
+}
+
+### Update. PATCH semantics: only the fields you send are applied.
+PATCH {{host}}/applications/{{applicationId}}
+Content-Type: application/json
+
+{
+  "status": "Interviewing",
+  "notes": "Phone screen booked for Thursday"
+}
+
+### Unlink a skill. The name travels in the path, so encode it: C# is C%23.
+# The shared skills row survives — only the join row goes.
+DELETE {{host}}/applications/{{applicationId}}/skills/C%23
+
+### Remove a requirement. Scoped to the parent: passing another application's id 404s.
+DELETE {{host}}/applications/{{applicationId}}/requirements/{{requirementId}}
+
+### Delete the application. The posting and company deliberately survive.
+DELETE {{host}}/applications/{{applicationId}}
+
+### --- GraphQL, same data layer ---
+
+### Query. Note enums come back SCREAMING_CASE here and PascalCase over REST.
+POST {{host}}/graphql
+Content-Type: application/json
+
+{
+  "query": "{ applications { id status posting { title company { name } postingSkills { isRequired skill { name } } } } }"
+}
+
+### Mutation — the Phase 2.1 shape: an input object in, a response DTO out.
+POST {{host}}/graphql
+Content-Type: application/json
+
+{
+  "query": "mutation($id: UUID!) { addSkillToPosting(applicationId: $id, input: { skillName: \"Terraform\", category: \"Infra\", isRequired: true }) { skillName category isRequired source } }",
+  "variables": { "id": "{{applicationId}}" }
+}
+
+### A bad id returns NOT_FOUND here and 404 over REST — the same handler decided both.
+POST {{host}}/graphql
+Content-Type: application/json
+
+{
+  "query": "mutation { addSkillToPosting(applicationId: \"00000000-0000-0000-0000-000000000000\", input: { skillName: \"C#\", isRequired: true }) { skillName } }"
+}

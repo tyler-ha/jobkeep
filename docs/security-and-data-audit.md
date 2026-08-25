@@ -107,7 +107,7 @@ and `jobLocation` — but is missing:
 | Expiry date | `validThrough` | A tracker that cannot tell you a posting closed is missing the one time-sensitive fact in the domain |
 | Remote / hybrid / onsite | `jobLocationType` | The most-filtered attribute in the current market; `Location` as free text cannot answer it |
 | Employer's requisition id | `identifier` | The natural key for de-duplicating the same role seen on two boards |
-| Where you found it | *(no schema.org equivalent)* | Seek vs LinkedIn vs referral — an analytics question Phase 2.3 will want and cannot currently ask |
+| Where you found it | *(no schema.org equivalent)* | Seek vs LinkedIn vs referral — an analytics question Phase 2.4 will want and cannot currently ask |
 
 Against tracker convention, also missing: status **history**, interview rounds,
 contacts, a next-action date, document versions. `backlog.md` already knows about
@@ -239,7 +239,7 @@ On an unauthenticated public write endpoint that is an unbounded-storage vector.
 a model identifier like `llama3.2:3b`, so `varchar(100)` is generous.
 
 **F14 · No index backs the default query.** `GetAllAsync` sorts
-`OrderByDescending(a => a.DateApplied)` and Phase 2.2 will filter on `Status`.
+`OrderByDescending(a => a.DateApplied)` and Phase 2.3 will filter on `Status`.
 Neither column is indexed; only the FK columns are.
 
 ### S3 — Recorded / roadmap
@@ -247,7 +247,7 @@ Neither column is indexed; only the FK columns are.
 **F15** No `audit_events` table — already in `backlog.md:61`, correctly sized as
 "new table + write-path change on *every* mutation".
 
-**F16** No status-history table — `phases/phase-2.4-status-rules.md:50` scopes it out
+**F16** No status-history table — `phases/phase-2.5-status-rules.md:50` scopes it out
 deliberately.
 
 **F17** Domain attribute gaps vs schema.org (§2) — `validThrough`, `jobLocationType`,
@@ -315,7 +315,7 @@ Closes F1, F9. A `users` table, and `OwnerUserId` on `job_applications`,
 
 > **Recommended scoping root: keep `skills` global.** It is shared reference data with
 > no PII, and per-user skill rows would destroy the single `GROUP BY` that decision 1
-> (Postgres over DynamoDB) and Phase 2.3 analytics both rest on. This is a real
+> (Postgres over DynamoDB) and Phase 2.4 analytics both rest on. This is a real
 > tradeoff — one user's skill taxonomy becomes visible in aggregate to another — and
 > it is the right one for a schema whose reason to exist is cross-job skill analytics.
 

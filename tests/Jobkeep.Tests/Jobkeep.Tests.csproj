@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Matches the app's TFM. Phase 2.5 moves both to net10.0 together. -->
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- xUnit v3 test projects are executables, not libraries. Required. -->
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- xunit.v3 carries its own Microsoft.Testing.Platform runner, so neither
+         Microsoft.NET.Test.Sdk nor xunit.runner.visualstudio is needed. The
+         `test.runner` section in the repo-root global.json is what points
+         `dotnet test` at that runner (see docs/phases/phase-2.6-tests-and-ci.md). -->
+    <PackageReference Include="xunit.v3" Version="4.0.0" />
+
+    <!-- Real Postgres in a throwaway container. The whole point of the phase:
+         EF InMemory/SQLite silently pass the mapping bugs this project cares
+         about (text[], DateOnly, unique indexes, delete behaviour). -->
+    <PackageReference Include="Testcontainers.PostgreSql" Version="4.14.0" />
+
+    <!-- Truncates all tables between tests so each one starts from a known state. -->
+    <PackageReference Include="Respawn" Version="7.0.0" />
+
+    <!-- WebApplicationFactory: boots the real Program.cs in-process. Pinned to the
+         installed ASP.NET Core 8 runtime (8.0.30). -->
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="8.0.30" />
+
+    <!-- Both pinned to 8.0.11, which is what Jobkeep.dll itself compiles against:
+         the app pairs Npgsql provider 8.0.10 (wants EF 8.0.10) with EF Design 8.0.11
+         (wants EF 8.0.11), and Design wins inside src. Without naming Relational
+         explicitly here, the provider's 8.0.10 arrives transitively as "primary" and
+         MSBuild reports an MSB3277 unification conflict against the app assembly.
+         Phase 2.5 removes the split for real by bumping both to net10-era versions. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.11" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="8.0.11" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/Jobkeep.csproj" />
+  </ItemGroup>
+
+</Project>

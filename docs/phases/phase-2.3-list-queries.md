@@ -1,4 +1,4 @@
-# Phase 2.2 — Query, filter, sort & page the list
+# Phase 2.3 — Query, filter, sort & page the list
 
 **Status: Not started**
 
@@ -69,4 +69,4 @@ Zero — local Postgres, no new packages.
 
 ## Next
 
-Phase 2.3 — analytics endpoints (skill demand, status funnel).
+Phase 2.4 — analytics endpoints (skill demand, status funnel).
