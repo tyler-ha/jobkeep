@@ -138,6 +138,14 @@ See `docs/architecture.md` decision 5.
 - **Write down the tradeoff.** Existing comments explain *why* (captive
   dependency, `AsSplitQuery`, delete behaviour). Match that density; it's the
   interview material.
+- **A phase ships with its tests.** Since Phase 2.2 there is a suite, so new work
+  extends it in the same change rather than leaving it for later — that is the
+  whole reason tests were pulled ahead of the remaining features. Prefer an
+  integration test through the real surface over a unit test with a fake; the
+  bugs this project actually has (SQL that doesn't translate, delete behaviour,
+  one rule enforced on one surface only) are invisible to fakes. A pure domain
+  rule with no database in it — the Phase 2.5 status lifecycle is the first — is
+  the exception, and gets a plain unit test.
 
 ## Commands
 
