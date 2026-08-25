@@ -9,7 +9,7 @@ this doc wins — and the phase doc should be corrected.
 
 ---
 
-## 1. As-built today (end of Phase 2)
+## 1. As-built today (end of Phase 2.1)
 
 One ASP.NET Core 8 project, one deployable, one database.
 
@@ -55,13 +55,13 @@ when they go stale.
 | # | Problem | Where |
 |---|---|---|
 | A1 | **GraphQL over-fetches.** Resolvers call `GetAllAsync()`, which eager-loads company + skills + requirements + AI analysis + ATS result *regardless of the fields requested*. This negates GraphQL's main advantage. Fix: HotChocolate projections/DataLoader over `IQueryable`. | `GraphQL/Query.cs:13`, `Repositories/PostgresJobApplicationRepository.cs:22` |
-| A2 | **EF entities are the API contract.** Endpoints return entities directly. `ReferenceHandler.IgnoreCycles` is a band-aid for the resulting navigation-property cycles, not a serialization preference. Response DTOs remove both the cycles and the coupling. | `Program.cs:26`, `Endpoints/ApplicationEndpoints.cs:31` |
-| A3 | **The repository interface is the wrong abstraction.** `AddSkillToPostingAsync` is a *use case* sitting on a CRUD interface. Phases 2.1-2.4 would add roughly 15 more methods to the same interface. | `Repositories/IJobApplicationRepository.cs:19` |
-| A4 | **Validation is ad hoc and surface-specific.** Hand-rolled null checks on the REST create path; the GraphQL mutation path has none. One rule, two surfaces, one implementation needed. | `Endpoints/ApplicationEndpoints.cs:45`, `GraphQL/Mutation.cs:9` |
-| A5 | **Stale comment** claiming Phase 2 swaps in a DynamoDB implementation. It did not. | `Repositories/IJobApplicationRepository.cs:5-7` |
+| A2 | **EF entities are the API contract.** Endpoints return entities directly. `ReferenceHandler.IgnoreCycles` is a band-aid for the resulting navigation-property cycles, not a serialization preference. Response DTOs remove both the cycles and the coupling. **Partly addressed:** the Phase 2.1 slices return response DTOs, so the four new operations are clean. The Phase 2 read/create/update path still returns entities. | `Program.cs:26`, `Endpoints/ApplicationEndpoints.cs:31` |
+| A3 | ~~**The repository interface is the wrong abstraction.**~~ **Addressed in Phase 2.1.** `AddSkillToPostingAsync` moved to `Modules/Applications/AddSkillToPosting.cs`, and the phase's other three use cases were built as slices rather than the four interface methods the phase doc originally called for. The interface is now genuine CRUD, and *smaller* than before the phase. It goes entirely when Phase 2.2 rewrites the read path. | `Repositories/IJobApplicationRepository.cs` |
+| A4 | **Validation is ad hoc and surface-specific.** Hand-rolled null checks on the REST create path; the GraphQL mutation path has none. One rule, two surfaces, one implementation needed. **Partly addressed:** Phase 2.1 put validation inside the slice handlers and gave both surfaces one outcome type (`Shared/Result.cs`), so the new operations cannot diverge. `CreateApplication` still validates only on the REST side. | `Endpoints/ApplicationEndpoints.cs:45`, `GraphQL/Mutation.cs:9` |
+| A5 | ~~**Stale comment** claiming Phase 2 swaps in a DynamoDB implementation.~~ **Fixed in Phase 2.1.** | `Repositories/IJobApplicationRepository.cs` |
 | A6 | **No tests, no CI, no compose file, no health check.** | repo-wide |
 | A7 | **`[JsonIgnore]` does not defend GraphQL.** HotChocolate honours `[GraphQLIgnore]`, so the back-references hidden from REST are *in the published schema* — `Company.postings`, `JobPosting.applications`, `Skill.postingSkills`. A client can walk `application → posting → company → postings → applications → resumeText` and reach every résumé in the database. **Confirmed against the emitted SDL**, not inferred from the attributes. | `Models/*.cs`, verified via `GET /graphql?sdl` |
-| A8 | **The audit columns are partial, and one already lies.** `job_postings` has no `UpdatedAtUtc` despite PATCH mutating it; four tables have none at all. `job_applications.UpdatedAtUtc` is hand-set in one method, and `AddSkillToPostingAsync` mutates and saves without touching it. The fix is a `SaveChangesInterceptor`, not more hand-maintenance. | `Repositories/PostgresJobApplicationRepository.cs:75,109` |
+| A8 | **The audit columns are partial, and one already lies.** `job_postings` has no `UpdatedAtUtc` despite PATCH mutating it; four tables have none at all. `job_applications.UpdatedAtUtc` is hand-set in exactly one place (`UpdateAsync`), and every other write path saves without touching it. **Phase 2.1 made this worse, as predicted:** the four new slices each `SaveChangesAsync` and none of them maintains a timestamp — the original evidence for this finding, `AddSkillToPostingAsync`, is gone, but it was replaced by four write paths with the same gap. That is the argument for a `SaveChangesInterceptor` rather than more hand-maintenance, restated by a phase that wasn't trying to make the point. | `Repositories/PostgresJobApplicationRepository.cs:75`, `Modules/Applications/*.cs` |
 | A9 | **The schema enforces nothing the application does not.** No DB-side default (`gen_random_uuid()`, `now()`), no CHECK constraint (`SalaryMin <= SalaryMax` is unenforced), no concurrency token, and eleven unbounded `text` columns on an unauthenticated write surface. | `Data/AppDbContext.cs`, `Migrations/…InitialCreate.cs` |
 
 Security, PII, secrets and retention are audited in full — severity, evidence and a
@@ -75,6 +75,12 @@ than operational.
 
 The direction from Phase 2.1 onward. **Adopted incrementally** — each phase
 builds its new code in this shape rather than stopping to refactor everything.
+
+**Phase 2.1 built the first four slices**, so this is no longer only a plan:
+`Modules/Applications/` holds `AddSkillToPosting`, `RemoveSkillFromPosting`,
+`AddRequirementToPosting` and `RemoveRequirement`, and `Shared/` holds the
+result type they return. `Endpoints/` and `Repositories/` still hold the Phase 2
+create/read/update/delete path; Phase 2.2 takes the read side.
 
 ```
 src/
@@ -176,6 +182,7 @@ Numbered, dated, with status, so reversals stay legible.
 | 7 | **MVC controllers — proposed for retirement.** `backlog.md` committed to adopting attribute-routed controllers as "the convention most teams use". Attribute-routed controllers organise code by *technical layer*, which cuts across vertical slices. Minimal APIs grouped per slice are equally mainstream in .NET 8+. Recommend dropping the adoption; confirm rather than silently discard. | 2026-08-25 | **Proposed** |
 | 8 | **Upgrade to `net10.0`.** `net8.0` reaches end of support **10 Nov 2026**; .NET 10 is LTS through Nov 2028. Slotted as Phase 2.5, before the AWS deploy, so Phase 3 lands on a supported runtime. | 2026-08-25 | Planned (Phase 2.5) |
 | 9 | **When user scoping lands, `skills` stays global.** Every other table gets an `OwnerUserId`; the shared `skills` table does not. Per-user skill rows would destroy the single `GROUP BY` that decision 1 and the Phase 2.3 analytics both rest on — which is the entire reason Postgres was chosen. The accepted cost is real and should be said out loud: one user's skill taxonomy is visible in aggregate to another. Revisit if JobKeep ever stops being a personal tool. Proposed by [`security-and-data-audit.md`](security-and-data-audit.md) §5 step 3; confirm before building the Identity module. | 2026-08-25 | **Proposed** |
+| 10 | **A slice handler returns `SliceResult<T>`; each surface translates it at its own edge.** The handler decides Ok/NotFound/Invalid without knowing its caller; `ToHttpResult` maps that to 404/400 and `ValueOrThrow` to a `GraphQLException` carrying `NOT_FOUND`/`INVALID_INPUT`. This is the mechanism behind "one rule, one implementation" — before it, the REST create path hand-rolled null checks and the GraphQL mutation path had none (A4). Named `SliceResult` because HotChocolate's GreenDonut publishes a `Result<T>` through a global using. | Phase 2.1 | Accepted |
 
 ---
 
@@ -188,7 +195,7 @@ Ordered by portfolio value per unit of effort.
 |---|---|---|
 | **Automated tests** | The single largest gap. Named in essentially every ad. xUnit + Testcontainers (real Postgres in Docker) tests the EF mapping and the find-or-create dedup logic that unit tests with a fake would miss. | Own phase — **strongest candidate to schedule next** |
 | **CI/CD** | Named in every ad. GitHub Actions: build + test on push. Cheap (free for public repos) and immediately visible on the repo page. | Own phase, pairs with tests |
-| **Response DTOs** (A2) | Decouples the API contract from the EF schema and removes the `IgnoreCycles` band-aid. | Fold into Phase 2.1/2.2 |
+| **Response DTOs** (A2) | Decouples the API contract from the EF schema and removes the `IgnoreCycles` band-aid. Phase 2.1 did this for its four new operations; the read/create path is what's left. | Phase 2.2 |
 | **GraphQL projections** (A1) | Makes GraphQL actually do the thing GraphQL is for. Good interview material: "I measured what my resolver loaded, and it was the whole graph." | Fold into Phase 2.2 |
 | **docker-compose** | Replaces the manual `docker run` in the README. One file, and Docker is on every ad. | Trivial — any phase |
 | **Health check endpoint** | `/health` hitting the DB. Needed before Phase 3 anyway (Lambda + RDS). | Phase 3 |

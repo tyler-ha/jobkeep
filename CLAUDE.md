@@ -77,7 +77,8 @@ New feature work goes in a **module**, as a **slice per use case**:
 
 ```
 src/Modules/<Module>/<UseCase>.cs   — request + handler + response, together
-src/Shared/                          — AppDbContext, cross-cutting contracts
+src/Shared/                          — SliceResult + cross-cutting contracts
+src/Data/AppDbContext.cs             — the schema, in one place (Fluent API)
 src/Program.cs                       — wiring only (DI, middleware, Map* calls)
 ```
 
@@ -95,16 +96,27 @@ Modules: `Applications` (core), `Analytics` (read-only), `Ai` (Phase 4),
 
 ### Migration state (read this before editing `src/`)
 
-The code has **not** been restructured yet — this is deliberate, so each phase
-stays runnable. As of 2026-08-25 `src/` still has `Endpoints/` and
-`Repositories/` from Phase 2, and `IJobApplicationRepository` is still wired up.
+The restructure is **in progress, incrementally**, so each phase stays runnable.
+As of Phase 2.1 (2026-08-25) `src/` has both shapes at once:
+
+- `Modules/Applications/` — four slices (skills + requirements), each holding its
+  request, handler and response. `Shared/` holds `SliceResult<T>`, which is what
+  a handler returns so REST and GraphQL can translate one outcome two ways.
+- `Endpoints/` + `Repositories/` — the Phase 2 create/read/update/delete path,
+  still wired up and still going through `IJobApplicationRepository`. Phase 2.2
+  takes the read side.
+
+The rules:
 
 - **New** code: write it as a slice in a module.
 - **Existing** code: migrate the parts a phase actually touches. Don't do a
   sweeping refactor as a side effect of a feature.
 - `IJobApplicationRepository` is **retiring, not growing.** Do not add methods
   to it. If a phase doc says to (Phase 2.3 does), write a slice instead and
-  correct the phase doc.
+  correct the phase doc — which is what Phase 2.1 did, and the interface came
+  out of that phase smaller than it went in.
+- A slice handler takes `AppDbContext` directly, validates in the handler (not
+  at either edge), and returns a **response DTO**, never an EF entity.
 
 Superseded rules from earlier versions of this file, kept here so their
 reversal is legible: *"never bypass `IJobApplicationRepository`"* and *"keep

@@ -18,7 +18,7 @@ while building demonstrable C# + AWS + AI integration experience.
 |---|---|---|
 | 1 | Local API, in-memory storage | Done — see `src/` |
 | 2 | Relational model on PostgreSQL + GraphQL | Done — local via Postgres in Docker |
-| 2.1 | Complete the write surface (skills + requirements CRUD) | Not started |
+| 2.1 | Complete the write surface (skills + requirements CRUD) | Done — first phase built as vertical slices |
 | 2.2 | Query, filter, sort & page the list | Not started |
 | 2.3 | Analytics endpoints (skill demand, status funnel) | Not started |
 | 2.4 | Enforce the application status lifecycle | Not started |
@@ -72,6 +72,15 @@ curl -X POST http://localhost:5080/applications \
   -d '{"company":"Canva","title":"Backend Engineer","notes":"Applied via referral"}'
 
 curl http://localhost:5080/applications
+
+# Sub-resources (Phase 2.1). Skills dedup into a shared `skills` table;
+# removing one unlinks the join row and leaves that shared row alone.
+curl -X POST http://localhost:5080/applications/{id}/skills   -H "Content-Type: application/json"   -d '{"skillName":"C#","category":"Language","isRequired":true}'
+
+curl -X POST http://localhost:5080/applications/{id}/requirements   -H "Content-Type: application/json"   -d '{"text":"5+ years .NET","kind":"Qualification","isMustHave":true}'
+
+# Skill names go in the path, so percent-encode them: C# is C%23
+curl -X DELETE http://localhost:5080/applications/{id}/skills/C%23
 ```
 
 **GraphQL** — open the Nitro IDE at `http://localhost:5080/graphql`, or:
@@ -120,13 +129,16 @@ Jobkeep/
 └── src/                   # The actual .NET project
     ├── Jobkeep.csproj
     ├── Program.cs                   # wiring only: DI, middleware, Map* calls
-    ├── Endpoints/                   # REST routes (minimal API, grouped per resource)
+    ├── Modules/                     # vertical slices — one file per use case
+    │   └── Applications/            #   AddSkillToPosting, RemoveRequirement, ...
+    ├── Shared/                      # SliceResult + cross-cutting contracts
+    ├── Endpoints/                   # Phase 2 REST routes (retiring with the repository)
     ├── appsettings.json             # empty Postgres conn (set in deploy)
     ├── appsettings.Development.json # points at local Postgres
     ├── Models/                      # relational domain model + enums + DTOs
     ├── Data/                        # AppDbContext (EF Core mapping)
     ├── Migrations/                  # EF migrations
-    ├── Repositories/                # IJobApplicationRepository + Postgres/InMemory impls
+    ├── Repositories/                # IJobApplicationRepository — retiring, not growing
     ├── GraphQL/                     # HotChocolate Query + Mutation
     └── Properties/
 ```

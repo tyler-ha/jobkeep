@@ -195,12 +195,18 @@ silently discard one.
   `Title`, `Location`, `Description` and `CompanyId`.
 - `companies`, `skills`, `posting_skills`, `job_requirements` have none at all.
 - `job_applications.UpdatedAtUtc` is set by hand in exactly one place
-  (`PostgresJobApplicationRepository.cs:75`). `AddSkillToPostingAsync` mutates the
-  aggregate and saves (line 109) **without touching it**.
+  (`PostgresJobApplicationRepository.cs:75`). `AddSkillToPostingAsync` mutated the
+  aggregate and saved **without touching it**.
+- **Updated 2026-08-25, after Phase 2.1.** That method no longer exists — it became
+  `Modules/Applications/AddSkillToPosting.cs`. The finding did not go with it: the
+  phase added *four* slices that each `SaveChangesAsync`, and none maintains a
+  timestamp. One stale write path was replaced by four. This is the finding
+  demonstrating itself; see §6.
 
 That last point is the argument for automating this rather than a style preference:
 **the column is wrong today.** A hand-maintained audit column is only correct until
-someone adds a second write path, which has already happened.
+someone adds a second write path, which had already happened when this was written —
+and happened four more times in the very next phase.
 
 **F9 · No `CreatedBy` / `UpdatedBy` anywhere.** Blocked on F1 — there is no actor to
 name yet.
@@ -349,6 +355,13 @@ The finding to lead with is **F8**, not F1. "No auth on a single-user local tool
 scope decision any interviewer will accept. *"I found an audit column that was already
 wrong, traced it to a second write path that skipped it, and replaced hand-maintenance
 with an interceptor"* is a debugging story with a root cause and a structural fix.
+
+It got a better ending in Phase 2.1. That phase deleted the exact method this finding
+cited — and added four new write paths with the same gap, none of them thinking about
+timestamps. The prediction ("only correct until someone adds a second write path") was
+confirmed within one phase, by the same person who wrote it. That is a stronger answer
+than the original: the fix has to be structural precisely because a careful author who
+had *just documented the problem* still didn't hand-maintain the column.
 
 **F5** is the second one: the point is not that GraphQL exposed a field, it is that
 `[JsonIgnore]` **looked like** it protected both surfaces and only protected one — and

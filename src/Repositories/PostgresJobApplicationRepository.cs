@@ -77,40 +77,9 @@ public class PostgresJobApplicationRepository : IJobApplicationRepository
         return await GetByIdAsync(id);
     }
 
-    public async Task<JobApplication?> AddSkillToPostingAsync(
-        Guid applicationId, string skillName, string? category, bool isRequired)
-    {
-        var app = await _db.JobApplications
-            .Include(a => a.Posting).ThenInclude(p => p.PostingSkills).ThenInclude(ps => ps.Skill)
-            .FirstOrDefaultAsync(a => a.Id == applicationId);
-        if (app is null) return null;
-
-        // Reuse the shared skill if it already exists — this is the dedup that
-        // makes "top skills across all jobs" a single GROUP BY over `skills`.
-        // If it's new, Add it explicitly: because Skill.Id is pre-populated
-        // (Guid.NewGuid()), EF would otherwise assume the set key means "already
-        // exists" and skip the INSERT, breaking the posting_skills FK.
-        var skill = await _db.Skills.FirstOrDefaultAsync(s => s.Name == skillName);
-        if (skill is null)
-        {
-            skill = new Skill { Name = skillName, Category = category };
-            _db.Skills.Add(skill);
-        }
-
-        var alreadyLinked = app.Posting.PostingSkills.Any(ps => ps.Skill.Name == skillName);
-        if (!alreadyLinked)
-        {
-            app.Posting.PostingSkills.Add(new PostingSkill
-            {
-                Skill = skill,
-                IsRequired = isRequired,
-                Source = SkillSource.Parsed
-            });
-            await _db.SaveChangesAsync();
-        }
-
-        return await GetByIdAsync(applicationId);
-    }
+    // AddSkillToPostingAsync used to live here. Phase 2.1 moved it to
+    // Modules/Applications/AddSkillToPosting.cs — a use case belongs in a slice,
+    // not on a CRUD interface (architecture.md A3, decision 5).
 
     public async Task<bool> DeleteAsync(Guid id)
     {
