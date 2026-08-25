@@ -60,6 +60,14 @@ when they go stale.
 | A4 | **Validation is ad hoc and surface-specific.** Hand-rolled null checks on the REST create path; the GraphQL mutation path has none. One rule, two surfaces, one implementation needed. | `Endpoints/ApplicationEndpoints.cs:45`, `GraphQL/Mutation.cs:9` |
 | A5 | **Stale comment** claiming Phase 2 swaps in a DynamoDB implementation. It did not. | `Repositories/IJobApplicationRepository.cs:5-7` |
 | A6 | **No tests, no CI, no compose file, no health check.** | repo-wide |
+| A7 | **`[JsonIgnore]` does not defend GraphQL.** HotChocolate honours `[GraphQLIgnore]`, so the back-references hidden from REST are *in the published schema* — `Company.postings`, `JobPosting.applications`, `Skill.postingSkills`. A client can walk `application → posting → company → postings → applications → resumeText` and reach every résumé in the database. **Confirmed against the emitted SDL**, not inferred from the attributes. | `Models/*.cs`, verified via `GET /graphql?sdl` |
+| A8 | **The audit columns are partial, and one already lies.** `job_postings` has no `UpdatedAtUtc` despite PATCH mutating it; four tables have none at all. `job_applications.UpdatedAtUtc` is hand-set in one method, and `AddSkillToPostingAsync` mutates and saves without touching it. The fix is a `SaveChangesInterceptor`, not more hand-maintenance. | `Repositories/PostgresJobApplicationRepository.cs:75,109` |
+| A9 | **The schema enforces nothing the application does not.** No DB-side default (`gen_random_uuid()`, `now()`), no CHECK constraint (`SalaryMin <= SalaryMax` is unenforced), no concurrency token, and eleven unbounded `text` columns on an unauthenticated write surface. | `Data/AppDbContext.cs`, `Migrations/…InitialCreate.cs` |
+
+Security, PII, secrets and retention are audited in full — severity, evidence and a
+phased remediation plan — in **[`security-and-data-audit.md`](security-and-data-audit.md)**.
+A7-A9 are the subset that belongs in *this* table because they are structural rather
+than operational.
 
 ---
 
@@ -167,6 +175,7 @@ Numbered, dated, with status, so reversals stay legible.
 | 6 | **Modular monolith over microservices,** with the extraction triggers in section 3. | 2026-08-25 | Accepted |
 | 7 | **MVC controllers — proposed for retirement.** `backlog.md` committed to adopting attribute-routed controllers as "the convention most teams use". Attribute-routed controllers organise code by *technical layer*, which cuts across vertical slices. Minimal APIs grouped per slice are equally mainstream in .NET 8+. Recommend dropping the adoption; confirm rather than silently discard. | 2026-08-25 | **Proposed** |
 | 8 | **Upgrade to `net10.0`.** `net8.0` reaches end of support **10 Nov 2026**; .NET 10 is LTS through Nov 2028. Slotted as Phase 2.5, before the AWS deploy, so Phase 3 lands on a supported runtime. | 2026-08-25 | Planned (Phase 2.5) |
+| 9 | **When user scoping lands, `skills` stays global.** Every other table gets an `OwnerUserId`; the shared `skills` table does not. Per-user skill rows would destroy the single `GROUP BY` that decision 1 and the Phase 2.3 analytics both rest on — which is the entire reason Postgres was chosen. The accepted cost is real and should be said out loud: one user's skill taxonomy is visible in aggregate to another. Revisit if JobKeep ever stops being a personal tool. Proposed by [`security-and-data-audit.md`](security-and-data-audit.md) §5 step 3; confirm before building the Identity module. | 2026-08-25 | **Proposed** |
 
 ---
 
@@ -183,8 +192,11 @@ Ordered by portfolio value per unit of effort.
 | **GraphQL projections** (A1) | Makes GraphQL actually do the thing GraphQL is for. Good interview material: "I measured what my resolver loaded, and it was the whole graph." | Fold into Phase 2.2 |
 | **docker-compose** | Replaces the manual `docker run` in the README. One file, and Docker is on every ad. | Trivial — any phase |
 | **Health check endpoint** | `/health` hitting the DB. Needed before Phase 3 anyway (Lambda + RDS). | Phase 3 |
-| **Auth / multi-user** | Architectural — every query becomes user-scoped. Already correctly deferred in the backlog. | Phase 3+ |
+| **Auth / multi-user** | Architectural — every query becomes user-scoped. Already correctly deferred in the backlog. Note the cost compounds: every phase built before it lands adds queries to re-scope. See [`security-and-data-audit.md`](security-and-data-audit.md) F1. | Phase 3+ |
 | **Structured logging / observability** | Serilog + correlation IDs. Meaningful once deployed and something can actually go wrong unobserved. | Phase 3+ |
+| **Audit & integrity baseline** (A8, A9) | Interceptor-maintained timestamps, DB-side defaults, CHECK constraints, `xmin` concurrency token, bounded text, the two missing indexes. One migration, no auth needed — the cheapest real fix on this list, and it corrects a column that is already wrong. | Own small phase (2.6) |
+| **PII, retention & transport** | `ResumeText` is an unbounded plaintext résumé; the DB connection does not require TLS; nothing is classified or has a retention rule, and APP 11.2 applies. Unlike auth, this was **never recorded as a tradeoff** — it was simply absent. | Phase 3 (transport), Phase 4/5 (retention) |
+| **Secrets management** | `appsettings.Development.json` is tracked and holds a plaintext password; `.gitignore` covers only `*.local.json`. Harmless today, but it is where the RDS string will land. | Phase 3 |
 
 ---
 
