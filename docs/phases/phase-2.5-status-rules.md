@@ -74,5 +74,7 @@ Zero — pure code, no new packages, no schema change.
 
 ## Next
 
-Revisit deferred items — optionally Phase 2.6 (reminders/follow-ups), otherwise
-Phase 3 (deploy to AWS Lambda + API Gateway + RDS).
+Phase 2.6 — upgrade to .NET 10 (LTS), which is a prerequisite for Phase 3.
+
+Reminders/follow-ups and the other deferred items in `backlog.md` are candidates
+to pull in here if you want another feature phase first; nothing depends on them.

@@ -146,6 +146,10 @@ cd src && dotnet run
 
 ## Next
 
-Phase 2.3 — filter, sort, and page the applications list. It owns the read path,
-which is where A1 (GraphQL over-fetch) and the rest of A2 (entities as the API
-contract) get fixed.
+Phase 2.2 — automated tests + CI. Scheduled ahead of the remaining Phase 2
+features because the gap register calls it "the single largest gap": this phase
+added four slices and a second API surface with nothing verifying either.
+
+Then Phase 2.3 — filter, sort, and page the applications list. It owns the read
+path, which is where A1 (GraphQL over-fetch) and the rest of A2 (entities as the
+API contract) get fixed.

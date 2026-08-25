@@ -1,6 +1,6 @@
 # Phase 2.2 — Automated tests + CI
 
-**Status:** Done (2026-08-25).
+**Status: Done** (2026-08-25).
 
 **Scheduled immediately after 2.1, ahead of the remaining Phase 2 features.** The gap
 register in `architecture.md` calls automated tests *"the single largest gap"* and
@@ -14,6 +14,17 @@ phase numbers still read in build order.
 Close **A6** — *"No tests, no CI, no compose file, no health check"* — for its first two
 items, using the tools the docs had already named: **xUnit + Testcontainers against
 real Postgres**, and **GitHub Actions build + test on push**.
+
+## Why this is Phase 2 work
+
+Phase 2 chose Postgres over DynamoDB on one argument: a normalized, shared `skills`
+table makes cross-posting analytics a single `GROUP BY`. Phase 2.1 then added four
+slices and a second API surface on top of it. None of that had a single test.
+
+So this is not new scope — it is verifying the thesis the phase was justified by,
+before three more phases are built on it. The delete-behaviour matrix and the
+find-or-create dedup are exactly the things a fake repository would have reported as
+working while the SQL was wrong.
 
 ## What was built
 
@@ -152,7 +163,16 @@ version split were **recorded, not fixed** — each belongs to a phase that owns
 
 No schema change, so `docs/diagrams/*.svg` stay valid.
 
-## How to run it
+## Cost
+
+Zero. Testcontainers runs locally against Docker, which is already installed for the
+dev database, and GitHub Actions is free for public repositories. No always-on
+infrastructure, nothing to tear down.
+
+The only ongoing cost is time: a full run takes ~8s locally and ~50s in CI, most of
+it container startup.
+
+## Verify locally
 
 ```bash
 cd src
@@ -181,3 +201,10 @@ they ever would.
   a `DateOnly` — same-day rows tie and their relative order is undefined, so no test
   asserts list order. Knowing which assertion would have been flaky is worth as much as
   the ones that are there.
+
+## Next
+
+Phase 2.3 — filter, sort, and page the applications list. It owns the read path, so
+it is where A1 (GraphQL over-fetch) and the rest of A2 (entities as the API contract)
+get fixed — and it is the first phase that gets to write its tests alongside the
+feature rather than afterwards.
