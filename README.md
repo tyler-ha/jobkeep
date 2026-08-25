@@ -18,7 +18,7 @@ while building demonstrable C# + AWS + AI integration experience.
 |---|---|---|
 | 1 | Local API, in-memory storage | Done — see `src/` |
 | 2 | Relational model on PostgreSQL + GraphQL | Done — local via Postgres in Docker |
-| 2.1 | Complete the write surface (skills + requirements CRUD) | Not started |
+| 2.1 | Complete the write surface (skills + requirements CRUD) | Done — first phase built as vertical slices |
 | 2.2 | Query, filter, sort & page the list | Not started |
 | 2.3 | Analytics endpoints (skill demand, status funnel) | Not started |
 | 2.4 | Enforce the application status lifecycle | Not started |
@@ -29,7 +29,7 @@ while building demonstrable C# + AWS + AI integration experience.
 | 6 | Front end | Not started |
 
 Full detail for each phase, including cost notes and interview talking
-points, is in `docs/`.
+points, is in [`docs/`](docs/README.md) — start with the index there.
 
 **How the code is shaped and why — plus the decision record, the gap
 register, and the verified market comparison — is in
@@ -72,6 +72,15 @@ curl -X POST http://localhost:5080/applications \
   -d '{"company":"Canva","title":"Backend Engineer","notes":"Applied via referral"}'
 
 curl http://localhost:5080/applications
+
+# Sub-resources (Phase 2.1). Skills dedup into a shared `skills` table;
+# removing one unlinks the join row and leaves that shared row alone.
+curl -X POST http://localhost:5080/applications/{id}/skills   -H "Content-Type: application/json"   -d '{"skillName":"C#","category":"Language","isRequired":true}'
+
+curl -X POST http://localhost:5080/applications/{id}/requirements   -H "Content-Type: application/json"   -d '{"text":"5+ years .NET","kind":"Qualification","isMustHave":true}'
+
+# Skill names go in the path, so percent-encode them: C# is C%23
+curl -X DELETE http://localhost:5080/applications/{id}/skills/C%23
 ```
 
 **GraphQL** — open the Nitro IDE at `http://localhost:5080/graphql`, or:
@@ -103,30 +112,33 @@ generates the DDL from EF rather than reading the model classes.
 Jobkeep/
 ├── CLAUDE.md              # Context file for Claude Code
 ├── README.md              # This file
-├── docs/                  # One doc per build phase
+├── docs/                  # see docs/README.md for the index
+│   ├── README.md           # what each doc is for, and which one wins
 │   ├── architecture.md     # HOW the code is shaped + decision record
-│   ├── phase-1-local-api.md
-│   ├── phase-2-postgres.md
-│   ├── phase-2.1-write-surface.md  # sub-phases: finish the model surface
-│   ├── phase-2.2-list-queries.md
-│   ├── phase-2.3-analytics.md
-│   ├── phase-2.4-status-rules.md
-│   ├── phase-2.5-dotnet10-upgrade.md
-│   ├── phase-3-aws-deploy.md
-│   ├── phase-4-ai-analyzer.md
-│   ├── phase-5-ats-check.md
-│   ├── phase-6-frontend.md
-│   └── backlog.md          # considered-but-not-committed feature candidates
+│   ├── security-and-data-audit.md  # schema/config exposure + remediation plan
+│   ├── backlog.md          # considered-but-not-committed feature candidates
+│   ├── token-log.md        # what each phase cost to build, in tokens
+│   ├── phases/             # one doc per build phase, in order
+│   │   ├── phase-1-local-api.md
+│   │   ├── phase-2-postgres.md
+│   │   ├── phase-2.1-write-surface.md
+│   │   └── ...             # 2.2-2.5, 3, 4, 5, 6
+│   └── diagrams/           # committed schema ERD + architecture SVGs
+├── scripts/
+│   └── token-usage.py     # totals Claude Code session tokens for docs/token-log.md
 └── src/                   # The actual .NET project
     ├── Jobkeep.csproj
     ├── Program.cs                   # wiring only: DI, middleware, Map* calls
-    ├── Endpoints/                   # REST routes (minimal API, grouped per resource)
+    ├── Modules/                     # vertical slices — one file per use case
+    │   └── Applications/            #   AddSkillToPosting, RemoveRequirement, ...
+    ├── Shared/                      # SliceResult + cross-cutting contracts
+    ├── Endpoints/                   # Phase 2 REST routes (retiring with the repository)
     ├── appsettings.json             # empty Postgres conn (set in deploy)
     ├── appsettings.Development.json # points at local Postgres
     ├── Models/                      # relational domain model + enums + DTOs
     ├── Data/                        # AppDbContext (EF Core mapping)
     ├── Migrations/                  # EF migrations
-    ├── Repositories/                # IJobApplicationRepository + Postgres/InMemory impls
+    ├── Repositories/                # IJobApplicationRepository — retiring, not growing
     ├── GraphQL/                     # HotChocolate Query + Mutation
     └── Properties/
 ```

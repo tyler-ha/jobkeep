@@ -53,13 +53,25 @@ Ordered roughly cheapest/most-Phase-2-shaped first.
 
 | Candidate | What it is | Cost / size | Likely home | Notes |
 |---|---|---|---|---|
-| **Soft delete / archive** | Mark rows inactive instead of hard `DELETE` so nothing is lost | Low — CRUD only, one nullable column + query filter | Could be a small Phase 2.x | No new concepts; cheap. Strongest candidate to pull in. |
+| **Soft delete / archive** | Mark rows inactive instead of hard `DELETE` so nothing is lost | Low — CRUD only, one nullable column + query filter | Could be a small Phase 2.x | No new concepts; cheap. Strongest candidate to pull in. **Gotcha found during the audit:** the unique indexes on `companies.Name` / `skills.Name` must become *filtered* unique indexes, or a soft-deleted company permanently blocks re-adding that name — and the find-or-create dedup depends on them. See [`security-and-data-audit.md`](security-and-data-audit.md) §5 step 2. |
 | **Data export (CSV/JSON)** | Export your applications | Low — read + serialize, no schema change | Could be a small Phase 2.x | Cheap, self-contained, ends runnable. |
 | **Reminders / follow-ups** | Date-based nudges ("follow up in 7 days", "interview tomorrow") | Medium — new entity + a due-date query; notifications later | Own phase (e.g. 2.5) | Flagship tracker feature. New entity = real scope. Notifications (email/push) are a *further* deferral tied to deploy. |
 | **Contacts / recruiter tracking** | Log who you spoke to at each company | Medium — new `Contact` entity + relationships | Own phase | Common in Huntr. New entity. |
 | **Document / resume versions** | Attach the specific resume/cover-letter version sent per application | Medium — new entity + storage decision (text now, files need blob storage → cost) | Own phase | Partially exists via `ResumeText`. File attachments would touch the cost priority (S3, etc.). |
-| **Audit / activity history** | "What changed and when" — a change log per entity | Medium-High — new table + write-path change on *every* mutation | Own phase | Touches everything; don't fold into an unrelated phase. `CreatedAtUtc`/`UpdatedAtUtc` exist but aren't a log. |
-| **Authentication / multi-user** | Scope all data per user; turn the tool into a real product | High — architectural, every query gets user-scoped | Own phase, tied to deploy (Phase 3+) | Deliberately *not* a Phase 2 item — would violate the small-phase priority. |
+| **Audit / activity history** | "What changed and when" — a change log per entity | Medium-High — new table + write-path change on *every* mutation | Own phase | Touches everything; don't fold into an unrelated phase. `CreatedAtUtc`/`UpdatedAtUtc` exist but aren't a log — and per the audit (A8) they aren't even reliable yet; fix those first. |
+| **Authentication / multi-user** | Scope all data per user; turn the tool into a real product | High — architectural, every query gets user-scoped | Own phase, tied to deploy (Phase 3+) | Deliberately *not* a Phase 2 item — would violate the small-phase priority. Scoping root is decided in `architecture.md` decision 9 (`skills` stays global). |
+
+### Added by the security & data audit (2026-08-25)
+
+Recorded because they were **absent from every document**, not deferred. Full
+evidence in [`security-and-data-audit.md`](security-and-data-audit.md).
+
+| Candidate | What it is | Cost / size | Likely home | Notes |
+|---|---|---|---|---|
+| **Audit & integrity baseline** | Interceptor-maintained timestamps, DB-side defaults, CHECK constraints, `xmin` concurrency token, bounded text, two missing indexes | Low — one migration + one interceptor, no auth needed | Small Phase 2.6 | The cheapest real fix on this list, and it corrects a column that is already wrong (A8). Best interview story in the audit. |
+| **Transport & secrets hardening** | `SSL Mode=VerifyFull`, RDS storage encryption, untrack `appsettings.Development.json`, connection string in SSM Parameter Store (free tier) | Low — config only, no schema | **Phase 3** | RDS storage encryption can only be enabled *at instance creation* — decide before the instance exists. |
+| **PII classification & retention** | Identify `ResumeText` / `Notes` / `Description` as personal information; decide whether they leave the machine once Phase 4 swaps off Ollama; retention rule per Privacy Act APP 11.2 | Low as a doc, Medium if purge is automated | Phase 4/5 guardrail | The one item here with an external obligation attached, not just good practice. |
+| **schema.org `JobPosting` gaps** | `validThrough` (expiry), `jobLocationType` (remote/hybrid), `identifier` (employer req id), source/channel | Low — four columns on `job_postings` | Fold into Phase 2.1 | Remote/hybrid is the most-filtered attribute in the current market and free-text `Location` cannot answer it. |
 
 ## Convention / industry-standard adoptions (committed intent, unscheduled)
 

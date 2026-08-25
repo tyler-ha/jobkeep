@@ -77,7 +77,8 @@ New feature work goes in a **module**, as a **slice per use case**:
 
 ```
 src/Modules/<Module>/<UseCase>.cs   — request + handler + response, together
-src/Shared/                          — AppDbContext, cross-cutting contracts
+src/Shared/                          — SliceResult + cross-cutting contracts
+src/Data/AppDbContext.cs             — the schema, in one place (Fluent API)
 src/Program.cs                       — wiring only (DI, middleware, Map* calls)
 ```
 
@@ -95,16 +96,27 @@ Modules: `Applications` (core), `Analytics` (read-only), `Ai` (Phase 4),
 
 ### Migration state (read this before editing `src/`)
 
-The code has **not** been restructured yet — this is deliberate, so each phase
-stays runnable. As of 2026-08-25 `src/` still has `Endpoints/` and
-`Repositories/` from Phase 2, and `IJobApplicationRepository` is still wired up.
+The restructure is **in progress, incrementally**, so each phase stays runnable.
+As of Phase 2.1 (2026-08-25) `src/` has both shapes at once:
+
+- `Modules/Applications/` — four slices (skills + requirements), each holding its
+  request, handler and response. `Shared/` holds `SliceResult<T>`, which is what
+  a handler returns so REST and GraphQL can translate one outcome two ways.
+- `Endpoints/` + `Repositories/` — the Phase 2 create/read/update/delete path,
+  still wired up and still going through `IJobApplicationRepository`. Phase 2.2
+  takes the read side.
+
+The rules:
 
 - **New** code: write it as a slice in a module.
 - **Existing** code: migrate the parts a phase actually touches. Don't do a
   sweeping refactor as a side effect of a feature.
 - `IJobApplicationRepository` is **retiring, not growing.** Do not add methods
   to it. If a phase doc says to (Phase 2.3 does), write a slice instead and
-  correct the phase doc.
+  correct the phase doc — which is what Phase 2.1 did, and the interface came
+  out of that phase smaller than it went in.
+- A slice handler takes `AppDbContext` directly, validates in the handler (not
+  at either edge), and returns a **response DTO**, never an EF entity.
 
 Superseded rules from earlier versions of this file, kept here so their
 reversal is legible: *"never bypass `IJobApplicationRepository`"* and *"keep
@@ -191,13 +203,19 @@ above any further architecture work.
 
 ## Where things are
 
+- `docs/README.md` — the index: what each doc is for, and which wins.
 - `docs/architecture.md` — how the code is shaped, why, and the decision
   record. **Check this before proposing structural changes.**
-- `docs/phase-N-*.md` — the plan and status for each build phase, in
+- `docs/phases/phase-N-*.md` — the plan and status for each build phase, in
   order. Check the current phase's doc before making changes so new
   work matches the intended scope for that stage.
+- `docs/security-and-data-audit.md` — schema/config exposure, F1-F18, and the
+  phased remediation plan.
 - `docs/backlog.md` — considered-but-not-committed features, and the
   verified market comparison.
+- `docs/token-log.md` — what each phase cost to build, in tokens. Regenerate
+  with `python scripts/token-usage.py`; see "When asked to move to the next
+  phase" below.
 - `docs/diagrams/` — `schema-erd.svg` and `architecture.svg`, embedded in
   `README.md` and `docs/architecture.md`. **Committed artefacts that go stale
   silently** — nothing fails a build when the schema moves and the picture
@@ -208,15 +226,24 @@ above any further architecture work.
   uniqueness live in Fluent API config and the Npgsql provider, so inferring
   them from the model classes produces a diagram that is wrong in exactly the
   places an interviewer would probe.
+- `scripts/token-usage.py` — reads Claude Code's session transcripts and totals
+  tokens per session, or per task within a session (`--task <prefix>`). The
+  source for `docs/token-log.md`.
 - `src/` — the actual .NET project.
 - Root `README.md` — status table and quick start.
 
 ## When asked to move to the next phase
 
-Read the relevant `docs/phase-N-*.md` file first — it already has the
+Read the relevant `docs/phases/phase-N-*.md` file first — it already has the
 plan. Implement it, update that doc's "Status" field to "Done" when
 working, and add any real deviations from the plan as notes in the doc
 so it stays an accurate record (useful later for interview stories too).
+
+When the phase is done, also **log what it cost**: run
+`python scripts/token-usage.py`, add a row to the "By phase" table in
+`docs/token-log.md`, and refresh its session table. The transcripts this reads
+are local and not kept forever, so a phase that isn't logged when it ends may
+not be recoverable later.
 
 The phase docs were written before the architecture record. If a phase doc
 contradicts `docs/architecture.md`, follow `architecture.md` and fix the

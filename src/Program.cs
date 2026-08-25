@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 using Jobkeep.Data;
 using Jobkeep.Endpoints;
 using Jobkeep.GraphQL;
+using Jobkeep.Modules.Applications;
 using Jobkeep.Repositories;
 using Microsoft.EntityFrameworkCore;
 
@@ -17,6 +18,11 @@ builder.Services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connect
 // Scoped, not singleton: the repository holds a scoped AppDbContext, so it must
 // share that lifetime (a singleton over a scoped context is a captive dependency).
 builder.Services.AddScoped<IJobApplicationRepository, PostgresJobApplicationRepository>();
+
+// Phase 2.1 onward, use cases are vertical slices under Modules/ instead of
+// methods on that repository (docs/architecture.md §2). Each slice handler takes
+// AppDbContext directly; this registers them and nothing else.
+builder.Services.AddApplicationsModule();
 
 // EF navigation properties form reference cycles (posting <-> its skills). Tell
 // System.Text.Json to ignore cycles so the REST endpoints can return entities
@@ -61,8 +67,14 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-// REST routes for /applications live in Endpoints/ApplicationEndpoints.cs.
+// REST routes for /applications live in Endpoints/ApplicationEndpoints.cs —
+// the Phase 2 routes still served by the retiring repository.
 app.MapApplicationEndpoints();
+
+// The Applications module's slice routes (skills + requirements sub-resources).
+// Same "/applications" prefix, different code path underneath; the line above
+// shrinks as later phases move its routes into slices.
+app.MapApplicationsModule();
 
 // Serves POST /graphql for queries + the Nitro (Banana Cake Pop) IDE at GET /graphql.
 app.MapGraphQL();

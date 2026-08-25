@@ -19,6 +19,9 @@ any cloud complexity.
   a one-line swap instead of a rewrite.
 - `Repositories/InMemoryJobApplicationRepository.cs` — Phase 1's storage,
   a `ConcurrentDictionary` in memory. Data resets on restart — expected.
+  **Deleted in Phase 2.1** (`architecture.md` decision 5): it was never wired up
+  after Phase 2, and the no-DB dev story is Postgres in Docker. Kept described
+  here because this doc is Phase 1's record, not a map of the current tree.
 - `Program.cs` — minimal API endpoints: `GET/POST/PATCH/DELETE /applications`.
 
 ## Run it

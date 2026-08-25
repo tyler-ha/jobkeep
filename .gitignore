@@ -21,3 +21,7 @@ Thumbs.db
 appsettings.*.local.json
 *.env
 .env
+
+# Python (scripts/)
+__pycache__/
+*.py[cod]
