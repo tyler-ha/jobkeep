@@ -2,7 +2,7 @@
 
 **Status: Not started**
 
-> **Prerequisite:** do **Phase 2.5** (upgrade to .NET 10 LTS) first. .NET 8
+> **Prerequisite:** do **Phase 2.6** (upgrade to .NET 10 LTS) first. .NET 8
 > goes end-of-support 10 Nov 2026, and migrating a live Lambda is a bigger job
 > than changing a target framework before anything is deployed.
 

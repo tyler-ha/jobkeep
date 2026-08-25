@@ -1,4 +1,4 @@
-# Phase 2.5 — Upgrade to .NET 10 (LTS)
+# Phase 2.6 — Upgrade to .NET 10 (LTS)
 
 **Status: Not started**
 

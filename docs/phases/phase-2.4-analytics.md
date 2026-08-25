@@ -1,4 +1,4 @@
-# Phase 2.3 — Analytics endpoints
+# Phase 2.4 — Analytics endpoints
 
 **Status: Not started**
 
@@ -73,4 +73,4 @@ Zero — local Postgres, no new packages.
 
 ## Next
 
-Phase 2.4 — enforce the application status lifecycle.
+Phase 2.5 — enforce the application status lifecycle.

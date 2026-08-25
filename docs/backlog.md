@@ -24,7 +24,7 @@ counts, and both are now safe to state:
   resume-first with a tracker attached, and its keyword feature is the
   **Job Matcher**: link one resume to one saved job, get a Match Score plus
   matched / missing / suggested keywords that update live as you edit. That is
-  resume-vs-**one**-job — our **Phase 5**, not our Phase 2.3. "Top in-demand
+  resume-vs-**one**-job — our **Phase 5**, not our Phase 2.4. "Top in-demand
   skills across **all** tracked postings" is a different question that neither
   Teal nor Huntr answers. It stays **our differentiator**.
 - **Don't use Simplify as a tracker benchmark.** Still correct — it's an
@@ -42,9 +42,9 @@ Full market context and sources: `docs/architecture.md` section 6.
 
 ## Already covered elsewhere (not backlog — here for cross-reference)
 
-- Filter / sort / page → **Phase 2.2** (planned)
-- Dashboard / status funnel → **Phase 2.3** (planned)
-- Skill-demand analytics → **Phase 2.3** (planned)
+- Filter / sort / page → **Phase 2.3** (planned)
+- Dashboard / status funnel → **Phase 2.4** (planned)
+- Skill-demand analytics → **Phase 2.4** (planned)
 - Resume-vs-job keyword matching → **Phase 5** (ATS check)
 
 ## Deferred candidates
@@ -61,6 +61,20 @@ Ordered roughly cheapest/most-Phase-2-shaped first.
 | **Audit / activity history** | "What changed and when" — a change log per entity | Medium-High — new table + write-path change on *every* mutation | Own phase | Touches everything; don't fold into an unrelated phase. `CreatedAtUtc`/`UpdatedAtUtc` exist but aren't a log — and per the audit (A8) they aren't even reliable yet; fix those first. |
 | **Authentication / multi-user** | Scope all data per user; turn the tool into a real product | High — architectural, every query gets user-scoped | Own phase, tied to deploy (Phase 3+) | Deliberately *not* a Phase 2 item — would violate the small-phase priority. Scoping root is decided in `architecture.md` decision 9 (`skills` stays global). |
 
+### Added by the user-journey review (2026-08-25)
+
+Surfaced by writing [`user-journeys.md`](user-journeys.md) — the gap between the
+intended end-to-end procedure and what any doc actually commits to. Same status as
+everything else here: **not a commitment.**
+
+| Candidate | What it is | Cost / size | Likely home | Notes |
+|---|---|---|---|---|
+| **Document intake (text-only)** | A `Documents` slice: raw text + a `kind` (Resume / JobAd / CoverLetter), optionally linked to an application | Low — one table, one slice, **no blob storage** | Own small phase, before Phase 4 | The largest journey gap: **nothing in any doc uploads or parses a file.** Phase 4 says "*paste* a job description in"; Phase 5 says "store your resume text once". Text-only keeps the near-zero-cost priority intact and also de-duplicates `ResumeText`, which is finding F2. PDF/DOCX parsing stays deferred. |
+| **AI-extracted requirements** | Extend Phase 4's prompt to write `job_requirements`, not just `posting_skills` | Low — prompt + inserts, table already exists | Fold into Phase 4 | Phase 4 extracts skills, seniority and a summary but never requirements — yet `job_requirements` exists *"for the Phase 5 ATS check"*. The AI phase currently feeds only half of the phase that depends on it. |
+| **Provenance on `job_requirements`** | A `Source` column mirroring `posting_skills.Source` (Parsed / AiExtracted) | Low — one column | With the row above | No way to tell a requirement you typed from one a model guessed. Harmless today, load-bearing the moment the row above ships. **Not recorded anywhere else**, including the audit. |
+| **Target profile** | Store the roles / seniority / skills you are aiming at | Medium — new entity + one analytics join | Own phase, after 2.3 | Upgrades the differentiator: Phase 2.4 answers *"what is in demand?"*; with a target it answers **"what is in demand that I do not have yet?"** — the question a job seeker actually has. |
+| **Interview rounds** | Round number, date, outcome, who you spoke to | Medium — new entity | Own phase | `Interviewing` is one enum value. "Second round Thursday" has nowhere to live but free-text `Notes`, which no query can use. Related: status history is scoped out of 2.4 (F16), and the audit lists interview rounds as missing against tracker convention. |
+
 ### Added by the security & data audit (2026-08-25)
 
 Recorded because they were **absent from every document**, not deferred. Full
@@ -68,10 +82,10 @@ evidence in [`security-and-data-audit.md`](security-and-data-audit.md).
 
 | Candidate | What it is | Cost / size | Likely home | Notes |
 |---|---|---|---|---|
-| **Audit & integrity baseline** | Interceptor-maintained timestamps, DB-side defaults, CHECK constraints, `xmin` concurrency token, bounded text, two missing indexes | Low — one migration + one interceptor, no auth needed | Small Phase 2.6 | The cheapest real fix on this list, and it corrects a column that is already wrong (A8). Best interview story in the audit. |
+| **Audit & integrity baseline** | Interceptor-maintained timestamps, DB-side defaults, CHECK constraints, `xmin` concurrency token, bounded text, two missing indexes | Low — one migration + one interceptor, no auth needed | Small Phase 2.7 | The cheapest real fix on this list, and it corrects a column that is already wrong (A8). Best interview story in the audit. |
 | **Transport & secrets hardening** | `SSL Mode=VerifyFull`, RDS storage encryption, untrack `appsettings.Development.json`, connection string in SSM Parameter Store (free tier) | Low — config only, no schema | **Phase 3** | RDS storage encryption can only be enabled *at instance creation* — decide before the instance exists. |
 | **PII classification & retention** | Identify `ResumeText` / `Notes` / `Description` as personal information; decide whether they leave the machine once Phase 4 swaps off Ollama; retention rule per Privacy Act APP 11.2 | Low as a doc, Medium if purge is automated | Phase 4/5 guardrail | The one item here with an external obligation attached, not just good practice. |
-| **schema.org `JobPosting` gaps** | `validThrough` (expiry), `jobLocationType` (remote/hybrid), `identifier` (employer req id), source/channel | Low — four columns on `job_postings` | Fold into Phase 2.1 | Remote/hybrid is the most-filtered attribute in the current market and free-text `Location` cannot answer it. |
+| **schema.org `JobPosting` gaps** | `validThrough` (expiry), `jobLocationType` (remote/hybrid), `identifier` (employer req id), source/channel | Low — four columns on `job_postings` | **Unowned** — 2.1 is Done; fold into 2.2 or its own small phase | Remote/hybrid is the most-filtered attribute in the current market and free-text `Location` cannot answer it. |
 
 ## Convention / industry-standard adoptions (committed intent, unscheduled)
 
@@ -85,9 +99,9 @@ its timing is right; when we do, **we apply it fully**, not half-way.
 
 | Adoption | From → To | Why deferred | STAR angle |
 |---|---|---|---|
-| **Automated tests** | No test project → xUnit + Testcontainers (real Postgres in Docker) | Not deferred for a good reason — this is simply the largest gap in the project. **Should be scheduled as its own phase, ahead of further architecture work.** Named in essentially every Melbourne .NET ad reviewed. | "Tested the EF mapping and find-or-create dedup against a real Postgres in a container, because a fake repository would have passed while the actual SQL was wrong — and that dedup is the feature the whole storage choice rests on." |
-| **CI/CD** | Manual local build → GitHub Actions (build + test on push) | Depends on tests existing to be worth much. Pair it with the testing phase. Free for public repos. | "Set up the pipeline early so a broken build was visible immediately rather than discovered at deploy time." |
-| **Response DTOs** | Endpoints/resolvers return EF entities → explicit response records | Cheap and worth folding into Phase 2.1/2.2 rather than doing standalone. Removes the `ReferenceHandler.IgnoreCycles` band-aid at the same time. | "The serializer needed a cycle-handling flag, which was the clue that I was leaking my database schema out as my API contract." |
+| ~~**Automated tests**~~ **DONE (Phase 2.2)** | No test project → xUnit + Testcontainers (real Postgres in Docker) | Not deferred for a good reason — this is simply the largest gap in the project. **Should be scheduled as its own phase, ahead of further architecture work.** Named in essentially every Melbourne .NET ad reviewed. | "Tested the EF mapping and find-or-create dedup against a real Postgres in a container, because a fake repository would have passed while the actual SQL was wrong — and that dedup is the feature the whole storage choice rests on." |
+| ~~**CI/CD**~~ **DONE (Phase 2.2)** | Manual local build → GitHub Actions (build + test on push) | Depends on tests existing to be worth much. Pair it with the testing phase. Free for public repos. | "Set up the pipeline early so a broken build was visible immediately rather than discovered at deploy time." |
+| **Response DTOs** | Endpoints/resolvers return EF entities → explicit response records | Cheap and worth folding into Phase 2.3 rather than doing standalone. Removes the `ReferenceHandler.IgnoreCycles` band-aid at the same time. | "The serializer needed a cycle-handling flag, which was the clue that I was leaking my database schema out as my API contract." |
 | **docker-compose** | Manual `docker run` in the README → one `compose.yaml` | Trivial; slot into any phase. Docker appears on nearly every ad. | Minor on its own, but it makes the quick-start a single command. |
 | ~~**MVC Controllers**~~ | ~~Minimal-API endpoint files → attribute-routed controllers~~ | **Proposed for retirement (2026-08-25)** — see below. | — |
 
@@ -116,7 +130,7 @@ worked against — and I can explain the tradeoff in both directions."*
 ## Explicitly NOT backlog (already owned or out of character)
 
 - **Kanban board / drag-and-drop** — frontend, belongs to **Phase 6** (the data
-  behind it is the Phase 2.3 analytics + status field).
+  behind it is the Phase 2.4 analytics + status field).
 - **AI job-description analysis** — that's **Phase 4**, already planned.
 - **Rate limiting / production API hygiene** — revisit at deploy (**Phase 3**),
   not before there's a real endpoint to protect.

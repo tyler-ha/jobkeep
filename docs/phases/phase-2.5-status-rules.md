@@ -1,4 +1,4 @@
-# Phase 2.4 — Enforce the application status lifecycle
+# Phase 2.5 — Enforce the application status lifecycle
 
 **Status: Not started**
 
@@ -74,5 +74,5 @@ Zero — pure code, no new packages, no schema change.
 
 ## Next
 
-Revisit deferred items — optionally Phase 2.5 (reminders/follow-ups), otherwise
+Revisit deferred items — optionally Phase 2.6 (reminders/follow-ups), otherwise
 Phase 3 (deploy to AWS Lambda + API Gateway + RDS).

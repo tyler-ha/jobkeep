@@ -131,9 +131,9 @@ runnable sub-phases, each in its own doc:
 - **Phase 2.1** (`phase-2.1-write-surface.md`) — complete the write surface:
   skills over REST + requirements CRUD (the `job_requirements` table is
   currently write-unreachable).
-- **Phase 2.2** (`phase-2.2-list-queries.md`) — filter / sort / page the list.
-- **Phase 2.3** (`phase-2.3-analytics.md`) — analytics endpoints (skill demand,
+- **Phase 2.3** (`phase-2.3-list-queries.md`) — filter / sort / page the list.
+- **Phase 2.4** (`phase-2.4-analytics.md`) — analytics endpoints (skill demand,
   status funnel) — exposes the `GROUP BY` payoff this phase was justified by.
-- **Phase 2.4** (`phase-2.4-status-rules.md`) — enforce the status lifecycle.
+- **Phase 2.5** (`phase-2.5-status-rules.md`) — enforce the status lifecycle.
 
 Then Phase 3 — deploy the API to AWS Lambda + API Gateway, with Postgres on RDS.

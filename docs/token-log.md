@@ -48,14 +48,15 @@ folded into a phase they didn't belong to.
 | **Phase 0** — shaping the project | 1 | 19 | 622k | The initial "what is this project" conversation. |
 | **Phase 1** — local API, in-memory | 2 | 177 | 8.7M | Scaffolding ASP.NET Core + the first endpoints. |
 | **Phase 2** — Postgres + GraphQL | 2 | 338 | 45.1M | **The most expensive thing in the project by far.** One 325-turn session accounts for 44.6M of it. |
-| **Phase 2.1** — write surface as slices | 1 | 187 | 24.9M | Four slices, both API surfaces, live verification, doc updates. |
+| **Phase 2.1** — write surface as slices | 1 | 210 | 29.7M | Four slices, both API surfaces, live verification, doc updates. Grew after it was first logged — the session continued past the phase. |
+| **Phase 2.2** — tests + CI | 1 | 185 | 30.2M | 55 integration tests, GitHub Actions, `user-journeys.md`, and the doc updates. Second-most expensive phase after Phase 2. Logged from inside the session it measures, so the real figure is a little higher than this. |
 | Architecture record | 1 | 162 | 19.8M | Writing `architecture.md` — the decision record and gap register. |
 | Schema + architecture diagrams | 1 | 162 | 19.9M | The `schema-diagram` skill and the two committed SVGs. |
 | Security & data audit | 1 | 110 | 13.4M | `security-and-data-audit.md`, F1–F18. |
-| Repo hygiene + architecture direction | 5 | 212 | 11.6M | `CLAUDE.md`, endpoint extraction, the rename to JobKeep, git config. |
+| Repo hygiene + architecture direction | 6 | 224 | 12.3M | `CLAUDE.md`, endpoint extraction, the rename to JobKeep, git config. |
 | Tooling / skills | 5 | 21 | 700k | Skill installs and short setup sessions. |
 | | | | | |
-| **Total** | **19** | **1388** | **144.8M** | |
+| **Total** | **21** | **1608** | **180.5M** | |
 
 ### What the numbers say
 
@@ -126,8 +127,10 @@ replay; `Total` = all four counters summed.
 | 2026-08-25 03:00 | `develop` | 162 | 727k | 18.9M | 224k | **19.9M** | `01934837` |
 | 2026-08-25 07:07 | `develop` | 39 | 230k | 1.9M | 34k | **2.2M** | `2d1cc0ae` |
 | 2026-08-25 08:46 | `develop` | 110 | 628k | 12.7M | 147k | **13.4M** | `5ebe70c1` |
-| 2026-08-25 09:17 | `develop` | 187 | 583k | 24.1M | 219k | **24.9M** | `18c78f32` |
-| | | **1388** | **5.7M** | **137.3M** | **1.8M** | **144.8M** | 19 sessions |
+| 2026-08-25 09:17 | `develop` | 210 | 617k | 28.9M | 238k | **29.7M** | `18c78f32` |
+| 2026-08-25 11:24 | `phase-2.1/write-surface` | 12 | 88k | 603k | 6k | **697k** | `ba9412ac` |
+| 2026-08-25 11:40 | `phase-2.2/tests-and-ci` | 185 | 1.3M | 28.6M | 278k | **30.2M** | `6b5afb84` |
+| | | **1608** | **7.1M** | **171.2M** | **2.1M** | **180.5M** | 21 sessions |
 
 ---
 
