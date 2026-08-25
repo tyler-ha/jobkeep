@@ -1,0 +1,136 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 730" width="1000" height="730" role="img" aria-labelledby="t d">
+  <title id="t">JobKeep database schema</title>
+  <desc id="d">Entity relationship diagram of the JobKeep PostgreSQL schema. job_postings is the hub. companies has many job_postings, delete restricted. job_postings has many job_requirements, one ai_analyses row, and many posting_skills, all cascading on delete. skills has many posting_skills, delete restricted. job_postings has many job_applications, delete restricted. Each job_application has one ats_results row, cascading on delete.</desc>
+
+  <rect x="0" y="0" width="1000" height="730" fill="#FBFCFB"/>
+
+  <defs>
+    <marker id="ar" viewBox="0 0 10 8" refX="9.5" refY="4" markerWidth="8" markerHeight="7" orient="auto">
+      <polygon points="0,0 10,4 0,8" fill="#0E5F58"/>
+    </marker>
+    <marker id="ac" viewBox="0 0 10 8" refX="9.5" refY="4" markerWidth="8" markerHeight="7" orient="auto">
+      <polygon points="0,0 10,4 0,8" fill="#A8402F"/>
+    </marker>
+  </defs>
+
+  <g font-family="ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace">
+
+    <!-- ============ edges (drawn first, boxes sit on top) ============ -->
+    <path d="M180,118 V190" fill="none" stroke="#0E5F58" stroke-width="1.6" marker-end="url(#ar)"/>
+    <path d="M300,215 H385 V179 H470" fill="none" stroke="#A8402F" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#ac)"/>
+    <path d="M300,229 H385 V289 H470" fill="none" stroke="#A8402F" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#ac)"/>
+    <path d="M300,243 H345 V399 H470" fill="none" stroke="#A8402F" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#ac)"/>
+    <path d="M760,399 H710" fill="none" stroke="#0E5F58" stroke-width="1.6" marker-end="url(#ar)"/>
+    <path d="M180,268 V430" fill="none" stroke="#0E5F58" stroke-width="1.6" marker-end="url(#ar)"/>
+    <path d="M180,508 V570" fill="none" stroke="#A8402F" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#ac)"/>
+
+    <g font-size="11" fill="#5B6C68">
+      <text x="192" y="152">1 : N</text>
+      <text x="427" y="173" text-anchor="middle">1 : N</text>
+      <text x="427" y="283" text-anchor="middle">1 : 1</text>
+      <text x="407" y="393" text-anchor="middle">1 : N</text>
+      <text x="735" y="393" text-anchor="middle">N : 1</text>
+      <text x="192" y="352">1 : N</text>
+      <text x="192" y="543">1 : 1</text>
+    </g>
+
+    <!-- ============ companies ============ -->
+    <rect x="60" y="40" width="240" height="78" rx="3" fill="#FFFFFF"/>
+    <rect x="60" y="40" width="240" height="26" fill="#E8EEEB"/>
+    <rect x="60" y="40" width="240" height="78" rx="3" fill="none" stroke="#C9D2CE"/>
+    <line x1="60" y1="66" x2="300" y2="66" stroke="#C9D2CE"/>
+    <text x="72" y="58" font-size="13" font-weight="600" fill="#16211F">companies</text>
+    <text x="72" y="86" font-size="11.5" fill="#16211F">Id</text>
+    <text x="288" y="86" font-size="10.5" fill="#5B6C68" text-anchor="end">uuid · PK</text>
+    <text x="72" y="106" font-size="11.5" fill="#16211F">Name</text>
+    <text x="288" y="106" font-size="10.5" fill="#5B6C68" text-anchor="end">varchar · UNIQUE</text>
+
+    <!-- ============ job_postings ============ -->
+    <rect x="60" y="190" width="240" height="78" rx="3" fill="#FFFFFF"/>
+    <rect x="60" y="190" width="240" height="26" fill="#E8EEEB"/>
+    <rect x="60" y="190" width="240" height="78" rx="3" fill="none" stroke="#C9D2CE"/>
+    <line x1="60" y1="216" x2="300" y2="216" stroke="#C9D2CE"/>
+    <text x="72" y="208" font-size="13" font-weight="600" fill="#16211F">job_postings</text>
+    <text x="72" y="236" font-size="11.5" fill="#16211F">Id</text>
+    <text x="288" y="236" font-size="10.5" fill="#5B6C68" text-anchor="end">uuid · PK</text>
+    <text x="72" y="256" font-size="11.5" fill="#16211F">CompanyId</text>
+    <text x="288" y="256" font-size="10.5" fill="#5B6C68" text-anchor="end">uuid · FK</text>
+
+    <!-- ============ job_applications ============ -->
+    <rect x="60" y="430" width="240" height="78" rx="3" fill="#FFFFFF"/>
+    <rect x="60" y="430" width="240" height="26" fill="#E8EEEB"/>
+    <rect x="60" y="430" width="240" height="78" rx="3" fill="none" stroke="#C9D2CE"/>
+    <line x1="60" y1="456" x2="300" y2="456" stroke="#C9D2CE"/>
+    <text x="72" y="448" font-size="13" font-weight="600" fill="#16211F">job_applications</text>
+    <text x="72" y="476" font-size="11.5" fill="#16211F">Id</text>
+    <text x="288" y="476" font-size="10.5" fill="#5B6C68" text-anchor="end">uuid · PK</text>
+    <text x="72" y="496" font-size="11.5" fill="#16211F">PostingId</text>
+    <text x="288" y="496" font-size="10.5" fill="#5B6C68" text-anchor="end">uuid · FK</text>
+
+    <!-- ============ ats_results ============ -->
+    <rect x="60" y="570" width="240" height="78" rx="3" fill="#FFFFFF"/>
+    <rect x="60" y="570" width="240" height="26" fill="#E8EEEB"/>
+    <rect x="60" y="570" width="240" height="78" rx="3" fill="none" stroke="#C9D2CE"/>
+    <line x1="60" y1="596" x2="300" y2="596" stroke="#C9D2CE"/>
+    <text x="72" y="588" font-size="13" font-weight="600" fill="#16211F">ats_results</text>
+    <text x="72" y="616" font-size="11.5" fill="#16211F">Id</text>
+    <text x="288" y="616" font-size="10.5" fill="#5B6C68" text-anchor="end">uuid · PK</text>
+    <text x="72" y="636" font-size="11.5" fill="#16211F">ApplicationId</text>
+    <text x="288" y="636" font-size="10.5" fill="#5B6C68" text-anchor="end">FK · UNIQUE</text>
+
+    <!-- ============ job_requirements ============ -->
+    <rect x="470" y="140" width="240" height="78" rx="3" fill="#FFFFFF"/>
+    <rect x="470" y="140" width="240" height="26" fill="#E8EEEB"/>
+    <rect x="470" y="140" width="240" height="78" rx="3" fill="none" stroke="#C9D2CE"/>
+    <line x1="470" y1="166" x2="710" y2="166" stroke="#C9D2CE"/>
+    <text x="482" y="158" font-size="13" font-weight="600" fill="#16211F">job_requirements</text>
+    <text x="482" y="186" font-size="11.5" fill="#16211F">Id</text>
+    <text x="698" y="186" font-size="10.5" fill="#5B6C68" text-anchor="end">uuid · PK</text>
+    <text x="482" y="206" font-size="11.5" fill="#16211F">PostingId</text>
+    <text x="698" y="206" font-size="10.5" fill="#5B6C68" text-anchor="end">uuid · FK</text>
+
+    <!-- ============ ai_analyses ============ -->
+    <rect x="470" y="250" width="240" height="78" rx="3" fill="#FFFFFF"/>
+    <rect x="470" y="250" width="240" height="26" fill="#E8EEEB"/>
+    <rect x="470" y="250" width="240" height="78" rx="3" fill="none" stroke="#C9D2CE"/>
+    <line x1="470" y1="276" x2="710" y2="276" stroke="#C9D2CE"/>
+    <text x="482" y="268" font-size="13" font-weight="600" fill="#16211F">ai_analyses</text>
+    <text x="482" y="296" font-size="11.5" fill="#16211F">Id</text>
+    <text x="698" y="296" font-size="10.5" fill="#5B6C68" text-anchor="end">uuid · PK</text>
+    <text x="482" y="316" font-size="11.5" fill="#16211F">PostingId</text>
+    <text x="698" y="316" font-size="10.5" fill="#5B6C68" text-anchor="end">FK · UNIQUE</text>
+
+    <!-- ============ posting_skills ============ -->
+    <rect x="470" y="360" width="240" height="78" rx="3" fill="#FFFFFF"/>
+    <rect x="470" y="360" width="240" height="26" fill="#E8EEEB"/>
+    <rect x="470" y="360" width="240" height="78" rx="3" fill="none" stroke="#C9D2CE"/>
+    <line x1="470" y1="386" x2="710" y2="386" stroke="#C9D2CE"/>
+    <text x="482" y="378" font-size="13" font-weight="600" fill="#16211F">posting_skills</text>
+    <text x="482" y="406" font-size="11.5" fill="#16211F">PostingId</text>
+    <text x="698" y="406" font-size="10.5" fill="#5B6C68" text-anchor="end">PK · FK</text>
+    <text x="482" y="426" font-size="11.5" fill="#16211F">SkillId</text>
+    <text x="698" y="426" font-size="10.5" fill="#5B6C68" text-anchor="end">PK · FK</text>
+
+    <!-- ============ skills ============ -->
+    <rect x="760" y="360" width="200" height="78" rx="3" fill="#FFFFFF"/>
+    <rect x="760" y="360" width="200" height="26" fill="#E8EEEB"/>
+    <rect x="760" y="360" width="200" height="78" rx="3" fill="none" stroke="#C9D2CE"/>
+    <line x1="760" y1="386" x2="960" y2="386" stroke="#C9D2CE"/>
+    <text x="772" y="378" font-size="13" font-weight="600" fill="#16211F">skills</text>
+    <text x="772" y="406" font-size="11.5" fill="#16211F">Id</text>
+    <text x="948" y="406" font-size="10.5" fill="#5B6C68" text-anchor="end">uuid · PK</text>
+    <text x="772" y="426" font-size="11.5" fill="#16211F">Name</text>
+    <text x="948" y="426" font-size="10.5" fill="#5B6C68" text-anchor="end">UNIQUE</text>
+
+    <!-- ============ legend ============ -->
+    <line x1="60" y1="678" x2="100" y2="678" stroke="#0E5F58" stroke-width="1.6"/>
+    <text x="110" y="682" font-size="11.5" fill="#5B6C68">ON DELETE RESTRICT — parent delete blocked</text>
+    <line x1="440" y1="678" x2="480" y2="678" stroke="#A8402F" stroke-width="1.6" stroke-dasharray="5 4"/>
+    <text x="490" y="682" font-size="11.5" fill="#5B6C68">ON DELETE CASCADE — children go with the parent</text>
+
+    <line x1="60" y1="698" x2="960" y2="698" stroke="#C9D2CE"/>
+    <text x="60" y="716" font-size="10.5" fill="#5B6C68">8 tables · 8 indexes (4 unique) · 7 foreign keys · 4 cascade, 3 restrict</text>
+    <text x="960" y="716" font-size="10.5" fill="#5B6C68" text-anchor="end">generated from EF migration 20260819115119_InitialCreate</text>
+
+  </g>
+</svg>
