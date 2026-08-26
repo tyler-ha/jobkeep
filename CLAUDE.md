@@ -72,6 +72,29 @@ a session's later turns cost far more than its early ones:
 | 160–210 turns | 120–170k |
 | 300+ turns | 140–210k |
 
+These brackets were fitted on Phases 1-2.2 and predict the *shape*, not the
+number: Phase 2.4 ran 78 turns at ~99k/turn, well above the bracket, because the
+standing context every turn replays — this file, the docs, the source — has grown
+since. The floor drifts up as the project does. The lever below is unchanged.
+
+**The operating rule that follows from this: keep the context window under 120k
+tokens, then `/handoff`, `/clear`, and reload the handoff doc in a fresh session.**
+The rule itself is in `~/.claude/CLAUDE.md` (user level, every project); what is
+specific to *this* repo is the conversion, because nobody can act on a token count
+they cannot see:
+
+- Fixed overhead here is **~40k before a word is exchanged** — system prompt,
+  tools, this file, the skills. So 120k total is only ~80k of actual conversation.
+- Measured on the Phase 2.4 session: **78 turns = 147k total / 107k messages.**
+  So **120k lands around turn 55-60** for turns of that shape — slices, tests, a
+  few large file reads. Fewer if the turns are read-heavy, more if conversational.
+- I cannot see my own context usage; `/context` is yours to run. I watch turn
+  count as a proxy and will say when it trips rather than continuing silently.
+
+Hand off **at the end of a runnable unit**, not mid-task — priority 2 and the cost
+data agree here, which is the useful part. A handoff in the middle of a
+half-applied refactor costs more than the context it saves.
+
 Phase 2.2 is the clean demonstration because it got measured twice: its first
 185 turns cost 163k/turn, its next 112 cost 286k/turn — same session, same task,
 back half **75% more expensive per turn**. So the lever is *where a session
@@ -337,7 +360,11 @@ fixed** — don't re-discover them:
   purpose is deduplication. Company dedup has the same defect. Both need a
   case-insensitive natural key, which is a migration and so its own phase. Note the
   *filters* added in 2.3 are case-insensitive (ILIKE), so searching finds both rows —
-  which hides the problem without fixing it.
+  which hides the problem without fixing it. Phase 2.4 is where it actually costs
+  something: a duplicate row splits one skill's count in `/stats/skill-demand`. It is
+  now pinned by a test that asserts the defect
+  (`SkillDemand_SplitsSkillsDifferingOnlyInCase_WhichIsTheKnownDedupGap`), so the fix
+  announces itself by breaking that test.
 - **`src` pairs Npgsql provider 8.0.10 with EF Design 8.0.11.** Harmless today;
   Phase 2.6 resolves it.
 - **No index on `Status` or `DateApplied`** even though 2.3 filters and sorts on
@@ -390,10 +417,18 @@ through the GraphQL schema). A1 is *partly* fixed — read decision 11 before
 
 ## When asked to move to the next phase
 
-**Currently up next: Phase 2.4** (`docs/phases/phase-2.4-analytics.md`) — skill
-demand and status funnel, as a read-only `Analytics` module. Its doc still tells you
-to add `GetStatusFunnelAsync` to `IJobApplicationRepository`, which no longer exists;
-write slices and correct the doc. `docs/README.md` has the full status table.
+**Currently up next: Phase 2.5** (`docs/phases/phase-2.5-status-rules.md`) — enforce
+the application status lifecycle. Its doc asks you to **confirm the transition table
+with the user before implementing**: which status may follow which is a business
+decision, not a technical one. It is also the project's first pure domain rule with
+no database in it, so it is the one place a plain unit test beats an integration
+test. `docs/README.md` has the full status table.
+
+Phase 2.4 is done (2026-08-26): `Modules/Analytics/`, read-only, three `GROUP BY`
+slices on both surfaces. Its one architectural consequence is **decision 13** — a
+read-only reporting module is allowed to read other modules' tables, which rule 2
+otherwise forbids. Read that before adding a second cross-module reader, because the
+exception is scoped to *read-only reporting* and does not generalise.
 
 Read the relevant `docs/phases/phase-N-*.md` file first — it already has the
 plan. Implement it, update that doc's "Status" field to "Done" when

@@ -87,8 +87,8 @@
     <text x="270" y="518" font-size="10.5" fill="#16211F">Ats</text>
     <text x="710" y="518" font-size="9.5" fill="#5B6C68" text-anchor="end">ats_results · phase 5</text>
     <line x1="270" y1="527" x2="710" y2="527" stroke="#C9D2CE"/>
-    <text x="490" y="540" font-size="9.5" fill="#8A9793" text-anchor="middle">a module never reads another module's tables —</text>
-    <text x="490" y="553" font-size="9.5" fill="#8A9793" text-anchor="middle">cross-module access goes through a public contract</text>
+    <text x="490" y="540" font-size="9.5" fill="#8A9793" text-anchor="middle">a module never reads another module's tables — cross-module access</text>
+    <text x="490" y="553" font-size="9.5" fill="#8A9793" text-anchor="middle">goes through a contract. Analytics is the read-only exception (decision 13)</text>
 
     <path d="M490,564 V594" fill="none" stroke="#0E5F58" stroke-width="1.6" marker-end="url(#an)"/>
 

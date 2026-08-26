@@ -1,3 +1,4 @@
+using Jobkeep.Modules.Analytics;
 using Jobkeep.Modules.Applications;
 
 namespace Jobkeep.GraphQL;
@@ -39,4 +40,31 @@ public class Query
         [Service] GetApplicationHandler handler,
         CancellationToken ct)
         => (await handler.HandleAsync(id, ct)).ValueOrThrow();
+
+    // Phase 2.4 — the analytics fields. Same pattern: adapters over the slice
+    // handlers the /stats routes call, so the cap on `top` and the shape of the
+    // funnel are decided once rather than once per surface.
+    //
+    // Worth noting what these are NOT. They return finished aggregates, not an
+    // IQueryable a client can further filter or page. That is on purpose: an
+    // aggregate over an unbounded client-supplied query is how a read-only
+    // reporting endpoint turns into a way to make the database do arbitrary
+    // work, and it is also how EF entities get back into the published schema
+    // (architecture.md A7, closed in Phase 2.3 and worth keeping closed).
+    public async Task<List<SkillDemandItem>> GetSkillDemand(
+        int? top,
+        [Service] SkillDemandHandler handler,
+        CancellationToken ct)
+        => (await handler.HandleAsync(top, ct)).ValueOrThrow();
+
+    public async Task<ApplicationFunnel> GetStatusFunnel(
+        [Service] StatusFunnelHandler handler,
+        CancellationToken ct)
+        => (await handler.HandleAsync(ct)).ValueOrThrow();
+
+    public async Task<List<CompanyRollupItem>> GetCompanyRollup(
+        int? top,
+        [Service] CompanyRollupHandler handler,
+        CancellationToken ct)
+        => (await handler.HandleAsync(top, ct)).ValueOrThrow();
 }

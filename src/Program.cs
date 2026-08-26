@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using Jobkeep.Data;
 using Jobkeep.GraphQL;
+using Jobkeep.Modules.Analytics;
 using Jobkeep.Modules.Applications;
 using Microsoft.EntityFrameworkCore;
 
@@ -17,6 +18,11 @@ builder.Services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connect
 // Each slice handler takes AppDbContext directly, so this registers them and
 // nothing else — as of Phase 2.3 there is no repository layer left to register.
 builder.Services.AddApplicationsModule();
+
+// Phase 2.4. Read-only: three aggregate queries, no tables of its own. It reads
+// Applications-owned tables, which bends architecture.md rule 2 deliberately —
+// AnalyticsModule.cs has the reasoning and the accepted cost.
+builder.Services.AddAnalyticsModule();
 
 builder.Services.ConfigureHttpJsonOptions(o =>
 {
@@ -68,6 +74,9 @@ if (app.Environment.IsDevelopment())
 // Every /applications route, REST side. One call, because the module owns its
 // own routing (Modules/Applications/ApplicationsModule.cs).
 app.MapApplicationsModule();
+
+// Every /stats route (Modules/Analytics/AnalyticsModule.cs).
+app.MapAnalyticsModule();
 
 // Serves POST /graphql for queries + the Nitro (Banana Cake Pop) IDE at GET /graphql.
 app.MapGraphQL();
