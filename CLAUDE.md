@@ -43,28 +43,23 @@ can. Prefer the defensible choice over the impressive-sounding one.
    build real understanding (for interviews) as much as to build the app
    itself. Prefer short explanations of *why* alongside code changes,
    especially around design decisions (module boundaries, AWS service
-   choices, AI provider abstractions).
+   choices, AI provider abstractions). This means **in code, alongside the
+   change** — it is not a mandate to keep the standing docs continuously
+   current. See "Documenting as you go" for what that does and doesn't oblige.
 4. **Local-first development.** Prefer developing against local/free
    equivalents (Postgres in Docker, Ollama) before touching real AWS or paid
    APIs, matching the pattern already established in Phases 1-2.
 
 ## Build cost, in tokens
 
-Measured, not estimated — `docs/token-log.md` is the full ledger, generated from
-session transcripts by `scripts/token-usage.py`. **As of Phase 2.3 (2026-08-26):
-24 sessions, 1992 turns, 251.2M tokens** — the Phase 2.3 row being itself a
-mid-session figure, see below. Roughly 95% of that is `cache_read` (context
-replay); fresh input plus output is ~11M.
+Measured, not estimated. **`docs/token-log.md` holds the ledger** — per phase and
+per session, generated from transcripts by `scripts/token-usage.py`. Deliberately
+not duplicated here: running totals in a file that loads into every session are a
+standing maintenance obligation, which is the thing this file is now trying to
+avoid. What follows is only the part that is stable and changes decisions.
 
-Where it went — the biggest items:
-
-| Item | Turns | Total |
-|---|---:|---:|
-| Phase 2.2 — tests + CI | 297 | 62.2M |
-| Phase 2 — Postgres + GraphQL | 338 | 45.1M |
-| Phase 2.3 — query surface, repository retired | 198 | 33.1M |
-| Phase 2.1 — write surface as slices | 210 | 29.7M |
-| *(architecture record + diagrams + security audit)* | *434* | *53.1M* |
+For scale: the project is a few hundred million tokens across ~2000 turns, ~95%
+of it `cache_read` (context replay). Fresh input plus output is under 5% of gross.
 
 **The one finding that should change behaviour: cost is superlinear in session
 length, not in task difficulty.** Every turn replays the conversation so far, so
@@ -89,10 +84,24 @@ Two things worth not re-learning:
   `token-log.md` for a phase and made it claim Phase 2 was the most expensive
   item. It was a real measurement of an unfinished thing, which is easier to
   miss than an estimate.
-- **Documentation is not the cheap part.** The architecture record, diagrams and
-  security audit together cost 53.1M — more than any single numbered phase
-  except 2.2. Defensible for a project whose second audience is "the evidence",
-  but it should be a deliberate choice each time, not a habit.
+- **Know which documentation actually recurs.** The architecture record, the
+  diagrams and the security audit cost 53.1M between them — but those were
+  three *one-off foundational* sessions. They do not repeat, and cutting that
+  kind of work is cutting the wrong thing. What repeats is **sweeps over files
+  the change never touched.** Phase 2.2 by prompt:
+
+  | Prompt | Turns | Total |
+  |---|---:|---:|
+  | write the tests (the feature work) | 141 | 19.8M |
+  | commit + renumber the phase docs | 37 | 10.2M |
+  | *"audit again my docs phases … follows standard flow"* | 34 | **10.3M** |
+  | *"check if i have skill to audit all the md file"* | 10 | **3.2M** |
+
+  13.5M of re-reading markdown that had not changed — as much as the entire
+  security audit cost to write from scratch — and both sweeps ran late in a
+  297-turn session at ~286k/turn. That is what "Documenting as you go" exists
+  to stop. Writing docs *beside* the code is the cheap case: the context is
+  already loaded.
 
 ## Architecture
 
@@ -208,6 +217,41 @@ the interface they protected is deleted. See `docs/architecture.md` decision 5.
   rule with no database in it — the Phase 2.5 status lifecycle is the first — is
   the exception, and gets a plain unit test.
 
+## Documenting as you go
+
+**Adopted 2026-08-26** (`architecture.md` decision 12), replacing a practice of
+refreshing every standing doc every phase. Three tiers.
+
+**Always, in the same change — these are near-free, and they are the evidence:**
+- In-code comments explaining a *tradeoff*. The context is already loaded, so
+  they cost almost nothing, and they are the interview material.
+- The phase doc's `Status`, and its real deviations from the plan. Write these
+  while the work is fresh — they are not recoverable later, and they are where
+  the STAR stories come from.
+- Tests (see "A phase ships with its tests").
+
+**Only when the change made it wrong.** For `architecture.md`, `CLAUDE.md`, the
+two READMEs and the audit, the test is *factually wrong* — not *doesn't mention
+this yet*. A doc naming a file the change deleted gets fixed. A doc that is
+merely silent about the new feature does not.
+
+So, concretely, do **not**: re-read the finding tables (A1-A9, F1-F18) for
+findings the change didn't move; rewrite prose that is still true so it names the
+new phase; regenerate a diagram "to be safe"; or open a doc just to check it.
+Prefer putting the detail in the **phase doc** — one accurate place beats four
+half-synchronised ones.
+
+**On a cadence, never per feature.** Doc audits and consistency sweeps run at
+phase-group boundaries only — before Phase 3 (the AWS deploy) and before Phase 6
+— and **always in a fresh session**. The cadence and the session boundary do the
+saving together: the same sweep late in a long session costs roughly 3x what it
+costs early.
+
+The accepted cost, stated plainly: between sweeps the standing docs will lag what
+the code does. That is tolerable because the ones that would be actively *wrong*
+get fixed immediately, and because a stale sentence is cheaper than the sweep
+that would have prevented it.
+
 ## Commands
 
 ```bash
@@ -314,7 +358,9 @@ through the GraphQL schema). A1 is *partly* fixed — read decision 11 before
   order. Check the current phase's doc before making changes so new
   work matches the intended scope for that stage.
 - `docs/security-and-data-audit.md` — schema/config exposure, F1-F18, and the
-  phased remediation plan.
+  phased remediation plan. **Refresh on a cadence, not per phase:** once before
+  Phase 3 ships to AWS, and once before auth lands. Those are the points where a
+  stale finding would actually cost something.
 - `docs/user-journeys.md` — what the user actually does, step by step, and where
   that procedure has holes. The counterpart to `architecture.md`: that one
   describes the system from the code's side, this one from the user's.
@@ -328,6 +374,9 @@ through the GraphQL schema). A1 is *partly* fixed — read decision 11 before
   silently** — nothing fails a build when the schema moves and the picture
   doesn't. Redraw them with the `schema-diagram` skill
   (`.claude/skills/schema-diagram/`) in the same change that moves the schema.
+  This trigger stays per-change because it fires rarely — only on a migration or
+  a module-boundary move. Phase 2.3 had no migration and correctly left
+  `schema-erd.svg` untouched while redrawing `architecture.svg`.
   That skill derives the schema from `dotnet ef migrations script`, not from
   reading `Models/*.cs` — column types, precision, delete behaviour and index
   uniqueness live in Fluent API config and the Npgsql provider, so inferring
@@ -353,8 +402,8 @@ so it stays an accurate record (useful later for interview stories too).
 
 When the phase is done, also **log what it cost**: run
 `python scripts/token-usage.py`, add a row to the "By phase" table in
-`docs/token-log.md`, refresh its session table, and update the headline numbers
-in "Build cost" above. The transcripts this reads are local and not kept
+`docs/token-log.md` and refresh its session table. That is the whole checklist —
+phase doc, token log, stop. The transcripts this reads are local and not kept
 forever, so a phase that isn't logged when it ends may not be recoverable later.
 
 Logging necessarily happens *inside* the session it measures, so the row always

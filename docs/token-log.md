@@ -170,6 +170,21 @@ Phase 2.1's session, for example:
 | 09:18 | 145 | 505k | 16.5M | 160k | **17.1M** | Implement Phase 2.1 (rundown, four slices, verification, docs) |
 | 09:48 | 42 | 78k | 7.7M | 59k | **7.8M** | Restructure `docs/`, add this token log |
 
+And Phase 2.2's, which is why `CLAUDE.md` now carries a documentation policy
+(`architecture.md` decision 12):
+
+| Turns | Total | Task |
+|---:|---:|---|
+| 141 | **19.8M** | write the tests — the feature work |
+| 37 | **10.2M** | commit, and renumber the phase docs |
+| 34 | **10.3M** | "audit again my docs phases and check if it follows standard flow" |
+| 10 | **3.2M** | "check if i have skill to audit all the md file, and afterward push" |
+
+13.5M of that is re-reading markdown that had not changed — as much as the entire
+security audit cost to *write*. It is also the sharpest version of the
+session-length point above: both sweeps ran after turn 240, at roughly 286k a
+turn, so the same work in a fresh session would have cost about a third.
+
 This is the finest granularity the transcripts support. There is no marker in
 them for "sub-task" beyond a human typing something new, so a single prompt that
 produced a whole phase shows up as one row — as the first line above does.
