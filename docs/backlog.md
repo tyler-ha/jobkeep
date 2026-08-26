@@ -87,6 +87,14 @@ evidence in [`security-and-data-audit.md`](security-and-data-audit.md).
 | **PII classification & retention** | Identify `ResumeText` / `Notes` / `Description` as personal information; decide whether they leave the machine once Phase 4 swaps off Ollama; retention rule per Privacy Act APP 11.2 | Low as a doc, Medium if purge is automated | Phase 4/5 guardrail | The one item here with an external obligation attached, not just good practice. |
 | **schema.org `JobPosting` gaps** | `validThrough` (expiry), `jobLocationType` (remote/hybrid), `identifier` (employer req id), source/channel | Low — four columns on `job_postings` | **Unowned** — 2.1 is Done; fold into 2.2 or its own small phase | Remote/hybrid is the most-filtered attribute in the current market and free-text `Location` cannot answer it. |
 
+### Added by the .NET 10 upgrade (2026-08-26)
+
+| Candidate | What it is | Cost / size | Likely home | Notes |
+|---|---|---|---|---|
+| **HotChocolate 14 → 16** | The GraphQL server is on the tail of the 14 line (14.3.1); 16.6.x is current | Medium — two majors of breaking changes | **Unowned** | Deliberately *not* done in Phase 2.6. The only thing forcing a move then was [GHSA-qr3m-xw4c-jqw3](https://github.com/advisories/GHSA-qr3m-xw4c-jqw3), and 14.3.1 patches it, so the 14 line is secure and supported for now. Pull this forward if a second advisory lands on 14, or if Phase 4/5 wants something only 15+ ships. Doing it inside a framework bump would have made any failure ambiguous. |
+| **GraphQL parse-depth limit** | A document-size / nesting guard in front of `/graphql` | Low | **Phase 3** (with rate limiting) | The advisory above is the argument: the parser runs *before* validation, so `MaxExecutionDepth` cannot protect it, and `StackOverflowException` is uncatchable. Patching HotChocolate fixed *this* parser bug; it did not give the app a way to reject an absurd document. Belongs with the rest of the deploy-time API hygiene. |
+
+
 ## Convention / industry-standard adoptions (committed intent, unscheduled)
 
 Unlike the feature candidates above, these are **not** "maybe" — they're

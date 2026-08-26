@@ -18,13 +18,12 @@ jobs:
       - name: Set up .NET
         uses: actions/setup-dotnet@v4
         with:
-          # Both, deliberately. The projects target net8.0, so the 8.0 runtime has to be
-          # present to execute the tests; but `dotnet test` only understands the
-          # `test.runner` section in global.json from the .NET 10 SDK, which is what
-          # points it at Microsoft.Testing.Platform (the runner xunit.v3 ships).
-          dotnet-version: |
-            8.0.x
-            10.0.x
+          # One SDK since Phase 2.6. The projects target net10.0, so the 10.0 runtime
+          # executes the tests; the same SDK is also the one that understands the
+          # `test.runner` section in global.json, which points `dotnet test` at
+          # Microsoft.Testing.Platform (the runner xunit.v3 ships). Before 2.6 this
+          # needed 8.0.x alongside it, for the net8.0 target.
+          dotnet-version: 10.0.x
 
       - name: Restore
         run: dotnet restore src/Jobkeep.slnx

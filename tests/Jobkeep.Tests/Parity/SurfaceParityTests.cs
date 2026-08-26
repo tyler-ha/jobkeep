@@ -231,6 +231,106 @@ public sealed class SurfaceParityTests(PostgresFixture fixture) : IntegrationTes
     }
 
     // ------------------------------------------------------------------
+    // Phase 2.5 — the status lifecycle. The table itself is unit-tested in
+    // Domain/ApplicationStatusTransitionTests; what needs a real app and a real
+    // database is everything around it.
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task AnIllegalTransition_Is400OverRest_AndINVALID_INPUTOverGraphQL()
+    {
+        // Offer -> Applied. Both surfaces call UpdateApplicationHandler, so the refusal
+        // and its wording come from one place — the same argument as the A4 tests above,
+        // now applied to a domain rule rather than to input validation.
+        var id = await Client.CreateApplicationAsync("Canva", "Backend Engineer", Ct);
+        (await Client.PatchAsJsonAsync($"/applications/{id}", new { status = "Offer" }, Ct))
+            .EnsureSuccessStatusCode();
+
+        var rest = await Client.PatchAsJsonAsync(
+            $"/applications/{id}", new { status = "Applied" }, Ct);
+        var graphql = await GraphQL.QueryAsync(
+            """
+            mutation ($id: UUID!) {
+              updateApplication(id: $id, input: { status: APPLIED }) { id status }
+            }
+            """,
+            new { id });
+
+        Assert.Equal(HttpStatusCode.BadRequest, rest.StatusCode);
+        Assert.Equal("INVALID_INPUT", graphql.FirstErrorCode);
+        Assert.Equal("Cannot move from Offer to Applied.", graphql.FirstErrorMessage);
+        Assert.Contains("Cannot move from Offer to Applied.", await rest.Content.ReadAsStringAsync(Ct));
+
+        using var unchanged = await Client.GetApplicationAsync(id, Ct);
+        Assert.Equal("Offer", unchanged.RootElement.GetProperty("status").GetString());
+    }
+
+    [Fact]
+    public async Task ARefusedTransition_LeavesTheRestOfThePatchUnapplied()
+    {
+        // The check runs before any field is assigned, so a PATCH carrying both a legal
+        // Notes change and an illegal status change writes neither. The alternative —
+        // save what is valid, refuse the rest — would make a 400 mean "some of your
+        // request landed", which no caller can act on.
+        var id = await Client.CreateApplicationAsync("Atlassian", "Platform Engineer", Ct);
+        (await Client.PatchAsJsonAsync($"/applications/{id}", new { status = "Offer" }, Ct))
+            .EnsureSuccessStatusCode();
+
+        var response = await Client.PatchAsJsonAsync(
+            $"/applications/{id}", new { status = "Interviewing", notes = "recruiter called" }, Ct);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        using var unchanged = await Client.GetApplicationAsync(id, Ct);
+        Assert.Equal("Offer", unchanged.RootElement.GetProperty("status").GetString());
+        Assert.Null(unchanged.RootElement.GetProperty("notes").GetString());
+    }
+
+    [Fact]
+    public async Task APatchThatDoesNotMentionStatus_IsNeverATransition()
+    {
+        // The case that would make the feature feel broken: an application parked in a
+        // closed status must still accept an edit to any other field. Unit-tested as
+        // IsAllowed(x, x), pinned here through the real PATCH path because the handler
+        // is what decides whether "omitted" and "unchanged" are the same thing.
+        var id = await Client.CreateApplicationAsync("Seek", "Engineer", Ct);
+        (await Client.PatchAsJsonAsync($"/applications/{id}", new { status = "Rejected" }, Ct))
+            .EnsureSuccessStatusCode();
+
+        var response = await Client.PatchAsJsonAsync(
+            $"/applications/{id}", new { notes = "worth trying again in six months" }, Ct);
+
+        response.EnsureSuccessStatusCode();
+
+        using var updated = await Client.GetApplicationAsync(id, Ct);
+        Assert.Equal("Rejected", updated.RootElement.GetProperty("status").GetString());
+        Assert.Equal("worth trying again in six months",
+            updated.RootElement.GetProperty("notes").GetString());
+    }
+
+    [Fact]
+    public async Task AClosedApplicationCanBeReopened_ButNotStraightToAnOffer()
+    {
+        // The decision that came from checking Huntr and Teal: neither treats a closed
+        // stage as a one-way door, so neither does this. The half that is still enforced
+        // is the half worth having — an offer cannot be conjured out of a rejection.
+        var id = await Client.CreateApplicationAsync("Xero", "Senior Engineer", Ct);
+        (await Client.PatchAsJsonAsync($"/applications/{id}", new { status = "Rejected" }, Ct))
+            .EnsureSuccessStatusCode();
+
+        var toOffer = await Client.PatchAsJsonAsync(
+            $"/applications/{id}", new { status = "Offer" }, Ct);
+        Assert.Equal(HttpStatusCode.BadRequest, toOffer.StatusCode);
+
+        var reopened = await Client.PatchAsJsonAsync(
+            $"/applications/{id}", new { status = "Interviewing" }, Ct);
+        reopened.EnsureSuccessStatusCode();
+
+        using var updated = await Client.GetApplicationAsync(id, Ct);
+        Assert.Equal("Interviewing", updated.RootElement.GetProperty("status").GetString());
+    }
+
+    // ------------------------------------------------------------------
     // Was A7 — EF entities reachable through the published GraphQL schema.
     // ------------------------------------------------------------------
 

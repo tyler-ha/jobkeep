@@ -15,8 +15,8 @@ namespace Jobkeep.Modules.Applications;
 // invalid. The rule that create enforces now also guards update: a field you
 // *send* must be valid, a field you omit is not your business.
 //
-// Phase 2.5 adds the status lifecycle here (which transitions are legal). This
-// slice is the seam that makes that a change to one file.
+// Phase 2.5 added the status lifecycle here (which transitions are legal), and the
+// seam held: it was a change to this one file plus the rule it calls.
 
 public record UpdateApplicationRequest(
     string? Company,
@@ -54,6 +54,23 @@ public class UpdateApplicationHandler
 
         if (application is null)
             return SliceResult<ApplicationDetail>.NotFound($"Application {id} not found.");
+
+        // Phase 2.5: the status lifecycle. Checked before anything is mutated, so a
+        // rejected transition leaves the whole PATCH unapplied rather than saving the
+        // other fields and refusing only this one. The rule itself is in
+        // ApplicationStatusTransitions — the handler asks, it does not decide, which is
+        // what keeps the rule storage-agnostic and unit-testable without a database.
+        //
+        // Both surfaces reach this because both call this handler, so GraphQL cannot
+        // quietly permit a move REST refuses (that was A4, and this is the shape of the
+        // fix rather than a second copy of the table).
+        if (request.Status is not null
+            && !ApplicationStatusTransitions.IsAllowed(application.Status, request.Status.Value))
+        {
+            return SliceResult<ApplicationDetail>.Invalid(
+                ApplicationStatusTransitions.RejectionMessage(
+                    application.Status, request.Status.Value));
+        }
 
         // Application-level fields.
         if (request.Status is not null) application.Status = request.Status.Value;
