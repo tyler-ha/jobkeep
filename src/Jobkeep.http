@@ -135,3 +135,42 @@ Content-Type: application/json
 ### application -> posting -> company -> postings -> applications -> resumeText that
 ### reached every resume in the database now fails validation as an unknown field.
 GET {{host}}/graphql?sdl
+
+### ------------------------------------------------------------------------
+### Phase 2.4 — analytics. Three GROUP BYs, run in Postgres, not in C#.
+### Watch the console while these run: each logs a real SQL GROUP BY with the
+### LIMIT pushed down.
+### ------------------------------------------------------------------------
+
+### Skill demand — the query the whole storage decision was made for. A
+### normalized, SHARED skills table turns "what should I learn next?" into one
+### GROUP BY; a document store has to read every document and tally in code.
+GET {{host}}/stats/skill-demand
+
+### top is capped at 100 and REJECTS out of range rather than clamping, so a
+### caller can tell it did not get what it asked for. This one is a 400.
+GET {{host}}/stats/skill-demand?top=101
+
+### Status funnel. Every stage comes back, zeros included — "no offers yet" is
+### the fact you are looking for, and a stage with no rows cannot come out of a
+### GROUP BY, so the empty stages are filled in after the count.
+GET {{host}}/stats/funnel
+
+### Roles per company — the rollup `companies` was normalized out for.
+GET {{host}}/stats/companies
+
+### All three over GraphQL, in one round trip, off the same slice handlers.
+POST {{host}}/graphql
+Content-Type: application/json
+
+{
+  "query": "{ skillDemand(top: 5) { name category postingCount } statusFunnel { total stages { status count } } companyRollup { name applicationCount } }"
+}
+
+### The cap is enforced in the handler, so it means the same thing here: INVALID_INPUT.
+POST {{host}}/graphql
+Content-Type: application/json
+
+{
+  "query": "{ skillDemand(top: 101) { name } }"
+}

@@ -93,7 +93,8 @@ src/
                            ApplicationDetail.cs   (shared response shape)
                            CompanyLookup.cs       (shared find-or-create)
                            ApplicationsModule.cs  (DI + routes)
-    Analytics/             SkillDemand.cs, StatusFunnel.cs   (Phase 2.4)
+    Analytics/             SkillDemand.cs, StatusFunnel.cs, CompanyRollup.cs
+                           AnalyticsModule.cs     (DI + routes)   (Phase 2.4)
     Ai/                    (Phase 4)
     Ats/                   (Phase 5)
     Identity/              (later — see backlog)
@@ -129,7 +130,7 @@ nobody enforces it.
 | Module | Owns | Notes |
 |---|---|---|
 | Applications | `job_applications`, `job_postings`, `companies`, `job_requirements` | The core aggregate. |
-| Analytics | reads `skills` + `posting_skills` | Read-only; aggregates in SQL, never in C#. |
+| Analytics | nothing — reads `posting_skills`, `skills`, `job_applications`, `job_postings`, `companies` | Read-only; aggregates in SQL, never in C#. The last three belong to Applications, so this row is the one deliberate exception to rule 2 — see decision 13. |
 | Ai | `ai_analyses` | Phase 4. Sits behind `IChatClient`. |
 | Ats | `ats_results` | Phase 5. |
 | Identity | users | Not yet built; touches every module's queries when it lands. |
@@ -200,6 +201,7 @@ Numbered, dated, with status, so reversals stay legible.
 | 10 | **A slice handler returns `SliceResult<T>`; each surface translates it at its own edge.** The handler decides Ok/NotFound/Invalid without knowing its caller; `ToHttpResult` maps that to 404/400 and `ValueOrThrow` to a `GraphQLException` carrying `NOT_FOUND`/`INVALID_INPUT`. This is the mechanism behind "one rule, one implementation" — before it, the REST create path hand-rolled null checks and the GraphQL mutation path had none (A4). Named `SliceResult` because HotChocolate's GreenDonut publishes a `Result<T>` through a global using. | Phase 2.1 | Accepted |
 | 11 | **No `HotChocolate.Data`; A1 gets the partial fix instead.** The obvious way to close the GraphQL over-fetch is `[UseProjection]`, which resolves per requested field. It only works over an `IQueryable` of the **entity**, so resolvers would return `IQueryable<JobApplication>` — putting EF entities back in the published schema and reopening A7, which the same phase had just closed. Trading a confidentiality finding for a performance one is a bad trade at this size. Taken instead: flat `.Select(...)` projections into DTOs, which remove the include graph but not per-field granularity, with the remainder written into A1 rather than described as done. Revisit if a DTO grows expensive enough that the difference is measurable. | Phase 2.3 | Accepted |
 | 12 | **Documentation becomes change-triggered, not continuous.** Standing docs were being refreshed every phase, and the recurring cost was not the writing — it was sweeps over files the change never touched. Phase 2.2 spent **13.5M tokens** on two "audit my docs" prompts, as much as the whole security audit cost to write, and both ran late in a 297-turn session at ~286k/turn. Now: in-code comments and phase-doc deviations always (near-free, and they are the interview record); standing docs only when a change made them *factually wrong*; audits only at phase-group boundaries and only in a fresh session. Accepted cost: the standing docs lag between sweeps. Rules in `CLAUDE.md`, "Documenting as you go". | 2026-08-26 | Accepted |
+| 13 | **Analytics reads across the module boundary, and that is the accepted trade.** Rule 2 says a module queries only its own tables. Analytics owns none, and the funnel and company rollup read `job_applications` / `job_postings` / `companies`, all owned by Applications. The alternative was a contract on Applications with one method per analytics question — which is `IJobApplicationRepository` returning under a new name, one phase after it was deleted for growing exactly that way. Reporting is the ordinary exception to a module boundary, because a report is by definition a question about several modules at once, and the **read-only** constraint is what keeps it honest: Analytics can never leave another module's data in a state that module did not choose, so the coupling is to a shape, not to a lifecycle. Cost, stated rather than hidden: extracting Analytics later stops being a pure code-move and needs those tables reachable — a read replica, a view, or an event feed rebuilding a local read model. Bounded migration, not a redesign. Reasoning also sits in `Modules/Analytics/AnalyticsModule.cs`, where someone adding a slice will actually read it. | Phase 2.4 | Accepted |
 
 ---
 

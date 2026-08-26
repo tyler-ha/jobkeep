@@ -28,8 +28,8 @@ does*; `backlog.md` owns *what we have decided not to build yet*.
 | 3 | Tag the posting with skills (must-have vs nice-to-have) | **Built** | `POST /applications/{id}/skills` |
 | 4 | Record structured requirements from the ad | **Built** | `POST /applications/{id}/requirements` |
 | 5 | Review and update as things move — status, notes | **Built** | `PATCH /applications/{id}` |
-| 6 | Find things again — filter by status, company, skill, date; sort; page | Planned | Phase 2.3 |
-| 7 | Ask what it all adds up to — skill demand, status funnel | Planned | Phase 2.4 |
+| 6 | Find things again — filter by status, company, skill, date; sort; page | **Built** | `GET /applications?...` (Phase 2.3) |
+| 7 | Ask what it all adds up to — skill demand, status funnel, roles per company | **Built** | `GET /stats/skill-demand`, `/stats/funnel`, `/stats/companies` (Phase 2.4) |
 | 8 | Be stopped from recording an impossible move (Offer → Applied) | Planned | Phase 2.5 |
 | 9 | Store your résumé once | Planned, thinly | Phase 5, step 1 |
 | 10 | Paste an ad and have skills + seniority + a summary extracted | Planned | Phase 4 |
