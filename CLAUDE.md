@@ -73,9 +73,10 @@ a session's later turns cost far more than its early ones:
 | 300+ turns | 140–210k |
 
 These brackets were fitted on Phases 1-2.2 and predict the *shape*, not the
-number: Phase 2.4 ran 78 turns at ~99k/turn, well above the bracket, because the
-standing context every turn replays — this file, the docs, the source — has grown
-since. The floor drifts up as the project does. The lever below is unchanged.
+number: Phase 2.4's first 78 turns ran at ~99k/turn, well above the bracket,
+because the standing context every turn replays — this file, the docs, the source
+— has grown since. The floor drifts up as the project does. The lever below is
+unchanged.
 
 **The operating rule that follows from this: keep the context window under 120k
 tokens, then `/handoff`, `/clear`, and reload the handoff doc in a fresh session.**
@@ -95,18 +96,30 @@ Hand off **at the end of a runnable unit**, not mid-task — priority 2 and the 
 data agree here, which is the useful part. A handoff in the middle of a
 half-applied refactor costs more than the context it saves.
 
-Phase 2.2 is the clean demonstration because it got measured twice: its first
-185 turns cost 163k/turn, its next 112 cost 286k/turn — same session, same task,
-back half **75% more expensive per turn**. So the lever is *where a session
-ends*, not how hard the work is. Finishing a phase and starting a fresh session
-is worth more than any prompt-level economy.
+Three phases have now been measured twice — logged mid-session, then corrected
+after the session actually ended — and all three say the same thing:
+
+| Phase | Front | Back | Back half costs |
+|---|---|---|---|
+| 2.2 | 185 turns @ 163k/turn | 112 turns @ 286k/turn | **+75%** per turn |
+| 2.3 | 198 turns @ 167k/turn | 62 turns @ 311k/turn | **+86%** per turn |
+| 2.4 | 78 turns @ 99k/turn | 85 turns @ 180k/turn | **+82%** per turn |
+
+Same session, same task, either side of the line. So the lever is *where a
+session ends*, not how hard the work is. Finishing a phase and starting a fresh
+session is worth more than any prompt-level economy.
 
 Two things worth not re-learning:
-- **Don't read a total logged mid-session as final.** Phase 2.2 was logged at
-  185 turns / 30.2M and finished at 297 / 62.2M. That wrong number sat in
-  `token-log.md` for a phase and made it claim Phase 2 was the most expensive
-  item. It was a real measurement of an unfinished thing, which is easier to
-  miss than an estimate.
+- **Don't read a total logged mid-session as final.** This has now been got
+  wrong three phases running. Phase 2.2 was logged at 185 turns / 30.2M and
+  finished at 297 / 62.2M — that wrong number sat in `token-log.md` for a phase
+  and made it claim Phase 2 was the most expensive item. Phase 2.3 was logged at
+  198 / 33.1M and finished at 260 / 52.4M. Phase 2.4 was logged at 78 / 7.7M and
+  finished at **163 / 23.0M**, three times the figure, and the wrong number was
+  load-bearing: `token-log.md` had built a whole paragraph on 2.4 being "the
+  control" that escaped the pattern. It hadn't. A real measurement of an
+  unfinished thing is much easier to miss than an estimate — so **write the row
+  saying it is provisional**, and correct it next phase.
 - **Know which documentation actually recurs.** The architecture record, the
   diagrams and the security audit cost 53.1M between them — but those were
   three *one-off foundational* sessions. They do not repeat, and cutting that
@@ -237,8 +250,9 @@ the interface they protected is deleted. See `docs/architecture.md` decision 5.
   integration test through the real surface over a unit test with a fake; the
   bugs this project actually has (SQL that doesn't translate, delete behaviour,
   one rule enforced on one surface only) are invisible to fakes. A pure domain
-  rule with no database in it — the Phase 2.5 status lifecycle is the first — is
-  the exception, and gets a plain unit test.
+  rule with no database in it — the Phase 2.5 status lifecycle is the only one so
+  far, in `tests/Jobkeep.Tests/Domain/` — is the exception, and gets a plain unit
+  test.
 
 ## Documenting as you go
 
@@ -417,12 +431,25 @@ through the GraphQL schema). A1 is *partly* fixed — read decision 11 before
 
 ## When asked to move to the next phase
 
-**Currently up next: Phase 2.5** (`docs/phases/phase-2.5-status-rules.md`) — enforce
-the application status lifecycle. Its doc asks you to **confirm the transition table
-with the user before implementing**: which status may follow which is a business
-decision, not a technical one. It is also the project's first pure domain rule with
-no database in it, so it is the one place a plain unit test beats an integration
-test. `docs/README.md` has the full status table.
+**Currently up next: Phase 2.6** (`docs/phases/phase-2.6-dotnet10-upgrade.md`) —
+upgrade to .NET 10, which is a prerequisite for the Phase 3 AWS deploy and is on a
+real clock: .NET 8 goes end of support **10 Nov 2026**. It also clears the
+provider/design version split recorded under "Known gaps".
+`docs/README.md` has the full phase status table.
+
+Phase 2.5 is done (2026-08-26): the status lifecycle, in
+`Models/ApplicationStatusTransitions.cs`, consulted by the update slice. Two things
+not to re-litigate — both were confirmed with the user, and the reasoning is in the
+phase doc:
+- **The table is deliberately permissive.** `Applied → Offer` is legal, and
+  `Rejected`/`Withdrawn` are *closed*, not terminal — Huntr and Teal both let a user
+  move a job back out of a closed stage, and shipping a stricter rule than any
+  product in the category was judged the wrong trade. The invariant that remains is
+  **an `Offer` can only be reached from an active application**.
+- **`tests/Jobkeep.Tests/Domain/` is the suite's only unit test**, and that is on
+  purpose — the rule is a pure function of two enums, so a container buys nothing.
+  Everything a database can still get wrong is pinned in
+  `Parity/SurfaceParityTests.cs`. Don't read it as licence to unit-test the slices.
 
 Phase 2.4 is done (2026-08-26): `Modules/Analytics/`, read-only, three `GROUP BY`
 slices on both surfaces. Its one architectural consequence is **decision 13** — a

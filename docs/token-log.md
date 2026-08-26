@@ -1,11 +1,14 @@
 # Token log
 
-*Regenerated 2026-08-26 from session transcripts, at the end of Phase 2.4. The
+*Regenerated 2026-08-26 from session transcripts, at the end of Phase 2.5. The
 final session below was still running when this was written, so its row
-understates it — as the last two versions of this file did. The Phase 2.2 row was
-logged at 185 turns / 30.2M and finished at 297 / 62.2M; the Phase 2.3 row was
-logged at 198 / 33.1M and finished at 260 / 52.4M. Both are corrected below.
-Assume the Phase 2.4 row is low by a similar margin.*
+understates it — as every version of this file has. The running tally of that
+correction, which is now three for three: Phase 2.2 was logged at 185 turns /
+30.2M and finished at 297 / 62.2M; Phase 2.3 was logged at 198 / 33.1M and
+finished at 260 / 52.4M; **Phase 2.4 was logged last time at 78 / 7.7M and
+finished at 163 / 23.0M** — three times the number this file carried for a phase.
+All three are corrected below. Assume the Phase 2.5 row is low by a similar
+margin.*
 
 **What this is:** how many tokens each phase of JobKeep actually cost to build
 with Claude Code. Generated from the session transcripts, not estimated after
@@ -33,7 +36,8 @@ So read the table this way:
 - **Total** — the honest gross number, and the one that grows with conversation
   length whether or not anything is being built.
 - **Fresh in + Output** — closer to "how much thinking and writing happened".
-  Across the whole project that is ~7.5M against a 145M gross.
+  Across the whole project that is ~12.5M against a 302M gross — the ratio
+  has held near 4% while the gross has doubled.
 
 A long session with few edits can outweigh a short session that shipped a
 feature. That is a property of how agents work, not a measure of productivity.
@@ -55,7 +59,8 @@ folded into a phase they didn't belong to.
 | **Phase 2.1** — write surface as slices | 1 | 210 | 29.7M | Four slices, both API surfaces, live verification, doc updates. Grew after it was first logged — the session continued past the phase. |
 | **Phase 2.2** — tests + CI | 1 | 297 | 62.2M | 55 integration tests, GitHub Actions, `user-journeys.md`, and the doc updates. **The most expensive item in the project**, overtaking Phase 2. Logged mid-session at 185 turns / 30.2M and finished at 297 — the second half cost more than the first, which is point 3 below happening in one session. |
 | **Phase 2.3** — query surface, and retiring the repository | 1 | 260 | 52.4M | Five slices, the repository and the Endpoints folder deleted, 31 new tests, A2/A3/A4/A7 closed, plus the doc and diagram updates. **Corrected:** logged last time at 198 turns / 33.1M from inside the running session, and it went on to 260 / 52.4M. Now the project's second most expensive item. |
-| **Phase 2.4** — analytics | 1 | 78 | 7.7M | Three read-only slices, both surfaces, 15 tests, and the module-boundary decision (13). **Logged from inside the session it measures, so this understates it** — see the header. Cheapest feature phase since 2.1, and the reason is visible in the number: it started in a fresh session and finished in well under 100 turns. |
+| **Phase 2.4** — analytics | 1 | 163 | 23.0M | Three read-only slices, both surfaces, 15 tests, and the module-boundary decision (13). **Corrected:** logged last time at 78 turns / 7.7M from inside the running session, and it went on to 163 / 23.0M — the session ran on to roughly double the turns and triple the tokens after the row was written. Still the cheapest feature phase since 2.1, but not by the margin the last version claimed. |
+| **Phase 2.5** — status lifecycle | 2 | 83 | 6.8M | One pure domain rule, the update slice, 31 new tests, plus the market check that set the transition table. **Logged from inside the session it measures, so this understates it** — see the header. Two sessions for one conversation because the work ran as a background job, which writes its own transcript alongside the foreground one; the 9-turn row is that foreground stub, not separate work. |
 | Architecture record | 1 | 162 | 19.8M | Writing `architecture.md` — the decision record and gap register. |
 | Schema + architecture diagrams | 1 | 162 | 19.9M | The `schema-diagram` skill and the two committed SVGs. |
 | Security & data audit | 1 | 110 | 13.4M | `security-and-data-audit.md`, F1–F18. |
@@ -63,7 +68,7 @@ folded into a phase they didn't belong to.
 | Docs audit + markdown skill | 2 | 74 | 5.6M | The phase-doc flow audit after the 2.2 renumber, and a markdown-audit skill built in a worktree. |
 | Tooling / skills | 5 | 21 | 700k | Skill installs and short setup sessions. |
 | | | | | |
-| **Total** | **26** | **2155** | **280.0M** | |
+| **Total** | **28** | **2323** | **302.0M** | |
 
 ### What the numbers say
 
@@ -121,18 +126,34 @@ Three things worth noticing, because they cut against intuition:
    **62 turns cost 19.3M**, or 311k/turn. The tail was **86% more expensive per
    turn**, and those 62 turns alone cost more than the entire architecture record.
 
-   Phase 2.4 is the control, and it complicates the story in a useful way. Same
-   kind of work — slices, both surfaces, tests, doc updates — started in a fresh
-   session and finished at 78 turns for **7.7M**: a seventh of Phase 2.3's total,
-   for a phase of comparable scope.
+   And then Phase 2.4 did it a **third** time, which is what turns a pattern into
+   a finding. The last version of this file called 2.4 "the control" and reported
+   it finished at 78 turns for 7.7M — a seventh of Phase 2.3, for comparable
+   scope. It had not finished. It ran on to **163 turns / 23.0M**: its first 78
+   turns cost 7.7M (99k/turn), its next **85 turns cost 15.3M**, or 180k/turn.
+   The tail was **82% more expensive per turn** — sitting neatly between 2.2's
+   75% and 2.3's 86%.
 
-   But that is ~99k per turn, well *above* the 55–65k the bracket table predicts
-   for a session that length. The brackets were fitted on sessions from Phases
-   1–2.2, and what has grown since is the **standing** context every turn replays
-   — a longer `CLAUDE.md`, more docs, more source. So the per-turn floor drifts
-   upward as the project does, and the brackets should be read as a shape, not as
-   a forecast. Ending a session early still bought a 7x saving here; it is simply
-   buying it against a rising baseline.
+   So the honest summary is that the *same* mistake has now been made in three
+   consecutive phases, and each time the correction landed in this paragraph
+   rather than in the behaviour. The rake is not the measurement; it is that a
+   session which has produced a runnable phase does not feel finished, so it
+   keeps going, and the expensive turns are all after that point.
+
+   The per-turn floor is also drifting. 99k/turn for 2.4's first 78 turns is well
+   *above* the 55–65k the bracket table predicts for a session that length. The
+   brackets were fitted on Phases 1–2.2, and what has grown since is the
+   **standing** context every turn replays — a longer `CLAUDE.md`, more docs,
+   more source. Read the brackets as a shape, not a forecast: ending a session
+   early still buys a large saving, but it buys it against a rising baseline.
+
+   Phase 2.5 is the first phase logged where the session had *not* already run
+   long: 83 turns for **6.8M**, ~82k/turn. That is the cheapest per-turn figure
+   since the brackets stopped holding, and the reason is the only one this file
+   has ever found — it started fresh and the phase was small. It is also being
+   written from inside that session, so by the pattern above it is wrong low. The
+   next regeneration should correct it, and the useful question then is whether
+   it was corrected by *less* than 2.2, 2.3 and 2.4 were.
 
    The lever is *where a session ends*, not how hard the task is. That is an
    unplanned second argument for priority 2 in `CLAUDE.md` — "each phase should
@@ -173,8 +194,10 @@ replay; `Total` = all four counters summed.
 | 2026-08-25 13:25 | `develop` | 25 | 139k | 1.3M | 20k | **1.5M** | `78adf777` |
 | 2026-08-26 05:51 | `phase-2.3/list-queries` | 260 | 939k | 51.1M | 332k | **52.4M** | `e5f69267` |
 | 2026-08-26 10:28 | `develop` | 23 | 174k | 1.5M | 19k | **1.7M** | `dfc3e109` |
-| 2026-08-26 10:30 | `develop` | 78 | 310k | 7.3M | 86k | **7.7M** | `c0f17455` |
-| | | **2155** | **8.9M** | **268.3M** | **2.7M** | **280.0M** | 26 sessions |
+| 2026-08-26 10:30 | `develop` | 163 | 533k | 22.2M | 204k | **23.0M** | `c0f17455` |
+| 2026-08-26 11:10 | `develop` | 86 | 422k | 7.2M | 77k | **7.7M** | `8abb49a7` |
+| 2026-08-26 11:10 | `develop` | 9 | 61k | 431k | 4k | **496k** | `a4832a88` |
+| | | **2335** | **9.6M** | **290.9M** | **2.9M** | **303.4M** | 28 sessions |
 
 ---
 

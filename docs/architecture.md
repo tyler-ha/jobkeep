@@ -140,8 +140,9 @@ nobody enforces it.
 Not Clean Architecture's four projects. A `Domain`/`Application`/`Infrastructure`/
 `Presentation` split for an 8-table single-user tracker costs more in ceremony than
 it returns. Use the dependency rule where domain logic actually earns it — the
-status lifecycle in Phase 2.5 is the first real candidate — and keep simple slices
-simple.
+status lifecycle was the first case that did, and lives in
+`Models/ApplicationStatusTransitions.cs`, called by the update slice rather than
+owning a layer of its own — and keep simple slices simple.
 
 ---
 

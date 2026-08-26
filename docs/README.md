@@ -28,7 +28,7 @@ phase doc is a historical record, not a description of the current tree.
 | 2.2 | [Automated tests + CI](phases/phase-2.2-tests-and-ci.md) | Done |
 | 2.3 | [Query, filter, sort & page the list](phases/phase-2.3-list-queries.md) | Done |
 | 2.4 | [Analytics endpoints](phases/phase-2.4-analytics.md) | Done |
-| 2.5 | [Enforce the status lifecycle](phases/phase-2.5-status-rules.md) | Not started |
+| 2.5 | [Enforce the status lifecycle](phases/phase-2.5-status-rules.md) | Done |
 | 2.6 | [Upgrade to .NET 10 (LTS)](phases/phase-2.6-dotnet10-upgrade.md) | Not started |
 | 3 | [Deploy to AWS Lambda + API Gateway](phases/phase-3-aws-deploy.md) | Not started |
 | 4 | [AI job-description analyzer](phases/phase-4-ai-analyzer.md) | Not started |

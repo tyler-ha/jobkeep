@@ -22,7 +22,7 @@ while building demonstrable C# + AWS + AI integration experience.
 | 2.2 | Automated tests + CI | Done — integration tests against real Postgres, plus GitHub Actions |
 | 2.3 | Query, filter, sort & page the list | Done — and the repository layer retired with it |
 | 2.4 | Analytics endpoints (skill demand, status funnel, company rollup) | Done — three `GROUP BY`s, on both surfaces |
-| 2.5 | Enforce the application status lifecycle | Not started |
+| 2.5 | Enforce the application status lifecycle | Done — one rule, both surfaces, no schema change |
 | 2.6 | Upgrade to .NET 10 (LTS) — .NET 8 EOL 10 Nov 2026 | Not started |
 | 3 | Deploy to AWS Lambda + API Gateway (+ RDS) | Not started |
 | 4 | AI job-description analyzer | Not started |

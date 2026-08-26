@@ -174,3 +174,100 @@ Content-Type: application/json
 {
   "query": "{ skillDemand(top: 101) { name } }"
 }
+
+### ------------------------------------------------------------------------
+### Phase 2.5 — the status lifecycle. One rule, in ApplicationStatusTransitions,
+### consulted by the update slice, so REST and GraphQL refuse the same moves with
+### the same wording. Run these in order against {{applicationId}}.
+### ------------------------------------------------------------------------
+
+### The ordinary path. Applied -> Interviewing.
+PATCH {{host}}/applications/{{applicationId}}
+Content-Type: application/json
+
+{
+  "status": "Interviewing"
+}
+
+### Interviewing -> Offer.
+PATCH {{host}}/applications/{{applicationId}}
+Content-Type: application/json
+
+{
+  "status": "Offer"
+}
+
+### Offer -> Applied. REFUSED, 400: "Cannot move from Offer to Applied."
+### An active application does not walk backwards down the pipeline.
+PATCH {{host}}/applications/{{applicationId}}
+Content-Type: application/json
+
+{
+  "status": "Applied"
+}
+
+### The same refusal over GraphQL — same message, under INVALID_INPUT, because
+### both surfaces call one handler. This is what "one rule, one implementation"
+### looks like from outside the process.
+POST {{host}}/graphql
+Content-Type: application/json
+
+{
+  "query": "mutation ($id: UUID!) { updateApplication(id: $id, input: { status: APPLIED }) { id status } }",
+  "variables": { "id": "{{applicationId}}" }
+}
+
+### A refused transition rolls back the WHOLE patch, not just the status: this
+### carries a perfectly legal notes change and writes neither. GET the
+### application afterwards and notes is untouched.
+PATCH {{host}}/applications/{{applicationId}}
+Content-Type: application/json
+
+{
+  "status": "Interviewing",
+  "notes": "recruiter called"
+}
+
+### Closing it is always allowed.
+PATCH {{host}}/applications/{{applicationId}}
+Content-Type: application/json
+
+{
+  "status": "Rejected"
+}
+
+### Rejected is CLOSED, not terminal — Huntr and Teal both let you move a job
+### back out of a closed stage, and so does this. Re-opening succeeds.
+PATCH {{host}}/applications/{{applicationId}}
+Content-Type: application/json
+
+{
+  "status": "Interviewing"
+}
+
+### But an Offer can only be reached from an ACTIVE application. Close it again,
+### then try to jump straight to an offer: REFUSED, 400.
+PATCH {{host}}/applications/{{applicationId}}
+Content-Type: application/json
+
+{
+  "status": "Rejected"
+}
+
+###
+PATCH {{host}}/applications/{{applicationId}}
+Content-Type: application/json
+
+{
+  "status": "Offer"
+}
+
+### A patch that never mentions status is never a transition, so it succeeds even
+### though the application is closed. This is the case that would make the whole
+### feature feel broken if it were wrong.
+PATCH {{host}}/applications/{{applicationId}}
+Content-Type: application/json
+
+{
+  "notes": "worth trying again in six months"
+}
