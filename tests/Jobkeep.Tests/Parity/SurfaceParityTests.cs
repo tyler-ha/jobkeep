@@ -1,6 +1,5 @@
 using System.Net;
 using System.Net.Http.Json;
-using System.Text.Json;
 using Jobkeep.Tests.Infrastructure;
 
 namespace Jobkeep.Tests.Parity;
@@ -11,8 +10,14 @@ namespace Jobkeep.Tests.Parity;
 /// 404/400, GraphQL to NOT_FOUND/INVALID_INPUT.
 ///
 /// That is a claim about behaviour, and nothing in the compiler enforces it. These tests
-/// are what stop it from quietly becoming false, and they also record the two places
-/// where it is *already* false (see the A4 tests at the bottom).
+/// are what stop it from quietly becoming false.
+///
+/// They also used to record the two places where it was <em>already</em> false — the A4
+/// tests at the bottom, which asserted that GraphQL accepted a blank title REST rejected
+/// and that PATCH validated nothing at all. Phase 2.3 moved create and update into slices,
+/// so those two failed, as they were written to. They are flipped now, and the comment on
+/// each says what it used to assert: the point of writing a finding as an executable test
+/// is that fixing the finding is what breaks it.
 /// </summary>
 public sealed class SurfaceParityTests(PostgresFixture fixture) : IntegrationTestBase(fixture)
 {
@@ -109,9 +114,9 @@ public sealed class SurfaceParityTests(PostgresFixture fixture) : IntegrationTes
         Assert.Equal("PARSED", payload.GetProperty("source").GetString());
 
         using var rest = await Client.GetApplicationAsync(id, Ct);
-        var names = rest.RootElement.GetProperty("posting").GetProperty("postingSkills")
+        var names = rest.RootElement.GetProperty("posting").GetProperty("skills")
             .EnumerateArray()
-            .Select(ps => ps.GetProperty("skill").GetProperty("name").GetString());
+            .Select(ps => ps.GetProperty("skillName").GetString());
         Assert.Contains("Terraform", names);
     }
 
@@ -134,20 +139,58 @@ public sealed class SurfaceParityTests(PostgresFixture fixture) : IntegrationTes
         Assert.Equal("Interviewing", rest.RootElement.GetProperty("status").GetString());
     }
 
+    [Fact]
+    public async Task TheSameFilter_ReturnsTheSameResultOverBothSurfaces()
+    {
+        // Phase 2.3's version of the parity claim. Filtering is a business rule, so it
+        // lives in ListApplicationsHandler where both surfaces reach it — the point being
+        // that neither surface can offer a filter, or a default, the other does not.
+        var withCSharp = await Client.CreateApplicationAsync("Canva", "Backend Engineer", Ct);
+        await Client.CreateApplicationAsync("Atlassian", "Platform Engineer", Ct);
+        (await Client.AddSkillAsync(withCSharp, "C#", Ct)).EnsureSuccessStatusCode();
+
+        var restResponse = await Client.GetAsync("/applications?skill=C%23", Ct);
+        using var rest = System.Text.Json.JsonDocument.Parse(
+            await restResponse.Content.ReadAsStringAsync(Ct));
+
+        var graphql = await GraphQL.QueryAsync(
+            """
+            { applications(query: { skill: "C#" }) { totalCount items { id company } } }
+            """);
+
+        var page = graphql.Data!.Value.GetProperty("applications");
+        Assert.Equal(rest.RootElement.GetProperty("totalCount").GetInt32(),
+            page.GetProperty("totalCount").GetInt32());
+        Assert.Equal(withCSharp,
+            page.GetProperty("items").EnumerateArray().Single().GetProperty("id").GetGuid());
+    }
+
+    [Fact]
+    public async Task InvalidPaging_Is400OverRest_AndINVALID_INPUTOverGraphQL()
+    {
+        var rest = await Client.GetAsync("/applications?pageSize=500", Ct);
+        var graphql = await GraphQL.QueryAsync(
+            "{ applications(query: { pageSize: 500 }) { totalCount } }");
+
+        Assert.Equal(HttpStatusCode.BadRequest, rest.StatusCode);
+        Assert.Equal("INVALID_INPUT", graphql.FirstErrorCode);
+        Assert.Equal("pageSize must be between 1 and 100.", graphql.FirstErrorMessage);
+    }
+
     // ------------------------------------------------------------------
-    // Known asymmetries. These assert what the code does TODAY, not what it
-    // should do. They are architecture.md A4 — "validation is ad hoc and
-    // surface-specific" — expressed as executable findings rather than prose.
-    //
-    // A skipped test would rot; a test asserting the fixed behaviour would fail
-    // and get muted. Asserting the current behaviour means the day Phase 2.2 or
-    // 2.4 centralises validation, these fail loudly and get flipped, which is
-    // exactly the signal wanted.
+    // Was A4 — "validation is ad hoc and surface-specific". Fixed in Phase 2.3.
     // ------------------------------------------------------------------
 
     [Fact]
-    public async Task A4_CreateApplication_RejectsBlankTitleOverRest_ButAcceptsItOverGraphQL()
+    public async Task CreateApplication_RejectsABlankTitleOverBothSurfaces()
     {
+        // Until Phase 2.3 this test was named A4_RejectsBlankTitleOverRest_ButAcceptsIt-
+        // OverGraphQL, and it asserted exactly that: the GraphQL mutation called the
+        // repository directly and never ran the null check ApplicationEndpoints.Create
+        // performed, so the same input succeeded here and 400'd there. One rule, two
+        // implementations — the thing vertical slices exist to stop.
+        //
+        // The rule now lives in CreateApplicationHandler, which both surfaces call.
         var rest = await Client.PostAsJsonAsync(
             "/applications", new { company = "Canva", title = "" }, Ct);
 
@@ -161,28 +204,64 @@ public sealed class SurfaceParityTests(PostgresFixture fixture) : IntegrationTes
             """);
 
         Assert.Equal(HttpStatusCode.BadRequest, rest.StatusCode);
+        Assert.Equal("INVALID_INPUT", graphql.FirstErrorCode);
+        Assert.Equal("Company and Title are required.", graphql.FirstErrorMessage);
 
-        // The GraphQL mutation calls the repository directly and never runs the null
-        // check that ApplicationEndpoints.Create performs, so the same input succeeds
-        // here. One rule, two implementations — the thing vertical slices exist to stop.
-        Assert.False(graphql.HasErrors);
-        Assert.Equal("", graphql.Data!.Value
-            .GetProperty("createApplication").GetProperty("posting").GetProperty("title").GetString());
-        Assert.Equal(1, await WithDbAsync(db => db.JobPostings.CountAsync(Ct)));
+        // Neither surface wrote anything. The old assertion here was the opposite —
+        // that GraphQL had left one posting behind.
+        Assert.Equal(0, await WithDbAsync(db => db.JobPostings.CountAsync(Ct)));
     }
 
     [Fact]
-    public async Task A4_Patch_HasNoValidation_SoItCanBlankATitleThatCreateWouldHaveRejected()
+    public async Task Patch_EnforcesTheSameTitleRuleThatCreateDoes()
     {
-        // ApplicationEndpoints.Update applies every non-null field with no checks. An
-        // empty string is not null, so it writes through — leaving a posting in a state
+        // Was A4_Patch_HasNoValidation_SoItCanBlankATitleThatCreateWouldHaveRejected.
+        // ApplicationEndpoints.Update applied every non-null field with no checks, and an
+        // empty string is not null, so it wrote through — leaving a posting in a state
         // POST /applications would have refused to create.
         var id = await Client.CreateApplicationAsync("Atlassian", "Backend Engineer", Ct);
 
         var response = await Client.PatchAsJsonAsync($"/applications/{id}", new { title = "" }, Ct);
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync(Ct));
-        Assert.Equal("", body.RootElement.GetProperty("posting").GetProperty("title").GetString());
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        using var unchanged = await Client.GetApplicationAsync(id, Ct);
+        Assert.Equal("Backend Engineer",
+            unchanged.RootElement.GetProperty("posting").GetProperty("title").GetString());
+    }
+
+    // ------------------------------------------------------------------
+    // Was A7 — EF entities reachable through the published GraphQL schema.
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task NoEfEntityIsReachableFromTheGraphQLSchema()
+    {
+        // A7 was found by reading the emitted SDL, not by reasoning about the model
+        // classes — the [JsonIgnore] attributes that hide back-references from REST mean
+        // nothing to HotChocolate, which honours [GraphQLIgnore]. So publishing
+        // JobApplication published Company.postings, JobPosting.applications and
+        // Skill.postingSkills with it, and a client could walk
+        //   application -> posting -> company -> postings -> applications -> resumeText
+        // to read every résumé in the database.
+        //
+        // Phase 2.3 put DTOs on every root field. HotChocolate builds the schema from
+        // return types, so the entity types are not in it at all — which closes the walk
+        // by construction rather than by remembering to annotate each new navigation
+        // property. Asserted against the SDL for the same reason it was found there.
+        var sdl = await Client.GetStringAsync("/graphql?sdl", Ct);
+
+        foreach (var entity in new[]
+                 {
+                     "JobApplication", "JobPosting", "Company", "Skill",
+                     "PostingSkill", "JobRequirement", "AtsResult", "AiAnalysis",
+                 })
+        {
+            Assert.DoesNotContain($"type {entity} ", sdl);
+        }
+
+        // And the replacements are there, so this cannot pass by the schema being empty.
+        Assert.Contains("type ApplicationDetail ", sdl);
+        Assert.Contains("type ApplicationPage ", sdl);
     }
 }

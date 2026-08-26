@@ -26,7 +26,7 @@ phase doc is a historical record, not a description of the current tree.
 | 2 | [Relational model on PostgreSQL + GraphQL](phases/phase-2-postgres.md) | Done |
 | 2.1 | [Complete the write surface](phases/phase-2.1-write-surface.md) | Done |
 | 2.2 | [Automated tests + CI](phases/phase-2.2-tests-and-ci.md) | Done |
-| 2.3 | [Query, filter, sort & page the list](phases/phase-2.3-list-queries.md) | Not started |
+| 2.3 | [Query, filter, sort & page the list](phases/phase-2.3-list-queries.md) | Done |
 | 2.4 | [Analytics endpoints](phases/phase-2.4-analytics.md) | Not started |
 | 2.5 | [Enforce the status lifecycle](phases/phase-2.5-status-rules.md) | Not started |
 | 2.6 | [Upgrade to .NET 10 (LTS)](phases/phase-2.6-dotnet10-upgrade.md) | Not started |

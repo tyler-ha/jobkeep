@@ -1,7 +1,9 @@
 # Token log
 
-*Generated 2026-08-25 from session transcripts. The final session below was
-still running when this was written, so its row understates it.*
+*Regenerated 2026-08-26 from session transcripts, at the end of Phase 2.3. The
+final session below was still running when this was written, so its row
+understates it — as the Phase 2.2 row did last time, and by a lot: it was logged
+at 185 turns / 30.2M and finished at 297 turns / 62.2M.*
 
 **What this is:** how many tokens each phase of JobKeep actually cost to build
 with Claude Code. Generated from the session transcripts, not estimated after
@@ -49,29 +51,38 @@ folded into a phase they didn't belong to.
 | **Phase 1** — local API, in-memory | 2 | 177 | 8.7M | Scaffolding ASP.NET Core + the first endpoints. |
 | **Phase 2** — Postgres + GraphQL | 2 | 338 | 45.1M | **The most expensive thing in the project by far.** One 325-turn session accounts for 44.6M of it. |
 | **Phase 2.1** — write surface as slices | 1 | 210 | 29.7M | Four slices, both API surfaces, live verification, doc updates. Grew after it was first logged — the session continued past the phase. |
-| **Phase 2.2** — tests + CI | 1 | 185 | 30.2M | 55 integration tests, GitHub Actions, `user-journeys.md`, and the doc updates. Second-most expensive phase after Phase 2. Logged from inside the session it measures, so the real figure is a little higher than this. |
+| **Phase 2.2** — tests + CI | 1 | 297 | 62.2M | 55 integration tests, GitHub Actions, `user-journeys.md`, and the doc updates. **The most expensive item in the project**, overtaking Phase 2. Logged mid-session at 185 turns / 30.2M and finished at 297 — the second half cost more than the first, which is point 3 below happening in one session. |
+| **Phase 2.3** — query surface, and retiring the repository | 1 | 198 | 33.1M | Five slices, the repository and the Endpoints folder deleted, 31 new tests, A2/A3/A4/A7 closed, plus the doc and diagram updates. Logged from inside the session it measures, so the real figure is higher. |
 | Architecture record | 1 | 162 | 19.8M | Writing `architecture.md` — the decision record and gap register. |
 | Schema + architecture diagrams | 1 | 162 | 19.9M | The `schema-diagram` skill and the two committed SVGs. |
 | Security & data audit | 1 | 110 | 13.4M | `security-and-data-audit.md`, F1–F18. |
 | Repo hygiene + architecture direction | 6 | 224 | 12.3M | `CLAUDE.md`, endpoint extraction, the rename to JobKeep, git config. |
+| Docs audit + markdown skill | 2 | 74 | 5.6M | The phase-doc flow audit after the 2.2 renumber, and a markdown-audit skill built in a worktree. |
 | Tooling / skills | 5 | 21 | 700k | Skill installs and short setup sessions. |
 | | | | | |
-| **Total** | **21** | **1608** | **180.5M** | |
+| **Total** | **24** | **1992** | **251.2M** | |
 
 ### What the numbers say
 
 Three things worth noticing, because they cut against intuition:
 
-1. **Phase 2 is the single most expensive item, and almost all of it is one
-   session.** 45.1M total, of which 44.6M came from one unbroken 325-turn
-   session — the schema, the migrations, both API surfaces and the
-   DynamoDB-to-Postgres reversal, all in one sitting. That is the "don't let a
-   phase sprawl" shape priority 2 in `CLAUDE.md` warns about, now with a number
-   on it.
+1. **The two most expensive items are both single long sessions, and neither is
+   the biggest phase.** Phase 2.2 — *tests and CI*, which shipped no features —
+   is the most expensive thing in the project at 62.2M over 297 turns. Phase 2
+   is second at 45.1M, of which 44.6M came from one unbroken 325-turn session
+   that built the schema, the migrations, both API surfaces and the
+   DynamoDB-to-Postgres reversal in a single sitting.
 
-   Phase 2.1 by contrast cost 24.9M. That is *not* a like-for-like comparison —
-   Phase 2 delivered far more — but the per-turn figures in point 3 show where
-   the difference actually comes from, and it isn't scope.
+   **This corrects what the 2026-08-25 version of this file said.** It claimed
+   Phase 2 was the most expensive item, and it was wrong for a mundane reason:
+   the Phase 2.2 row was written from inside the session it was measuring, at
+   185 turns and 30.2M. That session ran another 112 turns and *doubled*. The
+   number was not an estimate — it was a real measurement of an unfinished
+   thing, which is a different way to be wrong and an easier one to miss.
+
+   Compare scope honestly: Phase 2 delivered far more than 2.2 did. The per-turn
+   figures in point 3 are where the difference actually comes from, and it isn't
+   scope.
 
 2. **Documentation cost as much as code.** The architecture record, the diagrams
    and the security audit together are 53.1M — more than Phase 1 and Phase 2.1
@@ -88,12 +99,18 @@ Three things worth noticing, because they cut against intuition:
    |---|---|
    | under ~40 turns | 30–40k |
    | ~90–130 turns | 55–65k |
-   | 160+ turns | 120–140k |
+   | 160–210 turns | 120–170k |
+   | 300+ turns | 140–210k |
 
-   A 325-turn session cost 137k per turn — roughly **four times** what the same
-   turn costs in a short session. Total cost therefore grows closer to the square
-   of session length than in proportion to it: 19 turns → 0.6M, 130 turns → 6.9M,
-   325 turns → 44.6M.
+   A 325-turn session cost 137k per turn and a 297-turn one cost 209k — roughly
+   **five times** what the same turn costs in a short session. Total cost
+   therefore grows closer to the square of session length than in proportion to
+   it: 19 turns → 0.6M, 130 turns → 6.9M, 297 turns → 62.2M.
+
+   The Phase 2.2 session is the cleanest demonstration, because it was measured
+   twice. Its first 185 turns cost 30.2M (163k/turn); its next 112 cost 32.0M
+   (286k/turn). Same session, same task, and the back half was **75% more
+   expensive per turn** than the front half.
 
    The lever is *where a session ends*, not how hard the task is. That is an
    unplanned second argument for priority 2 in `CLAUDE.md` — "each phase should
@@ -129,8 +146,11 @@ replay; `Total` = all four counters summed.
 | 2026-08-25 08:46 | `develop` | 110 | 628k | 12.7M | 147k | **13.4M** | `5ebe70c1` |
 | 2026-08-25 09:17 | `develop` | 210 | 617k | 28.9M | 238k | **29.7M** | `18c78f32` |
 | 2026-08-25 11:24 | `phase-2.1/write-surface` | 12 | 88k | 603k | 6k | **697k** | `ba9412ac` |
-| 2026-08-25 11:40 | `phase-2.2/tests-and-ci` | 185 | 1.3M | 28.6M | 278k | **30.2M** | `6b5afb84` |
-| | | **1608** | **7.1M** | **171.2M** | **2.1M** | **180.5M** | 21 sessions |
+| 2026-08-25 11:40 | `phase-2.6/tests-and-ci` | 297 | 1.5M | 60.3M | 377k | **62.2M** | `6b5afb84` |
+| 2026-08-25 13:23 | `claude/markdown-audit-skill-92286b` | 49 | 104k | 4.0M | 22k | **4.1M** | `a163ebef` |
+| 2026-08-25 13:25 | `develop` | 25 | 139k | 1.3M | 20k | **1.5M** | `78adf777` |
+| 2026-08-26 05:51 | `phase-2.3/list-queries` | 198 | 845k | 32.0M | 238k | **33.1M** | `e5f69267` |
+| | | **1992** | **8.4M** | **240.4M** | **2.5M** | **251.2M** | 24 sessions |
 
 ---
 

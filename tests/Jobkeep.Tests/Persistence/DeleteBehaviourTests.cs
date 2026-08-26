@@ -136,9 +136,9 @@ public sealed class DeleteBehaviourTests(PostgresFixture fixture) : IntegrationT
 
         using var secondApp = await Client.GetApplicationAsync(second, Ct);
         var stillThere = secondApp.RootElement
-            .GetProperty("posting").GetProperty("postingSkills")
+            .GetProperty("posting").GetProperty("skills")
             .EnumerateArray()
-            .Any(ps => ps.GetProperty("skill").GetProperty("name").GetString() == "C#");
+            .Any(ps => ps.GetProperty("skillName").GetString() == "C#");
         Assert.True(stillThere);
     }
 }

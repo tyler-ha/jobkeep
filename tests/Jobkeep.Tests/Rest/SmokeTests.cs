@@ -6,12 +6,19 @@ namespace Jobkeep.Tests.Rest;
 public sealed class SmokeTests(PostgresFixture fixture) : IntegrationTestBase(fixture)
 {
     [Fact]
-    public async Task GetApplications_OnEmptyDatabase_Returns200AndEmptyArray()
+    public async Task GetApplications_OnEmptyDatabase_Returns200AndAnEmptyPage()
     {
         var response = await Client.GetAsync("/applications", Ct);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal("[]", await response.Content.ReadAsStringAsync(Ct));
+
+        // Phase 2.3 turned the bare array into a paged envelope. Asserting the whole
+        // body rather than just items.length pins the default page size and the fact
+        // that an empty result is still a well-formed page — a client reading
+        // totalPages should get 0, not null and not 1.
+        Assert.Equal(
+            """{"items":[],"totalCount":0,"page":1,"pageSize":20,"totalPages":0}""",
+            await response.Content.ReadAsStringAsync(Ct));
     }
 
     [Fact]

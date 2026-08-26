@@ -27,8 +27,28 @@ Content-Type: application/json
 ### Capture the id from the response above for everything below.
 @applicationId = {{create.response.body.id}}
 
-### List every application, newest first (full eager-loaded graph).
+### List: newest first, page 1, 20 rows. Every parameter below is optional.
 GET {{host}}/applications
+
+### Filter by status. The list is a page now: { items, totalCount, page, pageSize, totalPages }.
+GET {{host}}/applications?status=Interviewing
+
+### Company and title match ANYWHERE and case-insensitively (Postgres ILIKE).
+GET {{host}}/applications?company=canva&title=engineer
+
+### Skill matches the WHOLE name, case-insensitively — "C" must not return C# and C++.
+### This one filter is the phase-2 storage argument: an EXISTS through posting_skills
+### into the shared skills table, versus scanning every document in a NoSQL store.
+GET {{host}}/applications?skill=C%23
+
+### Applied-date range, inclusive at both ends.
+GET {{host}}/applications?appliedFrom=2026-01-01&appliedTo=2026-12-31
+
+### Sort and page. sort = DateApplied | Company | Title | Status | UpdatedAt.
+GET {{host}}/applications?sort=Company&direction=Asc&page=1&pageSize=5
+
+### Rejected, not clamped: page < 1, pageSize > 100, or from-after-to all return 400.
+GET {{host}}/applications?pageSize=1000
 
 ### Fetch one.
 GET {{host}}/applications/{{applicationId}}
@@ -53,7 +73,8 @@ Content-Type: application/json
   "isMustHave": true
 }
 
-### Update. PATCH semantics: only the fields you send are applied.
+### Update. PATCH semantics: only the fields you send are applied — but a field you
+### DO send has to be valid. `{"title": ""}` is a 400, not a silent blanking (was A4).
 PATCH {{host}}/applications/{{applicationId}}
 Content-Type: application/json
 
@@ -74,12 +95,13 @@ DELETE {{host}}/applications/{{applicationId}}
 
 ### --- GraphQL, same data layer ---
 
-### Query. Note enums come back SCREAMING_CASE here and PascalCase over REST.
+### Query. Same filters, same validation, same defaults as the REST call above — one
+### handler serves both. Enums come back SCREAMING_CASE here and PascalCase over REST.
 POST {{host}}/graphql
 Content-Type: application/json
 
 {
-  "query": "{ applications { id status posting { title company { name } postingSkills { isRequired skill { name } } } } }"
+  "query": "{ applications(query: { skill: \"C#\", sort: COMPANY, pageSize: 5 }) { totalCount page pageSize items { id company title status skills } } }"
 }
 
 ### Mutation — the Phase 2.1 shape: an input object in, a response DTO out.
@@ -98,3 +120,18 @@ Content-Type: application/json
 {
   "query": "mutation { addSkillToPosting(applicationId: \"00000000-0000-0000-0000-000000000000\", input: { skillName: \"C#\", isRequired: true }) { skillName } }"
 }
+
+### The A4 fix, visible: this used to SUCCEED over GraphQL while returning 400 over REST,
+### because the mutation called the repository directly and skipped the endpoint's check.
+### The rule lives in CreateApplicationHandler now, so both surfaces reject it.
+POST {{host}}/graphql
+Content-Type: application/json
+
+{
+  "query": "mutation { createApplication(input: { company: \"Canva\", title: \"\" }) { id } }"
+}
+
+### The A7 fix, visible: no EF entity is in the published schema any more, so the walk
+### application -> posting -> company -> postings -> applications -> resumeText that
+### reached every resume in the database now fails validation as an unknown field.
+GET {{host}}/graphql?sdl

@@ -19,8 +19,8 @@ while building demonstrable C# + AWS + AI integration experience.
 | 1 | Local API, in-memory storage | Done — see `src/` |
 | 2 | Relational model on PostgreSQL + GraphQL | Done — local via Postgres in Docker |
 | 2.1 | Complete the write surface (skills + requirements CRUD) | Done — first phase built as vertical slices |
-| 2.2 | Automated tests + CI | Done — 55 integration tests against real Postgres, plus GitHub Actions |
-| 2.3 | Query, filter, sort & page the list | Not started |
+| 2.2 | Automated tests + CI | Done — integration tests against real Postgres, plus GitHub Actions |
+| 2.3 | Query, filter, sort & page the list | Done — and the repository layer retired with it |
 | 2.4 | Analytics endpoints (skill demand, status funnel) | Not started |
 | 2.5 | Enforce the application status lifecycle | Not started |
 | 2.6 | Upgrade to .NET 10 (LTS) — .NET 8 EOL 10 Nov 2026 | Not started |
@@ -39,17 +39,17 @@ structural changes. In short: a modular monolith with vertical slices, one
 deployable, module boundaries drawn now so services can be extracted later
 if a real trigger appears.
 
-![Architecture: HTTP arrives at two API surfaces, REST and GraphQL, which sit
-on one shared data layer over a single PostgreSQL database. The
-IJobApplicationRepository path is drawn dashed because it is
-retiring.](docs/diagrams/architecture.svg)
+![Architecture: HTTP arrives at two API surfaces, REST and GraphQL, which both
+call vertical-slice handlers in the Applications module; the handlers use
+AppDbContext directly over a single PostgreSQL database, and return response DTOs
+that each surface renders its own way.](docs/diagrams/architecture.svg)
 
 REST and GraphQL are two surfaces over **one** data layer, so a rule can't be
-enforced on one and missed on the other. The dashed path is the Phase 2
-repository — it is retiring, not growing; new work goes into slices under
-`Modules/`.
+enforced on one and missed on the other. There used to be a second path — the
+Phase 2 repository, drawn dashed here because it was retiring. Phase 2.3 deleted
+it; every use case is now a slice under `Modules/`.
 
-## Quick start (Phase 2, current state)
+## Quick start (Phase 2.3, current state)
 
 Storage is **PostgreSQL via EF Core**. In Development the app talks to a local
 Postgres container and auto-applies EF migrations on startup, so start the
@@ -73,7 +73,7 @@ cd src
 dotnet test --project ../tests/Jobkeep.Tests/Jobkeep.Tests.csproj
 ```
 
-55 integration tests against a **real Postgres**, started automatically by
+86 integration tests against a **real Postgres**, started automatically by
 Testcontainers — so Docker needs to be running, but you do not need to start a
 database yourself. They use a throwaway container and never touch your dev data;
 there is a guard that refuses to run if they ever would. CI runs the same suite on
@@ -88,7 +88,13 @@ curl -X POST http://localhost:5080/applications \
   -H "Content-Type: application/json" \
   -d '{"company":"Canva","title":"Backend Engineer","notes":"Applied via referral"}'
 
+# The list is filtered, sorted and paged (Phase 2.3). Everything is optional.
 curl http://localhost:5080/applications
+curl "http://localhost:5080/applications?status=Interviewing&sort=Company&direction=Asc"
+
+# Company and title match anywhere, case-insensitively (ILIKE); skill matches the
+# whole name, because C is a prefix of both C# and C++.
+curl "http://localhost:5080/applications?company=canva&skill=C%23&page=1&pageSize=20"
 
 # Sub-resources (Phase 2.1). Skills dedup into a shared `skills` table;
 # removing one unlinks the join row and leaves that shared row alone.
@@ -103,8 +109,11 @@ curl -X DELETE http://localhost:5080/applications/{id}/skills/C%23
 **GraphQL** — open the Nitro IDE at `http://localhost:5080/graphql`, or:
 ```bash
 curl -X POST http://localhost:5080/graphql -H "Content-Type: application/json" \
-  -d '{"query":"{ applications { status posting { title company { name } postingSkills { skill { name } } } } }"}'
+  -d '{"query":"{ applications(query: { skill: \"C#\" }) { totalCount items { company title skills } } }"}'
 ```
+
+The same filter, the same validation and the same defaults as the REST call above —
+both surfaces call one handler, so neither can offer a rule the other does not have.
 
 Note: `status` (and other enums) now serialize by name — `"Interviewing"` over
 REST, `INTERVIEWING` over GraphQL — not as an int.
@@ -147,15 +156,13 @@ Jobkeep/
     ├── Jobkeep.csproj
     ├── Program.cs                   # wiring only: DI, middleware, Map* calls
     ├── Modules/                     # vertical slices — one file per use case
-    │   └── Applications/            #   AddSkillToPosting, RemoveRequirement, ...
-    ├── Shared/                      # SliceResult + cross-cutting contracts
-    ├── Endpoints/                   # Phase 2 REST routes (retiring with the repository)
+    │   └── Applications/            #   ListApplications, CreateApplication, ...
+    ├── Shared/                      # SliceResult + the two edge translations
     ├── appsettings.json             # empty Postgres conn (set in deploy)
     ├── appsettings.Development.json # points at local Postgres
-    ├── Models/                      # relational domain model + enums + DTOs
+    ├── Models/                      # relational domain model + enums
     ├── Data/                        # AppDbContext (EF Core mapping)
     ├── Migrations/                  # EF migrations
-    ├── Repositories/                # IJobApplicationRepository — retiring, not growing
     ├── GraphQL/                     # HotChocolate Query + Mutation
     └── Properties/
 ```
