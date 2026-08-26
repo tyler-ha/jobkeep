@@ -96,30 +96,38 @@ Hand off **at the end of a runnable unit**, not mid-task — priority 2 and the 
 data agree here, which is the useful part. A handoff in the middle of a
 half-applied refactor costs more than the context it saves.
 
-Three phases have now been measured twice — logged mid-session, then corrected
-after the session actually ended — and all three say the same thing:
+Four phases have now been measured twice — logged mid-session, then corrected
+after the session actually ended — and all four say the same thing:
 
 | Phase | Front | Back | Back half costs |
 |---|---|---|---|
 | 2.2 | 185 turns @ 163k/turn | 112 turns @ 286k/turn | **+75%** per turn |
 | 2.3 | 198 turns @ 167k/turn | 62 turns @ 311k/turn | **+86%** per turn |
 | 2.4 | 78 turns @ 99k/turn | 85 turns @ 180k/turn | **+82%** per turn |
+| 2.5 | 86 turns @ 89k/turn | 62 turns @ 168k/turn | **+87%** per turn |
 
 Same session, same task, either side of the line. So the lever is *where a
 session ends*, not how hard the work is. Finishing a phase and starting a fresh
 session is worth more than any prompt-level economy.
 
+Phase 2.5 sharpens it: its expensive back half was **not** the phase work, which
+was done at turn 86. It was committing, opening two PRs and writing the handoff —
+mechanical git housekeeping bought at 168k a turn because it happened at the end
+of a long session instead of the start of a short one.
+
 Two things worth not re-learning:
 - **Don't read a total logged mid-session as final.** This has now been got
-  wrong three phases running. Phase 2.2 was logged at 185 turns / 30.2M and
+  wrong **four phases running**. Phase 2.2 was logged at 185 turns / 30.2M and
   finished at 297 / 62.2M — that wrong number sat in `token-log.md` for a phase
   and made it claim Phase 2 was the most expensive item. Phase 2.3 was logged at
   198 / 33.1M and finished at 260 / 52.4M. Phase 2.4 was logged at 78 / 7.7M and
   finished at **163 / 23.0M**, three times the figure, and the wrong number was
   load-bearing: `token-log.md` had built a whole paragraph on 2.4 being "the
-  control" that escaped the pattern. It hadn't. A real measurement of an
-  unfinished thing is much easier to miss than an estimate — so **write the row
-  saying it is provisional**, and correct it next phase.
+  control" that escaped the pattern. It hadn't. Phase 2.5 was logged at 86 / 7.7M
+  and finished at **148 / 18.1M**, and its row had *predicted* its own correction
+  while still getting the size of it wrong. A real measurement of an unfinished
+  thing is much easier to miss than an estimate — so **write the row saying it is
+  provisional**, and correct it next phase.
 - **Know which documentation actually recurs.** The architecture record, the
   diagrams and the security audit cost 53.1M between them — but those were
   three *one-off foundational* sessions. They do not repeat, and cutting that
@@ -304,7 +312,8 @@ App listens on `http://localhost:5080` (`Properties/launchSettings.json`).
 Swagger UI at `/swagger` and the GraphQL Nitro IDE at `/graphql` — both
 Development-only.
 
-EF migrations (tool pinned to 8.0.11 in `src/dotnet-tools.json`):
+EF migrations (tool pinned to 10.0.11 in `src/dotnet-tools.json`, `rollForward: false`
+— bump it in lockstep with `Microsoft.EntityFrameworkCore.Design`):
 ```bash
 dotnet tool restore
 dotnet ef migrations add <Name>
@@ -321,15 +330,16 @@ ever resolves a connection string other than the container's. There is no
 `compose.yaml`; Testcontainers manages its own database.
 
 CI (`.github/workflows/ci.yml`) runs the same suite on every branch push, from the
-repo root rather than `src/`. It installs both the 8.0 and 10.0 SDKs (8.0 to run
-net8.0 tests, 10.0 to read `global.json`) and builds `src/Jobkeep.slnx`, which
-**includes the test project** — that's why its test step can pass `--no-restore`.
+repo root rather than `src/`. Since Phase 2.6 it installs **one** SDK (10.0.x —
+it both runs the `net10.0` tests and reads `global.json`) and builds
+`src/Jobkeep.slnx`, which **includes the test project** — that's why its test step
+can pass `--no-restore`.
 
 `dotnet test` needs the **repo-root `global.json`** (`test.runner` =
 `Microsoft.Testing.Platform`) and the **.NET 10 SDK** to read it — xUnit v3's runner
 is MTP, and the .NET 10 SDK refuses the old VSTest bridge. Pass the project as
-`--project <path>`, not positionally. No SDK version is pinned, so the `dotnet-ef`
-8.0.11 tool is unaffected.
+`--project <path>`, not positionally. No SDK version is pinned in `global.json`,
+so the `dotnet-ef` tool pin is independent of it.
 
 You can still exercise endpoints by hand via Swagger, the Nitro IDE, or
 `src/Jobkeep.http` (works in VS / VS Code / Rider, no account needed).
@@ -354,9 +364,9 @@ You can still exercise endpoints by hand via Swagger, the Nitro IDE, or
 
 ## Conventions
 
-- Target framework: `net8.0`. **Framework deadline: .NET 8 reaches end of
-  support 10 Nov 2026.** The upgrade to `net10.0` (LTS to Nov 2028) is
-  Phase 2.6, before the AWS deploy. Flag this if Phase 3 starts first.
+- Target framework: `net10.0` (LTS through **Nov 2028**), moved from `net8.0`
+  in Phase 2.6 ahead of the .NET 8 EOL on 10 Nov 2026. `src/` and
+  `tests/` share the TFM and move together.
 - Nullable reference types enabled — respect existing nullability
   annotations rather than suppressing warnings.
 - Keep new NuGet dependencies minimal and justify additions in the
@@ -379,8 +389,13 @@ fixed** — don't re-discover them:
   now pinned by a test that asserts the defect
   (`SkillDemand_SplitsSkillsDifferingOnlyInCase_WhichIsTheKnownDedupGap`), so the fix
   announces itself by breaking that test.
-- **`src` pairs Npgsql provider 8.0.10 with EF Design 8.0.11.** Harmless today;
-  Phase 2.6 resolves it.
+- **The EF version asymmetry survived Phase 2.6 — it was never about the major
+  version.** The app resolves EF 10.0.11 throughout, but the Npgsql provider
+  declares a *range* (`[10.0.4, 11.0.0)`) while EF Design pins an *exact* 10.0.11.
+  A transitive-only reference therefore lands on the floor, so
+  `Jobkeep.Tests.csproj` must keep naming `Microsoft.EntityFrameworkCore` and
+  `.Relational` explicitly; removing them fails with CS1705. Bump those two in
+  lockstep with EF Design. Reasons are in the csproj comment — read it first.
 - **No index on `Status` or `DateApplied`** even though 2.3 filters and sorts on
   both. Deliberate — see F14 — and parked in Phase 2.7 with the rest of the audit
   migration.
@@ -431,11 +446,26 @@ through the GraphQL schema). A1 is *partly* fixed — read decision 11 before
 
 ## When asked to move to the next phase
 
-**Currently up next: Phase 2.6** (`docs/phases/phase-2.6-dotnet10-upgrade.md`) —
-upgrade to .NET 10, which is a prerequisite for the Phase 3 AWS deploy and is on a
-real clock: .NET 8 goes end of support **10 Nov 2026**. It also clears the
-provider/design version split recorded under "Known gaps".
-`docs/README.md` has the full phase status table.
+**Currently up next: Phase 3** (`docs/phases/phase-3-aws-deploy.md`) — deploy to
+AWS Lambda + API Gateway with PostgreSQL on RDS free-tier. Two things are due
+*at* that boundary, not after it: the **doc/security-audit sweep** (see
+"Documenting as you go" — cadence, and in a fresh session), and the audit's
+**transport & secrets hardening**, because RDS storage encryption can only be
+enabled when the instance is created. `docs/README.md` has the full phase status
+table.
+
+Phase 2.6 is done (2026-08-26): `net10.0` everywhere, EF/Npgsql/`dotnet-ef` on
+the 10.x line, CI down to one SDK. **No C# changed** — the whole upgrade is four
+project/config files. Two things worth carrying forward:
+- **It caught a critical CVE, which is the real story.** The restore surfaced
+  NU1904 on `HotChocolate.Language` 14.3.0 — an uncatchable stack-overflow DoS
+  reachable from the unauthenticated `/graphql` endpoint, *before* validation
+  runs. Fixed by 14.3.1 (patch, no API change). The 14 → 16 major jump was
+  refused and is in `backlog.md`, along with a parse-depth guard for Phase 3.
+- **`net8.0` is gone from the build but not from the migrations.** The snapshot
+  and initial designer file still say `ProductVersion "8.0.11"`. That is metadata,
+  deliberately left; EF 10 reports no model drift from it. Don't regenerate
+  migrations to tidy the string.
 
 Phase 2.5 is done (2026-08-26): the status lifecycle, in
 `Models/ApplicationStatusTransitions.cs`, consulted by the update slice. Two things

@@ -115,6 +115,16 @@ reported an MSB3277 unification conflict. Worked around by naming both EF packag
 8.0.11 in the test project. **`src` was deliberately not changed** — Phase 2.6 removes
 the split for real when it bumps everything to net10-era versions.
 
+> **Corrected after Phase 2.6 (2026-08-26).** It didn't. The *major-line* split
+> went away — everything resolves EF 10.0.11 now — but the workaround is still
+> required, because the cause was never the major version: Npgsql declares a
+> **range** (`[10.0.4, 11.0.0)`) while EF Design pins an **exact** version, so a
+> transitive-only reference resolves to the floor. Removing the two pins was
+> tried during 2.6 and fails with CS1705. See `phase-2.6-dotnet10-upgrade.md`.
+
+The CI note above is also superseded: since Phase 2.6 the workflow installs the
+10.0.x SDK alone, which both runs the `net10.0` tests and reads `global.json`.
+
 **5. Two known asymmetries are asserted as-is, not fixed.**
 
 `SurfaceParityTests` contains two tests prefixed `A4_` that assert what the code does
