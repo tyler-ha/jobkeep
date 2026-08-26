@@ -1,9 +1,7 @@
 using System.Text.Json.Serialization;
 using Jobkeep.Data;
-using Jobkeep.Endpoints;
 using Jobkeep.GraphQL;
 using Jobkeep.Modules.Applications;
-using Jobkeep.Repositories;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -15,29 +13,29 @@ var builder = WebApplication.CreateBuilder(args);
 var connectionString = builder.Configuration.GetConnectionString("Postgres");
 builder.Services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connectionString));
 
-// Scoped, not singleton: the repository holds a scoped AppDbContext, so it must
-// share that lifetime (a singleton over a scoped context is a captive dependency).
-builder.Services.AddScoped<IJobApplicationRepository, PostgresJobApplicationRepository>();
-
-// Phase 2.1 onward, use cases are vertical slices under Modules/ instead of
-// methods on that repository (docs/architecture.md §2). Each slice handler takes
-// AppDbContext directly; this registers them and nothing else.
+// Every use case is a vertical slice under Modules/ (docs/architecture.md §2).
+// Each slice handler takes AppDbContext directly, so this registers them and
+// nothing else — as of Phase 2.3 there is no repository layer left to register.
 builder.Services.AddApplicationsModule();
 
-// EF navigation properties form reference cycles (posting <-> its skills). Tell
-// System.Text.Json to ignore cycles so the REST endpoints can return entities
-// directly. (GraphQL in Phase 2b resolves only requested fields, so it's immune.)
 builder.Services.ConfigureHttpJsonOptions(o =>
 {
-    o.SerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
     // Serialize/accept enums by name ("Interviewing", "FullTime") instead of by
     // int, so REST payloads are readable and match what GraphQL exposes.
     o.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
+
+    // ReferenceHandler.IgnoreCycles used to be set here, and it was load-bearing:
+    // the endpoints returned EF entities whose navigation properties cycle
+    // (posting <-> its skills), and without the flag System.Text.Json threw.
+    // That was a symptom of leaking the database schema out as the API contract,
+    // not a serialization preference (architecture.md A2). Phase 2.3 finished
+    // moving every route onto response DTOs, which have no cycles, so the flag
+    // came out. If it ever needs to come back, something is returning an entity.
 });
 
 // GraphQL (HotChocolate). Runs in-process on the same ASP.NET app, so it rides
 // the same Lambda deployment in Phase 3 — no separate service. Resolvers pull
-// the repository from DI, so GraphQL and REST share one storage implementation.
+// slice handlers from DI, so GraphQL and REST share one code path.
 builder.Services
     .AddGraphQLServer()
     .AddQueryType<Query>()
@@ -67,13 +65,8 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-// REST routes for /applications live in Endpoints/ApplicationEndpoints.cs —
-// the Phase 2 routes still served by the retiring repository.
-app.MapApplicationEndpoints();
-
-// The Applications module's slice routes (skills + requirements sub-resources).
-// Same "/applications" prefix, different code path underneath; the line above
-// shrinks as later phases move its routes into slices.
+// Every /applications route, REST side. One call, because the module owns its
+// own routing (Modules/Applications/ApplicationsModule.cs).
 app.MapApplicationsModule();
 
 // Serves POST /graphql for queries + the Nitro (Banana Cake Pop) IDE at GET /graphql.

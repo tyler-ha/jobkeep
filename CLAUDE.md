@@ -77,10 +77,15 @@ New feature work goes in a **module**, as a **slice per use case**:
 
 ```
 src/Modules/<Module>/<UseCase>.cs   — request + handler + response, together
+src/Modules/<Module>/<Module>Module.cs — DI + MapGroup routes for that module
 src/Shared/                          — SliceResult + cross-cutting contracts
 src/Data/AppDbContext.cs             — the schema, in one place (Fluent API)
 src/Program.cs                       — wiring only (DI, middleware, Map* calls)
 ```
+
+A new slice is a new file plus two lines in `<Module>Module.cs` (register the
+handler, map the route) — `Program.cs` only ever calls `Add*Module()` /
+`Map*Module()`.
 
 Modules: `Applications` (core), `Analytics` (read-only), `Ai` (Phase 4),
 `Ats` (Phase 5), `Identity` (later).
@@ -96,45 +101,54 @@ Modules: `Applications` (core), `Analytics` (read-only), `Ai` (Phase 4),
 
 ### Migration state (read this before editing `src/`)
 
-The restructure is **in progress, incrementally**, so each phase stays runnable.
-As of Phase 2.1 (2026-08-25) `src/` has both shapes at once:
+**The migration is finished.** It ran incrementally across Phases 2.1-2.3 so each
+phase stayed runnable, and as of Phase 2.3 (2026-08-26) `src/` has **one** shape:
+every use case is a slice under `Modules/Applications/`. `Endpoints/`,
+`Repositories/` and `Models/Dtos.cs` no longer exist — don't go looking for them,
+and don't recreate them.
 
-- `Modules/Applications/` — four slices (skills + requirements), each holding its
-  request, handler and response. `Shared/` holds `SliceResult<T>`, which is what
-  a handler returns so REST and GraphQL can translate one outcome two ways.
-- `Endpoints/` + `Repositories/` — the Phase 2 create/read/update/delete path,
-  still wired up and still going through `IJobApplicationRepository`. Phase 2.3
-  takes the read side.
+Two files in `Modules/Applications/` are shared by several slices, and the
+distinction matters because it is the one the repository got wrong:
+
+- `ApplicationDetail.cs` — the detail response records plus the EF projection
+  expression, used by the get / create / update slices.
+- `CompanyLookup.cs` — find-or-create a company by name, used by create and update.
+
+Neither owns *access*. Every slice still writes its own query; a slice that needs
+something different writes it rather than growing these files. A repository owns the
+queries themselves, which is why every use case had to become one of its methods,
+and why it kept growing.
 
 The rules:
 
-- **New** code: write it as a slice in a module.
-- **Existing** code: migrate the parts a phase actually touches. Don't do a
-  sweeping refactor as a side effect of a feature.
-- `IJobApplicationRepository` is **retiring, not growing.** Do not add methods
-  to it. If a phase doc says to (Phase 2.4 does), write a slice instead and
-  correct the phase doc — which is what Phase 2.1 did, and the interface came
-  out of that phase smaller than it went in.
-- A slice handler takes `AppDbContext` directly, validates in the handler (not
-  at either edge), and returns a **response DTO**, never an EF entity.
+- Write every use case as a slice in a module. A slice handler takes `AppDbContext`
+  directly, validates in the handler (not at either edge), and returns a **response
+  DTO**, never an EF entity.
+- Don't reintroduce a repository, a service layer, or a `Endpoints/*.cs` file. If a
+  phase doc says to add a method to `IJobApplicationRepository` (Phase 2.4 does),
+  write a slice instead and correct the phase doc — which is what 2.1 and 2.3 did.
+- Prefer a flat `.Select(...)` projection to `Include(...)`. Every read in `src/`
+  projects; an include graph is how the over-fetch in A1 got there.
 
 Superseded rules from earlier versions of this file, kept here so their
 reversal is legible: *"never bypass `IJobApplicationRepository`"* and *"keep
-`Program.cs` as the single place endpoints are defined"* are both retired.
-See `docs/architecture.md` decision 5.
+`Program.cs` as the single place endpoints are defined"* are both retired, and
+the interface they protected is deleted. See `docs/architecture.md` decision 5.
 
 ## What good looks like here
 
 - **Aggregate in SQL, not in memory.** EF `GroupBy` that translates to a
   real `GROUP BY` — never load a table and count in C#.
 - **DTOs at the edge.** Don't return EF entities from endpoints or resolvers;
-  the API contract shouldn't move every time the schema does. (The
-  `ReferenceHandler.IgnoreCycles` setting in `Program.cs` is a symptom of the
-  current violation, not a preference.)
+  the API contract shouldn't move every time the schema does. `Program.cs` used
+  to set `ReferenceHandler.IgnoreCycles` to paper over the navigation cycles that
+  caused — Phase 2.3 removed it. If it ever needs to come back, something is
+  returning an entity again.
 - **One rule, one implementation.** Validation and business rules live in the
   slice, so REST and GraphQL can't enforce different things.
-- **GraphQL should fetch what was asked for.** Resolvers currently eager-load
-  the whole object graph regardless of the query — see `architecture.md` A1.
+- **GraphQL should fetch what was asked for.** The eager-loaded include graph
+  is gone (Phase 2.3) but projection is still per-DTO, not per-field — see
+  `architecture.md` A1 and decision 11 for why the obvious fix was refused.
 - **Write down the tradeoff.** Existing comments explain *why* (captive
   dependency, `AsSplitQuery`, delete behaviour). Match that density; it's the
   interview material.
@@ -178,6 +192,11 @@ and never touches the dev database — `PostgresFixture` refuses to run if the a
 ever resolves a connection string other than the container's. There is no
 `compose.yaml`; Testcontainers manages its own database.
 
+CI (`.github/workflows/ci.yml`) runs the same suite on every branch push, from the
+repo root rather than `src/`. It installs both the 8.0 and 10.0 SDKs (8.0 to run
+net8.0 tests, 10.0 to read `global.json`) and builds `src/Jobkeep.slnx`, which
+**includes the test project** — that's why its test step can pass `--no-restore`.
+
 `dotnet test` needs the **repo-root `global.json`** (`test.runner` =
 `Microsoft.Testing.Platform`) and the **.NET 10 SDK** to read it — xUnit v3's runner
 is MTP, and the .NET 10 SDK refuses the old VSTest bridge. Pass the project as
@@ -196,11 +215,12 @@ You can still exercise endpoints by hand via Swagger, the Nitro IDE, or
   the stray file, or pass `Jobkeep.slnx` / `Jobkeep.csproj` explicitly.
 - **Migrations auto-apply on startup in Development only** (`Program.cs`).
   Deployed environments are expected to apply them as a deliberate release step.
-- **Enums serialize by name**, not int — `"Interviewing"` over REST,
-  `INTERVIEWING` over GraphQL.
-- **`ReferenceHandler.IgnoreCycles` is load-bearing.** EF navigation properties
-  (posting ↔ skills) cycle; removing it breaks REST serialization. GraphQL is
-  unaffected since it resolves only requested fields.
+- **Enums serialize by name**, not int, and are stored as strings —
+  `"Interviewing"` over REST, `INTERVIEWING` over GraphQL.
+- **`ReferenceHandler.IgnoreCycles` is gone** (Phase 2.3), and should stay gone.
+  It was load-bearing only because endpoints returned EF entities whose navigation
+  properties cycle (posting ↔ skills). Responses are DTOs now. Needing the flag
+  back means something is returning an entity.
 - **`appsettings*.json` contain `//` comments.** ASP.NET's config reader accepts
   them; strict JSON parsers won't. Don't "fix" them.
 
@@ -211,11 +231,8 @@ You can still exercise endpoints by hand via Swagger, the Nitro IDE, or
   Phase 2.6, before the AWS deploy. Flag this if Phase 3 starts first.
 - Nullable reference types enabled — respect existing nullability
   annotations rather than suppressing warnings.
-- Enums serialize by *name* on both surfaces, and are stored as strings.
 - Keep new NuGet dependencies minimal and justify additions in the
   relevant phase doc.
-- Migrations auto-apply in Development only; deployed environments apply
-  them as a deliberate release step.
 
 ## Known gaps (don't re-discover these)
 
@@ -223,15 +240,23 @@ No `docker-compose`, no health check, no auth. These are **recorded**, not
 forgotten — see the gap register in `docs/architecture.md`.
 
 Tests and CI landed in **Phase 2.2**, scheduled straight after 2.1 because the gap
-register called them the highest-value missing items. Three findings from that phase are
-**recorded, not fixed** — don't re-discover them:
+register called them the highest-value missing items. Findings still **recorded, not
+fixed** — don't re-discover them:
 - **Skill dedup is case-sensitive**, so `C#` and `c#` are two rows in the table whose
-  purpose is deduplication. Needs a case-insensitive natural key; own phase.
-- **Validation is surface-specific** (A4): GraphQL `createApplication` accepts a
-  blank title that REST rejects, and `PATCH` validates nothing at all. Asserted
-  as-is by the `A4_` tests in `SurfaceParityTests`; flip them when 2.3/2.5 fixes it.
+  purpose is deduplication. Company dedup has the same defect. Both need a
+  case-insensitive natural key, which is a migration and so its own phase. Note the
+  *filters* added in 2.3 are case-insensitive (ILIKE), so searching finds both rows —
+  which hides the problem without fixing it.
 - **`src` pairs Npgsql provider 8.0.10 with EF Design 8.0.11.** Harmless today;
   Phase 2.6 resolves it.
+- **No index on `Status` or `DateApplied`** even though 2.3 filters and sorts on
+  both. Deliberate — see F14 — and parked in Phase 2.7 with the rest of the audit
+  migration.
+
+**Fixed in Phase 2.3, so don't re-report them:** A2 (entities as the API contract),
+A3 (the repository), A4 (surface-specific validation) and A7 (EF entities reachable
+through the GraphQL schema). A1 is *partly* fixed — read decision 11 before
+"finishing" it, because the obvious fix reopens A7.
 
 ## Where things are
 
@@ -243,6 +268,9 @@ register called them the highest-value missing items. Three findings from that p
   work matches the intended scope for that stage.
 - `docs/security-and-data-audit.md` — schema/config exposure, F1-F18, and the
   phased remediation plan.
+- `docs/user-journeys.md` — what the user actually does, step by step, and where
+  that procedure has holes. The counterpart to `architecture.md`: that one
+  describes the system from the code's side, this one from the user's.
 - `docs/backlog.md` — considered-but-not-committed features, and the
   verified market comparison.
 - `docs/token-log.md` — what each phase cost to build, in tokens. Regenerate
@@ -265,6 +293,11 @@ register called them the highest-value missing items. Three findings from that p
 - Root `README.md` — status table and quick start.
 
 ## When asked to move to the next phase
+
+**Currently up next: Phase 2.4** (`docs/phases/phase-2.4-analytics.md`) — skill
+demand and status funnel, as a read-only `Analytics` module. Its doc still tells you
+to add `GetStatusFunnelAsync` to `IJobApplicationRepository`, which no longer exists;
+write slices and correct the doc. `docs/README.md` has the full status table.
 
 Read the relevant `docs/phases/phase-N-*.md` file first — it already has the
 plan. Implement it, update that doc's "Status" field to "Done" when

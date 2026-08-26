@@ -122,18 +122,19 @@ no diagram, because it will be trusted.
 ## Architecture diagram
 
 `docs/diagrams/architecture.svg` is drawn from `docs/architecture.md`, which is
-the authority — not from the current folder layout, which is mid-migration.
+the authority — not from the current folder layout.
 
 The thing this diagram must show, and the reason it exists: **REST and GraphQL
 are two surfaces over one data layer**, so a rule implemented in a slice is
 enforced identically on both. Draw the shared path, not two parallel stacks.
 
-Show the migration honestly. Per `CLAUDE.md`, `src/Endpoints/` and
-`src/Repositories/` still exist and `IJobApplicationRepository` is still wired
-up — it is *retiring, not growing*. Draw the legacy path in a visibly different
-treatment (dashed outline, muted fill) rather than omitting it. A diagram of
-the intended end state, presented as the current state, is the specific failure
-mode to avoid here.
+Draw what is actually there, checking `CLAUDE.md` first. Until Phase 2.3 that
+meant a second, dashed lane for `src/Endpoints/` + `src/Repositories/`, which
+were still wired up and *retiring, not growing*. **Phase 2.3 deleted them**, so
+there is one lane now and the dashed treatment should be gone. The general rule
+survives the specific case: a diagram of the intended end state, presented as
+the current state, is the failure mode to avoid — and so is a diagram still
+showing scaffolding that has since been removed.
 
 ## Do not
 

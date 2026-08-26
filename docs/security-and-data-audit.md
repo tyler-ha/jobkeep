@@ -155,6 +155,7 @@ is the obvious place a real RDS connection string lands in Phase 3, and it is al
 tracked.
 
 **F5 · GraphQL is not defended by `[JsonIgnore]`. (Verified against the emitted SDL.)**
+**RESOLVED in Phase 2.3 — see the note after this finding.**
 HotChocolate honours `[GraphQLIgnore]`, not `System.Text.Json`'s `[JsonIgnore]`, and
 there is no `[GraphQLIgnore]` anywhere in `src/`. The back-references hidden from REST
 are therefore **present in the published schema** — confirmed by reading the SDL from
@@ -175,19 +176,40 @@ So this query is valid against the live schema:
 It walks from any one record to **every résumé in the database**. It was submitted
 against a running instance and **passed validation** — HotChocolate 14.3's `@cost`
 directives did not reject it; only the downed database stopped execution. Combined
-with F1, this is the most serious finding in the audit.
+with F1, this was the most serious finding in the audit.
 
-**F6 · `GET /applications` is an unpaged full-table dump.**
-`Endpoints/ApplicationEndpoints.cs:28-32` returns every application with the entire
-eager-loaded object graph (`PostgresJobApplicationRepository.WithGraph()`, lines
-22-29). Already recorded as A1/A2; noted here because it is also the data-exposure
-path, not only a performance one.
+> **Resolved 2026-08-26 (Phase 2.3).** Every GraphQL root field now returns a
+> response DTO instead of an EF entity. HotChocolate builds the schema from
+> resolver return types, so `JobApplication`, `Company`, `Skill` and the rest are
+> no longer *in* the published schema — the query above fails validation with an
+> unknown-field error rather than executing. Worth noting **how** it was closed:
+> not by adding `[GraphQLIgnore]` to each back-reference, which would have needed
+> remembering on every future navigation property, but by removing the entities
+> from the surface entirely. The regression guard is
+> `SurfaceParityTests.NoEfEntityIsReachableFromTheGraphQLSchema`, which asserts
+> against the emitted SDL — the same artefact this finding was made from.
+>
+> F1 (no authentication) is untouched. Every application is still readable by
+> anyone who can reach the port; what changed is that reading one no longer hands
+> you all of them.
+
+**F6 · `GET /applications` is an unpaged full-table dump. RESOLVED in Phase 2.3.**
+The endpoint returned every application with the entire eager-loaded object graph.
+It is now paged (default 20, hard ceiling 100, both enforced in the handler for
+REST and GraphQL alike) and projects to a summary DTO that carries neither
+`Description` nor `ResumeText` — so the list is bounded *and* no longer a résumé
+dump. Recorded here rather than deleted because the exposure framing is what made
+it worth fixing early: A1 called it a performance problem.
+
+The ceiling matters on an unauthenticated surface for its own reason —
+`?pageSize=1000000` reached `Take()` directly before it existed.
 
 ### S2 — Medium: schema integrity
 
 **F7 · No concurrency token** → last-write-wins on the read-modify-write in
-`PostgresJobApplicationRepository.UpdateAsync` (lines 52-78). Two concurrent PATCHes
-silently discard one.
+`Modules/Applications/UpdateApplication.cs`. Two concurrent PATCHes silently discard
+one. (The code moved out of `PostgresJobApplicationRepository.UpdateAsync` in Phase
+2.3; the read-modify-write, and this finding, moved with it unchanged.)
 
 **F8 · The audit columns are inconsistent, and one of them already lies.**
 
@@ -195,7 +217,8 @@ silently discard one.
   `Title`, `Location`, `Description` and `CompanyId`.
 - `companies`, `skills`, `posting_skills`, `job_requirements` have none at all.
 - `job_applications.UpdatedAtUtc` is set by hand in exactly one place
-  (`PostgresJobApplicationRepository.cs:75`). `AddSkillToPostingAsync` mutated the
+  (`Modules/Applications/UpdateApplication.cs`, formerly
+  `PostgresJobApplicationRepository.cs:75`). `AddSkillToPostingAsync` mutated the
   aggregate and saved **without touching it**.
 - **Updated 2026-08-25, after Phase 2.1.** That method no longer exists — it became
   `Modules/Applications/AddSkillToPosting.cs`. The finding did not go with it: the
@@ -238,9 +261,13 @@ On an unauthenticated public write endpoint that is an unbounded-storage vector.
 `ai_analyses.ModelUsed` is the clearest case that a bound is simply missing — it holds
 a model identifier like `llama3.2:3b`, so `varchar(100)` is generous.
 
-**F14 · No index backs the default query.** `GetAllAsync` sorts
-`OrderByDescending(a => a.DateApplied)` and Phase 2.3 will filter on `Status`.
-Neither column is indexed; only the FK columns are.
+**F14 · No index backs the default query.** `ListApplicationsHandler` sorts on
+`DateApplied` by default and filters on `Status`, `DateApplied`, and — through a
+join — company and skill names. None of those columns is indexed; only the FKs are.
+Phase 2.3 shipped the filtering and deliberately left the indexes to Phase 2.7 so
+that phase stays one migration: at a few hundred personal rows the seq scan is
+sub-millisecond, and an index added before the query pattern settles is a guess.
+Still open, and now with a concrete query pattern to index *for*.
 
 ### S3 — Recorded / roadmap
 
@@ -368,6 +395,13 @@ had *just documented the problem* still didn't hand-maintain the column.
 that this was confirmed by reading the emitted SDL rather than by trusting the
 annotation. That is the same reasoning as the `schema-diagram` skill's rule about
 deriving from EF rather than from the model classes, applied to a different artefact.
+
+Its resolution in Phase 2.3 adds a second half worth telling: the fix was not
+`[GraphQLIgnore]` on each back-reference, which would have to be remembered on every
+navigation property added afterwards. Returning DTOs took the entity types out of the
+schema, so the walk is impossible rather than merely blocked — and the fix arrived as
+a *side effect* of a phase about paging. The mechanism that caused the finding
+(HotChocolate infers the schema from return types) is the same one that closed it.
 
 **Step 3's tradeoff** is the third: choosing to leave `skills` global, naming the
 privacy cost of that, and tying it back to the reason Postgres was chosen at all.

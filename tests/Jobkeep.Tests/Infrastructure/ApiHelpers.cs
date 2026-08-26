@@ -61,9 +61,15 @@ public static class ApiHelpers
             new { text, kind, isMustHave }, ct);
 
     /// <summary>
-    /// GET /applications/{id} as a raw JsonElement. Raw rather than typed on purpose:
-    /// the REST read path still returns EF entities (architecture.md A2), so pinning it
-    /// to a DTO here would quietly assert a contract the app does not actually have.
+    /// GET /applications/{id} as a raw JsonElement.
+    ///
+    /// Still raw rather than typed, but for a different reason than before Phase 2.3.
+    /// It used to be raw because the read path returned EF entities and there was no DTO
+    /// to bind to (architecture.md A2). There is one now — ApplicationDetail — and
+    /// binding to it would make these assertions read better. It stays raw deliberately:
+    /// deserializing into the app's own record proves the app can round-trip its own
+    /// type, not that the JSON on the wire has the field names a client expects. The
+    /// wire format is the contract, so the tests read the wire format.
     /// </summary>
     public static async Task<JsonDocument> GetApplicationAsync(
         this HttpClient client, Guid id, CancellationToken ct)

@@ -1,41 +1,36 @@
-using Jobkeep.Models;
 using Jobkeep.Modules.Applications;
-using Jobkeep.Repositories;
 
 namespace Jobkeep.GraphQL;
 
-// GraphQL write side. Every mutation here is a thin adapter: it hands the
-// request to the same code path REST uses and translates the outcome. The
-// create/update/delete trio still goes through the retiring repository; the
-// skills and requirements mutations go through Phase 2.1's slice handlers,
-// which is the migration in progress made visible in one file.
+// GraphQL write side. Every mutation is a thin adapter: it hands the request to
+// the same slice handler REST calls and translates the outcome.
+//
+// As of Phase 2.3 that is true of all seven, with no exceptions left. Until this
+// phase, create/update/delete went straight to IJobApplicationRepository and
+// skipped the validation the REST endpoints did by hand — which is why
+// `createApplication(input: { company: "Canva", title: "" })` used to succeed
+// against a POST that returned 400 for the same input (architecture.md A4). The
+// rule now lives in CreateApplicationHandler, so there is nowhere for the two
+// surfaces to disagree.
 public class Mutation
 {
-    public async Task<JobApplication> CreateApplication(
-        CreateJobApplicationRequest input, [Service] IJobApplicationRepository repo)
-    {
-        var application = new JobApplication
-        {
-            Notes = input.Notes,
-            ResumeText = input.ResumeText,
-            Posting = new JobPosting
-            {
-                Title = input.Title,
-                Location = input.Location,
-                Description = input.Description,
-                SourceUrl = input.SourceUrl,
-                Company = new Company { Name = input.Company }
-            }
-        };
-        return await repo.CreateAsync(application);
-    }
+    public async Task<ApplicationDetail> CreateApplication(
+        CreateApplicationRequest input,
+        [Service] CreateApplicationHandler handler, CancellationToken ct)
+        => (await handler.HandleAsync(input, ct)).ValueOrThrow();
 
-    public Task<JobApplication?> UpdateApplication(
-        Guid id, UpdateJobApplicationRequest input, [Service] IJobApplicationRepository repo)
-        => repo.UpdateAsync(id, input);
+    public async Task<ApplicationDetail> UpdateApplication(
+        Guid id, UpdateApplicationRequest input,
+        [Service] UpdateApplicationHandler handler, CancellationToken ct)
+        => (await handler.HandleAsync(id, input, ct)).ValueOrThrow();
 
-    public Task<bool> DeleteApplication(Guid id, [Service] IJobApplicationRepository repo)
-        => repo.DeleteAsync(id);
+    // Deleting an application that is already gone is now an error carrying
+    // NOT_FOUND, where it used to return false. GraphQL has no status codes, so
+    // `false` was the only signal available and it read identically to a
+    // successful no-op — the REST side has always answered 404.
+    public async Task<bool> DeleteApplication(
+        Guid id, [Service] DeleteApplicationHandler handler, CancellationToken ct)
+        => (await handler.HandleAsync(id, ct)).ValueOrThrow();
 
     // Exercises the shared-skills join: reuses an existing Skill row by name or
     // creates it, then links it to the application's posting.
