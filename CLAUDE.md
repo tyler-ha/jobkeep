@@ -37,7 +37,8 @@ can. Prefer the defensible choice over the impressive-sounding one.
    history of abandoning projects when scope gets fuzzy. Don't let a
    phase sprawl — if a change is getting large, suggest splitting it.
    This is also why architecture changes are adopted *incrementally*, per
-   phase, rather than as one big refactor.
+   phase, rather than as one big refactor. It turns out to be the token-cost
+   control too — see "Build cost" below.
 3. **Explain, don't just generate.** The person is using this project to
    build real understanding (for interviews) as much as to build the app
    itself. Prefer short explanations of *why* alongside code changes,
@@ -46,6 +47,52 @@ can. Prefer the defensible choice over the impressive-sounding one.
 4. **Local-first development.** Prefer developing against local/free
    equivalents (Postgres in Docker, Ollama) before touching real AWS or paid
    APIs, matching the pattern already established in Phases 1-2.
+
+## Build cost, in tokens
+
+Measured, not estimated — `docs/token-log.md` is the full ledger, generated from
+session transcripts by `scripts/token-usage.py`. **As of Phase 2.3 (2026-08-26):
+24 sessions, 1992 turns, 251.2M tokens** — the Phase 2.3 row being itself a
+mid-session figure, see below. Roughly 95% of that is `cache_read` (context
+replay); fresh input plus output is ~11M.
+
+Where it went — the biggest items:
+
+| Item | Turns | Total |
+|---|---:|---:|
+| Phase 2.2 — tests + CI | 297 | 62.2M |
+| Phase 2 — Postgres + GraphQL | 338 | 45.1M |
+| Phase 2.3 — query surface, repository retired | 198 | 33.1M |
+| Phase 2.1 — write surface as slices | 210 | 29.7M |
+| *(architecture record + diagrams + security audit)* | *434* | *53.1M* |
+
+**The one finding that should change behaviour: cost is superlinear in session
+length, not in task difficulty.** Every turn replays the conversation so far, so
+a session's later turns cost far more than its early ones:
+
+| Session length | Cost per turn |
+|---|---|
+| under ~40 turns | 30–40k |
+| ~90–130 turns | 55–65k |
+| 160–210 turns | 120–170k |
+| 300+ turns | 140–210k |
+
+Phase 2.2 is the clean demonstration because it got measured twice: its first
+185 turns cost 163k/turn, its next 112 cost 286k/turn — same session, same task,
+back half **75% more expensive per turn**. So the lever is *where a session
+ends*, not how hard the work is. Finishing a phase and starting a fresh session
+is worth more than any prompt-level economy.
+
+Two things worth not re-learning:
+- **Don't read a total logged mid-session as final.** Phase 2.2 was logged at
+  185 turns / 30.2M and finished at 297 / 62.2M. That wrong number sat in
+  `token-log.md` for a phase and made it claim Phase 2 was the most expensive
+  item. It was a real measurement of an unfinished thing, which is easier to
+  miss than an estimate.
+- **Documentation is not the cheap part.** The architecture record, diagrams and
+  security audit together cost 53.1M — more than any single numbered phase
+  except 2.2. Defensible for a project whose second audience is "the evidence",
+  but it should be a deliberate choice each time, not a habit.
 
 ## Architecture
 
@@ -306,9 +353,13 @@ so it stays an accurate record (useful later for interview stories too).
 
 When the phase is done, also **log what it cost**: run
 `python scripts/token-usage.py`, add a row to the "By phase" table in
-`docs/token-log.md`, and refresh its session table. The transcripts this reads
-are local and not kept forever, so a phase that isn't logged when it ends may
-not be recoverable later.
+`docs/token-log.md`, refresh its session table, and update the headline numbers
+in "Build cost" above. The transcripts this reads are local and not kept
+forever, so a phase that isn't logged when it ends may not be recoverable later.
+
+Logging necessarily happens *inside* the session it measures, so the row always
+understates the session it is written in. Say so in the row rather than implying
+the number is final — the Phase 2.2 row did not, and was wrong by half.
 
 The phase docs were written before the architecture record. If a phase doc
 contradicts `docs/architecture.md`, follow `architecture.md` and fix the
