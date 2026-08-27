@@ -1,216 +1,295 @@
-# Phase 4.5 — Resume import and parsing
+# Phase 4.5 — Document import: upload, parse, confirm, save
 
-**Status: Proposed — architecture under discussion, nothing built, nothing decided.**
+**Status: Done** (2026-08-27). Built, tested (171 tests green), and checked by
+hand against the real model.
 
 > Numbered 4.5 rather than inserted as a new 5 on purpose. Renumbering the phase
 > docs cost 10.2M tokens the one time it was done (see `CLAUDE.md`, "Build cost"),
 > and a decimal is free.
 
-## Where this came from
+## What was asked for
 
-Asked for on 2026-08-27: upload a resume as PDF / DOCX / TXT and parse it into
-records the app can use.
+> *"add a feature (if you don't have it) to parse text/docs/docx/pdf/etc file to
+> input, then AI or tools analyse the doc (depends on what kind of tools or
+> direction that industry usually work with), looking for keywords that fits our
+> database, (like upload for job description, upload resume/cv). Then it should
+> ask the user to confirm the correct input. Like a CV builder. Then confirm or
+> fix on user term. Then save to upload the documents to save to the db. For now,
+> no saving documents yet. We will have it in the backlog."*
 
-It is worth noting that this is not a new idea bolted on — **it is Phase 5's step
-1**, which currently reads in full:
+Two things in that are broader than the original 4.5 plan, and both were built:
+it covers **job ads as well as resumes**, and it has an explicit **confirm-or-fix
+step** before anything is written.
 
-> *Add a way to store your resume text once (a simple field or small endpoint —
-> this is a single-user tool, no need to overbuild this).*
+## What shipped
 
-Phase 5 (ATS check) compares a stored resume against a posting, and cannot run
-without one. So this either happens first as its own phase, or it happens badly
-inside Phase 5 as a side quest. Doing it first is the reason for the 4.5.
+```
+POST   /imports                  multipart: file + kind (+ label, sourceUrl)
+GET    /imports?status=          the review queue
+GET    /imports/{id}             the review screen: draft + extracted text
+PUT    /imports/{id}             the user's corrections
+POST   /imports/{id}/reparse     re-run the model over the stored text
+POST   /imports/{id}/confirm     the gate — writes the real rows
+DELETE /imports/{id}             discard
+```
 
-## The one distinction the whole design rests on
+GraphQL gets `imports`, `import`, `reviewImport`, `restructureImport`,
+`confirmImport`, `discardImport`. **The upload is REST-only** — see "Deviations".
 
-"Parse a resume" is **two different problems** with different failure modes, and
-conflating them is the mistake to avoid:
+| File | Role |
+|---|---|
+| `src/Modules/Documents/DocumentTextExtractor.cs` | bytes → text. PdfPig, OpenXml, UTF-8. Content-sniffed |
+| `src/Modules/Documents/DocumentStructurer.cs` | text → draft, via `IChatClient` |
+| `src/Modules/Documents/ImportDraft.cs` | the draft shapes + the model-facing schema classes |
+| `src/Modules/Documents/ImportDocument.cs` | the upload slice |
+| `src/Modules/Documents/{Get,List,Review,Restructure,Commit,Discard}Import.cs` | the review cycle, one slice each |
+| `src/Modules/Documents/DocumentsModule.cs` | DI, options, routes |
+| `src/Shared/ModelClient.cs` | `IChatClient` registration, moved out of the Ai module |
+| `src/Models/Resume.cs`, `DocumentImport.cs` | the new entities |
+| `src/Migrations/…_ResumesAndDocumentImports.cs` | first migration since InitialCreate |
+| `tests/Jobkeep.Tests/Documents/` | 13 extraction + 16 import tests |
+| `tests/Jobkeep.Tests/Fixtures/` | real PDF / DOCX / TXT / OLE2 fixture files |
 
-| | Extraction | Structuring |
-|---|---|---|
-| Job | bytes → plain text | text → records |
-| Tool | a parser library | the model, via `IChatClient` |
-| Determinism | **total** — same file, same text, always | none — a model, sampled |
-| Failure | throws, or gives obviously empty text | silently plausible and wrong |
-| Testable | yes, with a checked-in fixture file | only through a fake |
+New packages: **PdfPig 0.1.16** (Apache 2.0) and **DocumentFormat.OpenXml 3.5.1**
+(MIT). Both pure managed, no native dependency, no vulnerability advisories.
 
-They should be **separate steps with the text persisted in between**. That buys
-three things: re-parsing after a prompt change costs no re-upload; a bad
-extraction is diagnosable without a model in the loop; and the two halves get the
-kind of test each one actually deserves — a real fixture PDF for extraction, a
-canned model reply for structuring.
+## The shape, and why it is this shape
 
-This is the same shape Phase 4 already uses (`ai_analyses` is stored, and
-re-analyzing is an update path, not a re-upload), so it is a pattern being reused
-rather than invented.
+**"Parse a document" is two problems with opposite failure modes.** Keeping them
+apart is the whole design:
 
-## Decision 1 — where does a resume live? **This is the real question.**
+```
+bytes ──[extraction]──> text ──[structuring]──> draft ──[human]──> rows
+         deterministic          a sampled model        confirmed
+         fails loudly           fails plausibly
+```
 
-Today `ResumeText` is a `string?` **column on `JobApplication`**. So the resume is
-a property of *an application*.
+Extraction is a library call: same file, same text, every time; when it fails it
+throws. Structuring is a model: when it fails it returns something that looks
+right and isn't. **The text is persisted between them**, which buys three things —
+re-parsing after a prompt change costs no re-upload, a bad extraction is
+diagnosable without a model in the loop, and each half gets the test it deserves
+(a real fixture file / a canned reply).
 
-That is wrong for what was asked, and it is worth being precise about why: a
-resume is a property of **you**. You have perhaps two or three variants, and you
-apply to thirty jobs with them. The current shape stores the same text thirty
-times, gives you no way to ask "which applications used the resume I have since
-improved", and makes "parse into records we can use" meaningless — records
-attached to one application are not reusable.
+This is also what the industry does, which is worth knowing since the question was
+asked. Textkernel, Affinda and DaXtra all separate document conversion from field
+extraction; the second stage moved from statistical sequence models to LLMs over
+the last few years and the **seam between the two did not move**. The
+confirm-and-fix screen is standard too — it is the "review your parsed resume"
+step in every ATS onboarding flow.
 
-Two options.
+## Decisions
 
-**A. Keep it per-application.** Zero migration, matches the code that exists.
-Duplicates the text per application, and there is nowhere for parsed records to
-live that makes sense.
+The plan version of this doc ended with four open questions. All four were
+answered while building; here is what was chosen and why.
 
-**B. A `resumes` table, and `JobApplication` points at one.** A resume becomes its
-own aggregate with a label ("backend-focused", "generalist"), its extracted text,
-and its parsed records. `JobApplication.ResumeId` replaces `ResumeText`.
+**1. Where does a resume live? → B, a `resumes` table.** `JobApplication.ResumeText`
+is gone, replaced by `ResumeId`. A resume is a property of *you*, not of one
+application; as a column it stored the same text once per application and gave the
+parsed records nowhere reusable to live. The payoff is immediate and is
+demonstrated below: resume skills and posting skills are now rows in the **same
+shared `skills` table**.
 
-**Recommendation: B.** It is the shape the feature was asked for, it makes the
-Phase 5 ATS check a comparison between two stored things rather than a comparison
-against a column, and it unlocks the question a job tracker should be able to
-answer — *which of my skills do the jobs I apply to actually ask for, and which
-does my resume not mention?* That query is the whole point of having a shared
-`skills` table already.
+**2. Fold the parked Phase 2.7 migration in? → No.** This phase opened a migration,
+which is the cheap moment to fix the case-sensitive dedup gap — but doing it would
+make one phase do two things, which is what `CLAUDE.md` priority 2 exists to
+prevent. The new `resumes.Label` index is deliberately case-sensitive **to match**
+skills and companies, so all three still agree and 2.7 can fix them together.
 
-**What B costs, stated plainly:** it is a **migration**, and the first one since
-InitialCreate. That means it also triggers a `schema-diagram` redraw, which
-Phases 2.3–4 all correctly avoided. It also touches the existing
-create/update slices, which write `ResumeText` today.
+**3. Which records? → All four.** Skills, basics, experience, education. "Like a CV
+builder" needs experience and education; cutting to skills-plus-basics would have
+halved the phase and the feature.
 
-**A migration is the right moment to fix the parked case-sensitivity gap.**
-`CLAUDE.md` has the skill/company dedup defect parked in "Phase 2.7 with the rest
-of the audit migration", along with the missing `Status` / `DateApplied` indexes.
-If this phase is opening a migration anyway, the marginal cost of folding 2.7 in
-is small, and the alternative is two migrations doing adjacent work. **Worth
-deciding deliberately rather than by accident** — the argument against is that it
-makes one phase do two things, which is exactly what `CLAUDE.md` priority 2 warns
-about.
+**4. `.doc`? → Out, explicitly.** A clear 400 telling the user to save as `.docx`.
+There is no good free pure-managed extractor for the pre-2007 binary format, and
+the alternatives are a native dependency or a commercial licence. This was the
+phase's named scope trap and it stayed out.
 
-## Decision 2 — which module owns it?
+**5. Keep the uploaded file? → No** (confirmed by the user: *"For now, no saving
+documents yet. We will have it in the backlog."*). Extract the text, store the
+text, hash the bytes for provenance, drop the bytes. The cost argument is Neon's
+free-tier 0.5 GB; the better argument is security — nothing is written to disk, so
+path-traversal-via-filename cannot occur here. Added to `backlog.md`.
 
-A resume is not an application, and it is not an analysis.
+Three decisions were **not** in the plan and were made while building:
 
-- **`Resumes` module**, owning `resumes` and its parsed child tables. Clean, and
-  consistent with the ownership table.
-- **Fold into `Applications`.** Fewer moving parts, but Applications becomes "the
-  module for everything that isn't reporting or AI", which is how a modular
-  monolith quietly becomes a monolith.
+**6. The draft is a `jsonb` column, not draft tables.** A draft has no query
+surface: nothing asks "find drafts whose third experience mentions Kubernetes". It
+is written whole, read whole, edited whole, then either committed or discarded.
+Five throwaway tables mirroring the five real ones would double the schema to model
+something whose entire lifetime is one review screen. The *committed* records get
+real tables, because those are queried.
 
-**Recommendation: a `Resumes` module.** With a caveat that must be faced up front,
-because it is decision 14 all over again: the *structuring* step is an AI call
-that writes records. If `Resumes` owns those tables and calls `IChatClient`
-itself, it needs no contract — the Ai module is not involved and nothing crosses
-a boundary. **That is the cheaper shape and probably the right one.** The
-alternative — `Ai` owning resume parsing too — recreates the cross-module write
-that `IPostingContract` exists to mediate, and would want a second contract.
+**7. A module may call another module's use case.** The posting commit calls
+Applications' `CreateApplicationHandler` rather than writing `job_applications`.
+That is **not** the rule-2 crossing `IPostingContract` exists to mediate — reaching
+into another module's *tables* is what rule 2 forbids; invoking its published *use
+case* is the boundary working. The validation and the company dedup run, so there
+is still exactly one implementation of "create an application" (A4). Skills still
+go through `IPostingContract.AddExtractedSkillsAsync` — the existing contract,
+used unchanged. **Its two-method cap was not stretched**: a second consumer needing
+exactly the methods that already exist is evidence the boundary was drawn right.
 
-The generalisable rule worth writing down if this holds: **`Ai` is not "the module
-where model calls live".** `IChatClient` is a shared dependency any module may
-inject, the same way `AppDbContext` is. `Ai` owns `ai_analyses` — a table — not a
-technology. Getting this wrong produces a module that grows a slice every time
-any feature wants a model, which is `IJobApplicationRepository` in a new costume.
+**8. `IChatClient` moved from the Ai module to `Shared/`.** Documents calls a model
+too. The rule this produced, which the plan predicted: **the Ai module owns a
+table, not a technology.** `IChatClient` is a shared dependency any module may
+inject, like `AppDbContext`. Left in `AiModule`, Ai would grow a slice every time
+any feature wanted a model — `IJobApplicationRepository` in a new costume.
 
-## Decision 3 — which formats, and which libraries
+## Real-model check — three findings, and one that transfers
 
-Recommended, with the licensing checked because it is a portfolio project:
+Run against **llama3.2:3b** on the fixture resume (a real PDF) and a realistic
+Melbourne job ad. As in Phase 4, none of these was catchable by the test suite,
+because the tests fake the model on purpose.
 
-| Format | Library | Licence | Note |
-|---|---|---|---|
-| `.pdf` | **PdfPig** | Apache 2.0 | Pure .NET, actively maintained, no native dependency. The realistic default. |
-| `.docx` | **DocumentFormat.OpenXml** | MIT | Microsoft's own. No Office install, no COM. |
-| `.txt` / `.md` | none | — | Read the bytes. |
+### The resume path worked first time
+9.4s. Name, email, phone and location all correct; the professional summary
+copied; **5/5 skills**; both jobs with employer, title and dates; the education
+entry. Dates came back transcribed — `"Mar 2021"`, `"Present"` — which is what the
+`[Description]` saying "exactly as the resume writes it" is for. Asked for a date,
+a small model normalises to `2021-03-01` and turns "Present" into today, inventing
+precision the document does not contain.
 
-**Explicitly refuse `.doc`** (the pre-2007 binary format). There is no good free
-pure-managed extractor for it, and the options are a native dependency or a
-commercial library. The honest answer is a clear error telling the user to save
-as `.docx`, and it costs nothing to say so. **`.doc` is the scope trap in this
-phase** — it looks like one more entry in a switch statement and it is not.
+### Finding 1 — **field order in the schema decided whether an array was filled at all**
 
-Worth flagging and *not* doing: **iText7 is AGPL** unless you buy a licence. It is
-the first result for "C# PDF library" and it is the wrong pick for a public
-portfolio repo.
+The job-ad path first returned **zero skills and zero requirements in 0.9 seconds**,
+reproducibly (Temperature = 0). Company, title and location were correct — all
+answerable from the first two lines.
 
-The other trap: **a PDF that is a scan has no text layer.** Extraction returns
-empty, and no library fixes that without OCR, which is a different project. The
-design answer is to detect it and say so — "this PDF has no selectable text, it
-looks like a scan" — rather than storing an empty resume and letting the ATS
-check silently report that you match nothing.
+Two changes, tested one at a time:
 
-## Decision 4 — do we keep the uploaded file?
+| Change | skills | requirements |
+|---|---:|---:|
+| as built | 0 | 0 |
+| prompt: stop granting permission to return an empty list; demand every technology | 0 | 6 |
+| **schema: move `Requirements` before `Skills`** | **7** | 6 |
 
-Cheapest defensible answer: **no.** Extract the text, store the text, discard the
-bytes. The file's only job is to be a source of text, the text is what every
-later feature reads, and re-uploading is trivial for a single user.
+The reorder is the finding. With constrained decoding the model emits properties
+in **schema order**, and the first array it reaches is emitted before it has
+engaged with the document at all. Put another array in front of it and it fills.
+Phase 4's analyzer never hit this because its schema has `Seniority` and a
+2-3 sentence `Summary` before `Skills`, and generating the summary is what forces
+the read.
 
-Keeping the original means either `bytea` in Postgres — which eats the Neon free
-tier's 0.5 GB, the one resource in the deployed plan that is actually scarce — or
-object storage, which is an S3 bucket and a new AWS surface in a phase that is
-otherwise local. Store a filename and a hash for provenance; drop the bytes.
+**The general rule, worth carrying to any future extraction schema: put a field
+that cannot be answered without reading the whole document FIRST.** Cheap scalar
+fields at the top are a trap — they let the model answer, commit to a shape, and
+coast.
 
-## Decision 5 — what records, exactly?
+The prompt change was kept as well: it is what took requirements from 0 to 6, and
+`"use an empty list"` in a prompt turns out to be an invitation rather than a
+permission.
 
-"Parse into records we can use" needs pinning down, because it is the difference
-between a weekend and a month. Suggested minimum, and it is deliberately small:
+### Finding 2 — **a schema-constrained enum guarantees a valid answer, not a right one**
 
-- **Skills** — reusing the existing shared `skills` table, which is the entire
-  reason it is a shared table. This is the one that pays off immediately: skills
-  from your resume vs. skills from postings is a single query once both sides
-  exist.
-- **Contact/basics** — name, email, phone, location. Cheap and reliable.
-- **Experience entries** — employer, title, start/end, bullets.
-- **Education entries** — institution, qualification, year.
+Every extracted requirement came back `Responsibility`, including *"At least 5
+years of professional backend engineering experience"*, which is plainly a
+Qualification. The model also read only the "What we are looking for" section,
+skipping the responsibilities and benefits entirely.
 
-Do *not* try to extract a "years of experience" number or a seniority judgement.
-The Phase 4 real-model check is directly relevant here: a 3B model asked for a
-derived judgement returns something plausible and unfounded. Extraction of what
-is literally written is what worked; inference is what produced garbage.
+The first theory was a parsing artefact: `Kind` was a `string`, and the mapper's
+tolerant `TryParse` fell back to `Responsibility` on anything unrecognised — so a
+uniformly-wrong field would look exactly like this. It was changed to a real enum
+that reaches the schema as a JSON Schema `enum` of the three names, making an
+invalid value impossible.
 
-## What Phase 4 already proved, that this phase should not re-learn
+**It made no difference.** The model had been answering with a legal word all
+along and choosing badly. Classifying a sentence into three abstract categories is
+simply at the edge of what a 3B model does well, and no prompt attempted moved it.
 
-All three are in the Phase 4 doc's "Real-model check", and every one applies
-unchanged to the structuring step:
+Kept as-is, and the enum change was kept too — it removes a silent fallback that
+was actively hiding the problem. This is the case the confirm-and-fix step exists
+for: a wrong label is one click to fix on the review screen, and `IsMustHave` —
+the field Phase 5's ATS check actually reads — was **correct on all six**.
 
-1. **Field guidance goes in `[Description]` attributes, not the prompt.** In the
-   prompt, a small model echoes the instructions back as the values.
-2. **Set `RequireAllProperties`.** The default schema marks nothing required, so
-   `{}` is a legal reply and a small model will send it.
-3. **`Temperature = 0`.** Default sampling made one run in three return nothing.
+The meta-lesson matches Phase 4's exactly: the instinct was "the model is too
+small". The first defect was a field reordering. The second is a real model
+limitation, and the design already absorbs it — which is the point of putting a
+human in the loop rather than trusting the output.
 
-A resume is also *much longer* than a job ad, so the truncation limit and the
-context window need thought rather than the copied 12,000 characters — and a
-resume's important content is not all at the top, so head-truncation is a worse
-answer here than it was for a job ad. This is the one place the Phase 4 pattern
-does not transfer cleanly.
+### The payoff query, on real imported data
 
-## Security — the first real attack surface
+A resume uploaded as a PDF, a job ad uploaded as text, both confirmed:
 
-File upload is a bigger change to this app's risk profile than anything since it
-was written, and the security audit is already due for a refresh at the Phase 3
-boundary. Non-negotiables, none expensive:
+```
+     Name     | posting_requires | on_my_resume
+--------------+------------------+--------------
+ .NET         | t                | f
+ ASP.NET Core | f                | f
+ Kafka        | f                | f
+ AWS          | t                | t
+ C#           | t                | t
+ PostgreSQL   | t                | t
+ Docker       | f                | t
+```
 
-- **A size cap enforced before the parse**, not after.
-- **Sniff the content, don't trust the extension or the client's content-type.**
-- **Never let an uploaded filename reach a filesystem path.** Nothing is written
-  to disk under decision 4, which removes most of this class outright — a good
-  argument for that decision beyond cost.
-- Treat the parser as processing hostile input. PdfPig and OpenXml are managed
-  code, which bounds this considerably, but a malformed file should return a 400
-  rather than an unhandled exception.
+*".NET is required and is not on my resume"* — one join, because both sides are
+rows in the shared `skills` table. That is Phase 5's ATS check, already answerable,
+and it is the concrete return on decision 1.
 
-Bounded today by the app being localhost-only with no auth — but Phase 6 is a
-front end and Phase 3 is a public URL, so this is the wrong thing to leave until
-it matters.
+## Deviations from the plan
 
-## Open questions for the user
+- **Scope widened to job ads**, on the user's ask. The plan was resume-only.
+- **The confirm/fix cycle was added** — the plan went straight from parse to rows.
+  It is now the centre of the design and the reason for `document_imports`.
+- **`/reparse` was not planned.** It falls out of storing the text between the two
+  stages and is what makes that decision pay: a prompt or model improvement
+  re-runs over every past import with no re-upload.
+- **The upload endpoint is REST-only.** Every other write in this app exists on
+  both surfaces and that rule is deliberately broken here. GraphQL has no file
+  type; uploading through it means the GraphQL multipart-request *convention* and
+  an `Upload` scalar, i.e. a non-standard extension in the published schema so one
+  mutation can do what a plain POST already does. The line drawn instead: the
+  **bytes** arrive over REST, everything after that is on both surfaces. The rule
+  is about business logic having one implementation, and "receive a file" is
+  transport.
+- **`DocumentFormat` had to be renamed `SourceFormat`** — `DocumentFormat.OpenXml`
+  puts a namespace of that name in scope and CS0118 results. Same class of
+  collision as `SliceResult` vs GreenDonut's `Result`.
+- **The migration drops `ResumeText` without migrating its contents.** Safe here —
+  single-user local database, never deployed, the column was Phase 5 scaffolding
+  no endpoint meaningfully filled. The migration says so in a comment.
 
-1. **Decision 1 — per-application text (A) or a `resumes` table (B)?** B is
-   recommended and is a migration.
-2. **If B: fold the parked Phase 2.7 migration work in, or keep it separate?**
-3. **Decision 5 — is the four-record-type list right?** Cutting experience and
-   education to "skills plus basics" would roughly halve the phase.
-4. Confirm `.doc` is out of scope.
+## Security
+
+File upload is the biggest change to this app's risk profile since it was written.
+What was done, none of it expensive:
+
+- **Size cap enforced before anything parses** (5 MB), checked twice: against the
+  declared length at the endpoint, then against the bytes actually received.
+- **Content sniffing, not extension trust** — magic bytes decide the format.
+- **Nothing reaches a filesystem path.** No file is ever written, so the
+  filename-traversal class is unreachable rather than mitigated. This is the
+  strongest argument for decision 5.
+- **Parsers treated as processing hostile input** — a malformed PDF or zip returns
+  400, never an unhandled 500.
+- **Invalid UTF-8 is refused**, not silently replaced with U+FFFD.
+- **The list endpoint never returns résumé text**, matching the Phase 2.3 fix that
+  removed `ResumeText` from the list projection.
+
+Still open and belonging to the audit's refresh, not here: `resumes.SourceText` and
+`document_imports.ExtractedText` are unbounded plaintext personal information with
+no retention rule (APP 11.2), and a *discarded* import keeps its text on purpose.
+`DisableAntiforgery()` on the upload endpoint is correct for an app with no auth
+and no cookies, and is one of the things that must be revisited when auth lands.
+
+## Known gaps
+
+- **Requirement `Kind` is unreliable** (finding 2). Fix it on the review screen.
+- **No real-word-processor PDF in the fixtures.** The checked-in PDF is
+  hand-assembled; multi-column layouts, subset fonts and kerning written as
+  individual `Tj` operators are where PDF extraction gets genuinely hard, and none
+  is exercised. The by-hand check is what covers it.
+- **Case-sensitive dedup** applies to `resumes.Label` too, deliberately (decision 2).
+- **No OCR**, so a scanned PDF cannot be imported. It is detected and reported
+  rather than stored as an empty resume.
+- **`MaxStructureChars` truncates from the head** at 24,000 characters. It should
+  effectively never fire on a real resume (a dense three-page resume is ~8,000),
+  and it warns when it does. Chunk-and-merge was judged machinery in search of a
+  problem at this size.
 
 ## Next
 
-Phase 5 — ATS compatibility check, which consumes whatever this produces.
+**Phase 5 — ATS compatibility check**, which consumes what this produces. Its step
+1 ("store your resume text once") is now done, and the skills-gap join above is
+most of its answer already.

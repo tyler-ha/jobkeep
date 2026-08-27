@@ -1,8 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 790" width="980" height="790" role="img" aria-labelledby="t d">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 880" width="980" height="880" role="img" aria-labelledby="t d">
   <title id="t">JobKeep architecture — one deployable, two API surfaces, one code path</title>
-  <desc id="d">HTTP requests arrive at two API surfaces: REST minimal-API routes mapped by the Applications module, and a HotChocolate GraphQL endpoint. Each surface has its own thin translation of an outcome — ToHttpResult renders a status code, ValueOrThrow raises a GraphQL error — but both call the same vertical-slice handler underneath, so neither can enforce a different rule. A slice holds its request, handler and response in one file, validates there, and returns a response DTO rather than an EF entity, which is why no entity type appears in the published GraphQL schema. Handlers use AppDbContext directly over a single PostgreSQL database. Modules own their own tables and do not read each other's.</desc>
+  <desc id="d">HTTP requests arrive at two API surfaces: REST minimal-API routes mapped per module, and a HotChocolate GraphQL endpoint. Each surface has its own thin translation of an outcome — ToHttpResult renders a status code, ValueOrThrow raises a GraphQL error — but both call the same vertical-slice handler underneath, so neither can enforce a different rule. The one exception is the Phase 4.5 file upload, which is REST-only because GraphQL has no file type. A slice holds its request, handler and response in one file, validates there, and returns a response DTO rather than an EF entity, which is why no entity type appears in the published GraphQL schema. Handlers use AppDbContext directly over a single PostgreSQL database. Modules own their own tables and do not read each other's; the skills table is shared by design.</desc>
 
-  <rect x="0" y="0" width="980" height="790" fill="#FBFCFB"/>
+  <rect x="0" y="0" width="980" height="880" fill="#FBFCFB"/>
 
   <defs>
     <marker id="an" viewBox="0 0 10 8" refX="9.5" refY="4" markerWidth="8" markerHeight="7" orient="auto">
@@ -27,8 +27,8 @@
     <rect x="170" y="104" width="260" height="24" fill="#E8EEEB"/>
     <rect x="170" y="104" width="260" height="66" rx="3" fill="none" stroke="#C9D2CE"/>
     <text x="300" y="121" font-size="11" font-weight="600" fill="#16211F" text-anchor="middle">REST · minimal API</text>
-    <text x="300" y="143" font-size="9.5" fill="#16211F" text-anchor="middle">Modules/Applications/ApplicationsModule.cs</text>
-    <text x="300" y="159" font-size="10" fill="#5B6C68" text-anchor="middle">MapGroup "/applications"</text>
+    <text x="300" y="143" font-size="9.5" fill="#16211F" text-anchor="middle">each module maps its own routes</text>
+    <text x="300" y="159" font-size="10" fill="#5B6C68" text-anchor="middle">/applications · /stats · /imports</text>
 
     <rect x="550" y="104" width="260" height="66" rx="3" fill="#FFFFFF"/>
     <rect x="550" y="104" width="260" height="24" fill="#E8EEEB"/>
@@ -37,80 +37,105 @@
     <text x="680" y="143" font-size="9.5" fill="#16211F" text-anchor="middle">GraphQL/Query.cs · Mutation.cs</text>
     <text x="680" y="159" font-size="10" fill="#5B6C68" text-anchor="middle">POST /graphql</text>
 
+    <!-- the one deliberate asymmetry -->
+    <text x="300" y="184" font-size="9" fill="#8A9793" text-anchor="middle">POST /imports (multipart) is REST-only — GraphQL has no file type</text>
+
     <!-- ============ per-surface edge translation ============ -->
-    <line x1="300" y1="170" x2="300" y2="188" stroke="#C9D2CE" stroke-width="1.2"/>
-    <line x1="680" y1="170" x2="680" y2="188" stroke="#C9D2CE" stroke-width="1.2"/>
+    <line x1="300" y1="190" x2="300" y2="200" stroke="#C9D2CE" stroke-width="1.2"/>
+    <line x1="680" y1="170" x2="680" y2="200" stroke="#C9D2CE" stroke-width="1.2"/>
 
-    <rect x="170" y="188" width="260" height="46" rx="3" fill="#FFFFFF" stroke="#C9D2CE"/>
-    <text x="300" y="206" font-size="9.5" fill="#16211F" text-anchor="middle">Shared/ResultHttpExtensions.cs</text>
-    <text x="300" y="222" font-size="9.5" fill="#5B6C68" text-anchor="middle">ToHttpResult → 200 · 201 · 204 · 400 · 404</text>
+    <rect x="170" y="200" width="260" height="46" rx="3" fill="#FFFFFF" stroke="#C9D2CE"/>
+    <text x="300" y="218" font-size="9.5" fill="#16211F" text-anchor="middle">Shared/ResultHttpExtensions.cs</text>
+    <text x="300" y="234" font-size="9.5" fill="#5B6C68" text-anchor="middle">ToHttpResult → 200 · 201 · 204 · 400 · 404</text>
 
-    <rect x="550" y="188" width="260" height="46" rx="3" fill="#FFFFFF" stroke="#C9D2CE"/>
-    <text x="680" y="206" font-size="9.5" fill="#16211F" text-anchor="middle">GraphQL/ResultExtensions.cs</text>
-    <text x="680" y="222" font-size="9.5" fill="#5B6C68" text-anchor="middle">ValueOrThrow → INVALID_INPUT · NOT_FOUND</text>
+    <rect x="550" y="200" width="260" height="46" rx="3" fill="#FFFFFF" stroke="#C9D2CE"/>
+    <text x="680" y="218" font-size="9.5" fill="#16211F" text-anchor="middle">GraphQL/ResultExtensions.cs</text>
+    <text x="680" y="234" font-size="9.5" fill="#5B6C68" text-anchor="middle">ValueOrThrow → INVALID_INPUT · NOT_FOUND</text>
 
-    <text x="490" y="212" font-size="9.5" fill="#8A9793" text-anchor="middle">one outcome,</text>
-    <text x="490" y="226" font-size="9.5" fill="#8A9793" text-anchor="middle">two renderings</text>
+    <text x="490" y="224" font-size="9.5" fill="#8A9793" text-anchor="middle">one outcome,</text>
+    <text x="490" y="238" font-size="9.5" fill="#8A9793" text-anchor="middle">two renderings</text>
 
     <!-- ============ converge: one code path under both ============ -->
-    <path d="M300,234 V262" fill="none" stroke="#0E5F58" stroke-width="1.6"/>
-    <path d="M680,234 V262" fill="none" stroke="#0E5F58" stroke-width="1.6"/>
-    <line x1="300" y1="262" x2="680" y2="262" stroke="#0E5F58" stroke-width="1.6"/>
-    <text x="490" y="255" font-size="10" fill="#5B6C68" text-anchor="middle">one code path — neither surface can enforce a different rule</text>
+    <path d="M300,246 V274" fill="none" stroke="#0E5F58" stroke-width="1.6"/>
+    <path d="M680,246 V274" fill="none" stroke="#0E5F58" stroke-width="1.6"/>
+    <line x1="300" y1="274" x2="680" y2="274" stroke="#0E5F58" stroke-width="1.6"/>
+    <text x="490" y="267" font-size="10" fill="#5B6C68" text-anchor="middle">one code path — neither surface can enforce a different rule</text>
 
-    <path d="M490,262 V292" fill="none" stroke="#0E5F58" stroke-width="1.6" marker-end="url(#an)"/>
+    <path d="M490,274 V304" fill="none" stroke="#0E5F58" stroke-width="1.6" marker-end="url(#an)"/>
 
     <!-- ============ the slice ============ -->
-    <rect x="250" y="292" width="480" height="100" rx="3" fill="#FFFFFF"/>
-    <rect x="250" y="292" width="480" height="24" fill="#E8EEEB"/>
-    <rect x="250" y="292" width="480" height="100" rx="3" fill="none" stroke="#0E5F58"/>
-    <text x="490" y="309" font-size="11" font-weight="600" fill="#16211F" text-anchor="middle">Modules/&lt;Module&gt;/&lt;UseCase&gt;.cs</text>
-    <text x="490" y="333" font-size="10" fill="#16211F" text-anchor="middle">request + handler + response, in one file · validates here</text>
-    <text x="490" y="351" font-size="10" fill="#5B6C68" text-anchor="middle">returns SliceResult&lt;T&gt;, translated at each surface's own edge</text>
-    <text x="490" y="369" font-size="10" fill="#5B6C68" text-anchor="middle">and a response DTO — never an EF entity, so no entity type</text>
-    <text x="490" y="385" font-size="10" fill="#5B6C68" text-anchor="middle">reaches the published GraphQL schema</text>
+    <rect x="250" y="304" width="480" height="100" rx="3" fill="#FFFFFF"/>
+    <rect x="250" y="304" width="480" height="24" fill="#E8EEEB"/>
+    <rect x="250" y="304" width="480" height="100" rx="3" fill="none" stroke="#0E5F58"/>
+    <text x="490" y="321" font-size="11" font-weight="600" fill="#16211F" text-anchor="middle">Modules/&lt;Module&gt;/&lt;UseCase&gt;.cs</text>
+    <text x="490" y="345" font-size="10" fill="#16211F" text-anchor="middle">request + handler + response, in one file · validates here</text>
+    <text x="490" y="363" font-size="10" fill="#5B6C68" text-anchor="middle">returns SliceResult&lt;T&gt;, translated at each surface's own edge</text>
+    <text x="490" y="381" font-size="10" fill="#5B6C68" text-anchor="middle">and a response DTO — never an EF entity, so no entity type</text>
+    <text x="490" y="397" font-size="10" fill="#5B6C68" text-anchor="middle">reaches the published GraphQL schema</text>
 
-    <path d="M490,392 V418" fill="none" stroke="#0E5F58" stroke-width="1.6" marker-end="url(#an)"/>
+    <path d="M490,404 V430" fill="none" stroke="#0E5F58" stroke-width="1.6" marker-end="url(#an)"/>
 
     <!-- ============ module ownership ============ -->
-    <rect x="250" y="418" width="480" height="146" rx="3" fill="#FFFFFF"/>
-    <rect x="250" y="418" width="480" height="146" rx="3" fill="none" stroke="#0E5F58"/>
-    <text x="270" y="440" font-size="10.5" fill="#16211F">Applications</text>
-    <text x="710" y="440" font-size="9.5" fill="#5B6C68" text-anchor="end">applications · postings · companies · requirements</text>
-    <line x1="270" y1="449" x2="710" y2="449" stroke="#E8EEEB"/>
-    <text x="270" y="466" font-size="10.5" fill="#16211F">Analytics</text>
-    <text x="710" y="466" font-size="9.5" fill="#5B6C68" text-anchor="end">read-only · aggregates in SQL · phase 2.4</text>
-    <line x1="270" y1="475" x2="710" y2="475" stroke="#E8EEEB"/>
-    <text x="270" y="492" font-size="10.5" fill="#16211F">Ai</text>
-    <text x="710" y="492" font-size="9.5" fill="#5B6C68" text-anchor="end">ai_analyses · phase 4</text>
-    <line x1="270" y1="501" x2="710" y2="501" stroke="#E8EEEB"/>
-    <text x="270" y="518" font-size="10.5" fill="#16211F">Ats</text>
-    <text x="710" y="518" font-size="9.5" fill="#5B6C68" text-anchor="end">ats_results · phase 5</text>
-    <line x1="270" y1="527" x2="710" y2="527" stroke="#C9D2CE"/>
-    <text x="490" y="540" font-size="9.5" fill="#8A9793" text-anchor="middle">a module never reads another module's tables — cross-module access</text>
-    <text x="490" y="553" font-size="9.5" fill="#8A9793" text-anchor="middle">goes through a contract. Analytics is the read-only exception (decision 13)</text>
+    <rect x="250" y="430" width="480" height="212" rx="3" fill="#FFFFFF"/>
+    <rect x="250" y="430" width="480" height="212" rx="3" fill="none" stroke="#0E5F58"/>
 
-    <path d="M490,564 V594" fill="none" stroke="#0E5F58" stroke-width="1.6" marker-end="url(#an)"/>
+    <text x="270" y="452" font-size="10.5" fill="#16211F">Applications</text>
+    <text x="710" y="452" font-size="9.5" fill="#5B6C68" text-anchor="end">applications · postings · companies · requirements</text>
+    <line x1="270" y1="461" x2="710" y2="461" stroke="#E8EEEB"/>
+
+    <text x="270" y="478" font-size="10.5" fill="#16211F">Analytics</text>
+    <text x="710" y="478" font-size="9.5" fill="#5B6C68" text-anchor="end">read-only · aggregates in SQL · phase 2.4</text>
+    <line x1="270" y1="487" x2="710" y2="487" stroke="#E8EEEB"/>
+
+    <text x="270" y="504" font-size="10.5" fill="#16211F">Ai</text>
+    <text x="710" y="504" font-size="9.5" fill="#5B6C68" text-anchor="end">ai_analyses · phase 4</text>
+    <line x1="270" y1="513" x2="710" y2="513" stroke="#E8EEEB"/>
+
+    <text x="270" y="530" font-size="10.5" fill="#16211F">Documents</text>
+    <text x="710" y="530" font-size="9.5" fill="#5B6C68" text-anchor="end">document_imports · resumes + 3 children · phase 4.5</text>
+    <line x1="270" y1="539" x2="710" y2="539" stroke="#E8EEEB"/>
+
+    <text x="270" y="556" font-size="10.5" fill="#16211F">Ats</text>
+    <text x="710" y="556" font-size="9.5" fill="#5B6C68" text-anchor="end">ats_results · phase 5</text>
+    <line x1="270" y1="565" x2="710" y2="565" stroke="#E8EEEB"/>
+
+    <text x="270" y="582" font-size="10.5" fill="#0E5F58">skills</text>
+    <text x="710" y="582" font-size="9.5" fill="#0E5F58" text-anchor="end">shared — owned by no module, joined from both sides</text>
+    <line x1="270" y1="591" x2="710" y2="591" stroke="#C9D2CE"/>
+
+    <text x="490" y="606" font-size="9.5" fill="#8A9793" text-anchor="middle">a module never reads another module's tables. Cross-module access goes through</text>
+    <text x="490" y="619" font-size="9.5" fill="#8A9793" text-anchor="middle">a contract (decision 14) or that module's own use case (decision 15).</text>
+    <text x="490" y="632" font-size="9.5" fill="#8A9793" text-anchor="middle">Analytics is the read-only exception (decision 13).</text>
+
+    <path d="M490,642 V672" fill="none" stroke="#0E5F58" stroke-width="1.6" marker-end="url(#an)"/>
+
+    <!-- ============ the shared model client ============ -->
+    <rect x="740" y="470" width="216" height="72" rx="3" fill="#FFFFFF" stroke="#C9D2CE" stroke-dasharray="4 3"/>
+    <text x="848" y="490" font-size="10" font-weight="600" fill="#16211F" text-anchor="middle">Shared/ModelClient.cs</text>
+    <text x="848" y="506" font-size="9" fill="#5B6C68" text-anchor="middle">IChatClient → Ollama, local</text>
+    <text x="848" y="521" font-size="9" fill="#8A9793" text-anchor="middle">injected by Ai AND Documents:</text>
+    <text x="848" y="534" font-size="9" fill="#8A9793" text-anchor="middle">a dependency, not a module's property</text>
+    <line x1="730" y1="506" x2="740" y2="506" stroke="#C9D2CE" stroke-width="1.2"/>
 
     <!-- ============ data layer ============ -->
-    <rect x="340" y="594" width="300" height="58" rx="3" fill="#FFFFFF"/>
-    <rect x="340" y="594" width="300" height="22" fill="#E8EEEB"/>
-    <rect x="340" y="594" width="300" height="58" rx="3" fill="none" stroke="#C9D2CE"/>
-    <text x="490" y="609" font-size="11" font-weight="600" fill="#16211F" text-anchor="middle">Data/AppDbContext.cs</text>
-    <text x="490" y="644" font-size="10" fill="#5B6C68" text-anchor="middle">Fluent API in one place · enums as strings</text>
-    <text x="490" y="644" font-size="10" fill="#5B6C68" text-anchor="middle">delete behaviour chosen per relationship</text>
+    <rect x="340" y="672" width="300" height="62" rx="3" fill="#FFFFFF"/>
+    <rect x="340" y="672" width="300" height="22" fill="#E8EEEB"/>
+    <rect x="340" y="672" width="300" height="62" rx="3" fill="none" stroke="#C9D2CE"/>
+    <text x="490" y="687" font-size="11" font-weight="600" fill="#16211F" text-anchor="middle">Data/AppDbContext.cs</text>
+    <text x="490" y="710" font-size="10" fill="#5B6C68" text-anchor="middle">Fluent API in one place · enums as strings</text>
+    <text x="490" y="726" font-size="10" fill="#5B6C68" text-anchor="middle">delete behaviour chosen per relationship</text>
 
-    <path d="M490,652 V684" fill="none" stroke="#16211F" stroke-width="1.4" marker-end="url(#ai)"/>
+    <path d="M490,734 V766" fill="none" stroke="#16211F" stroke-width="1.4" marker-end="url(#ai)"/>
 
-    <rect x="380" y="684" width="220" height="46" rx="3" fill="#FFFFFF" stroke="#C9D2CE"/>
-    <text x="490" y="703" font-size="11.5" font-weight="600" fill="#16211F" text-anchor="middle">PostgreSQL</text>
-    <text x="490" y="719" font-size="9.5" fill="#5B6C68" text-anchor="middle">Docker local · RDS free-tier deployed</text>
+    <rect x="380" y="766" width="220" height="46" rx="3" fill="#FFFFFF" stroke="#C9D2CE"/>
+    <text x="490" y="785" font-size="11.5" font-weight="600" fill="#16211F" text-anchor="middle">PostgreSQL</text>
+    <text x="490" y="801" font-size="9.5" fill="#5B6C68" text-anchor="middle">Docker local · Neon free tier when deployed</text>
 
     <!-- ============ footer ============ -->
-    <line x1="110" y1="752" x2="870" y2="752" stroke="#E8EEEB"/>
-    <text x="110" y="770" font-size="9.5" fill="#5B6C68">Earlier versions of this diagram had a second, dashed lane: the Phase 2 routes going through IJobApplicationRepository.</text>
-    <text x="110" y="783" font-size="9.5" fill="#5B6C68">Phases 2.1–2.3 replaced it slice by slice and Phase 2.3 deleted it, so there is one lane.</text>
-    <text x="870" y="783" font-size="9.5" fill="#8A9793" text-anchor="end">as-built end of Phase 2.3 · one deployable</text>
+    <line x1="110" y1="838" x2="870" y2="838" stroke="#E8EEEB"/>
+    <text x="110" y="856" font-size="9.5" fill="#5B6C68">Earlier versions had a second, dashed lane: the Phase 2 routes going through IJobApplicationRepository. Phase 2.3 deleted it, so there is one lane.</text>
+    <text x="110" y="869" font-size="9.5" fill="#5B6C68">The deployment target stopped being RDS in Phase 3 — nothing in the deployed plan may bill per hour.</text>
+    <text x="870" y="869" font-size="9.5" fill="#8A9793" text-anchor="end">as-built end of Phase 4.5 · one deployable</text>
 
   </g>
 </svg>

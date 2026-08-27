@@ -1,7 +1,5 @@
 using Jobkeep.Modules.Applications;
 using Jobkeep.Shared;
-using Microsoft.Extensions.AI;
-using OllamaSharp;
 
 namespace Jobkeep.Modules.Ai;
 
@@ -11,23 +9,15 @@ namespace Jobkeep.Modules.Ai;
 // while costing an extra unwrap in every handler.
 public class AiOptions
 {
-    // Where Ollama is listening. Only ever localhost in this project — see the
-    // provider note in AiModule below.
-    public string Endpoint { get; set; } = "http://localhost:11434";
-
-    // The model tag, e.g. "llama3.2:3b". Also written into ai_analyses.ModelUsed,
-    // so a stored analysis records what produced it — useful when a later model
-    // gives visibly better output and you want to know which rows are stale.
-    public string Model { get; set; } = "llama3.2:3b";
-
-    // A local 3B model on CPU is not fast. The default HttpClient timeout of 100s
-    // is long enough to look like a hang and short enough to fail a cold first
-    // request while the model loads into memory, which is the worst of both.
-    public int TimeoutSeconds { get; set; } = 180;
-
     // Job ads are occasionally pasted with a whole careers page attached. See
     // AnalyzePosting.cs for why this truncates instead of rejecting.
     public int MaxDescriptionChars { get; set; } = 12000;
+
+    // Endpoint, Model and TimeoutSeconds used to live here. Phase 4.5 moved them
+    // to ModelOptions in Shared/ModelClient.cs, because a second module now calls
+    // a model and the connection is not this module's property to own. They are
+    // still bound from the same "Ai" configuration section, so no appsettings
+    // file changed.
 }
 
 // Module wiring for Ai: DI plus its two routes.
@@ -68,34 +58,18 @@ public static class AiModule
         config.GetSection("Ai").Bind(options);
         services.AddSingleton(options);
 
-        // Registered as a singleton because OllamaApiClient wraps an HttpClient,
-        // and a per-request HttpClient is the socket-exhaustion bug. It holds no
-        // per-request state, so this is safe — and unlike a handler, it has no
-        // scoped dependency to capture, so it is not the captive-dependency trap
-        // ApplicationsModule warns about.
-        services.AddSingleton<IChatClient>(_ =>
-        {
-            var http = new HttpClient
-            {
-                BaseAddress = new Uri(options.Endpoint),
-                Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds)
-            };
-
-            // OllamaSharp implements IChatClient directly, so there is no adapter
-            // package in between. Microsoft.Extensions.AI.Ollama existed and was
-            // deprecated in favour of exactly this.
-            return new OllamaApiClient(http, options.Model);
-        });
+        // IChatClient itself is registered by AddModelClient in Program.cs, not
+        // here. See Shared/ModelClient.cs for why the model client stopped being
+        // this module's to own once Documents also needed one.
 
         // Scoped, matching AppDbContext — both handlers hold one.
         services.AddScoped<AnalyzePostingHandler>();
         services.AddScoped<GetAnalysisHandler>();
 
-        // The contract Ai uses to reach Applications-owned tables. Registered
-        // here rather than in ApplicationsModule because Ai is the only consumer,
-        // and a contract with no consumer registered is dead wiring. If a second
-        // module ever needs it, it moves.
-        services.AddScoped<IPostingContract, PostingContract>();
+        // IPostingContract used to be registered here, on the argument that Ai
+        // was its only consumer. Phase 4.5 made Documents a second one, which is
+        // the condition that comment named for moving it — so it now lives in
+        // AddApplicationsModule, with the module that owns the tables it guards.
 
         return services;
     }

@@ -1,6 +1,8 @@
 using Jobkeep.Modules.Ai;
 using Jobkeep.Modules.Analytics;
 using Jobkeep.Modules.Applications;
+using Jobkeep.Modules.Documents;
+using Jobkeep.Models;
 
 namespace Jobkeep.GraphQL;
 
@@ -79,4 +81,25 @@ public class Query
         [Service] GetAnalysisHandler handler,
         CancellationToken ct)
         => (await handler.HandleAsync(applicationId, ct)).ValueOrThrow();
+
+    // Phase 4.5 — the document import review cycle.
+    //
+    // The upload itself is REST-only (DocumentsModule.cs explains why a file
+    // does not belong in this schema), but everything after the bytes arrive is
+    // on both surfaces: the draft you review, correct and confirm is the same
+    // draft either way, decided by the same handlers.
+    public async Task<List<ImportSummary>> GetImports(
+        ImportStatus? status,
+        [Service] ListImportsHandler handler,
+        CancellationToken ct)
+        => (await handler.HandleAsync(status, ct)).ValueOrThrow();
+
+    // Returns the extracted text as well as the draft — the review screen needs
+    // the document to check the draft against. GetImport.cs notes why that is a
+    // deliberate exception to this codebase's habit of never over-fetching.
+    public async Task<ImportResponse> GetImport(
+        Guid id,
+        [Service] GetImportHandler handler,
+        CancellationToken ct)
+        => (await handler.HandleAsync(id, ct)).ValueOrThrow();
 }

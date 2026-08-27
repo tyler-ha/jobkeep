@@ -4,6 +4,8 @@ using Jobkeep.GraphQL;
 using Jobkeep.Modules.Ai;
 using Jobkeep.Modules.Analytics;
 using Jobkeep.Modules.Applications;
+using Jobkeep.Modules.Documents;
+using Jobkeep.Shared;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -33,6 +35,18 @@ builder.Services.AddAnalyticsModule();
 // Takes IConfiguration because the model endpoint and tag are config, not code —
 // that is the whole point of putting the analyzer behind IChatClient.
 builder.Services.AddAiModule(builder.Configuration);
+
+// The language model client itself, shared by every module that wants one.
+// Registered here rather than inside AddAiModule since Phase 4.5, because
+// Documents also calls a model and the Ai module owns a table, not a technology
+// (Shared/ModelClient.cs has the full argument).
+builder.Services.AddModelClient(builder.Configuration);
+
+// Phase 4.5. Owns `document_imports` and the four resume tables. Turns an
+// uploaded PDF/DOCX/text file into a draft, and — only once a human confirms it —
+// into real rows. Reaches Applications through IPostingContract and through that
+// module's own use-case handlers, never its tables directly.
+builder.Services.AddDocumentsModule(builder.Configuration);
 
 builder.Services.ConfigureHttpJsonOptions(o =>
 {
@@ -92,6 +106,9 @@ app.MapAnalyticsModule();
 // the module is Ai — AiModule.cs explains why the URL follows the resource while
 // the code follows the owner.
 app.MapAiModule();
+
+// Every /imports route: upload, review, correct, confirm, discard.
+app.MapDocumentsModule();
 
 // Serves POST /graphql for queries + the Nitro (Banana Cake Pop) IDE at GET /graphql.
 app.MapGraphQL();

@@ -31,8 +31,8 @@ phase doc is a historical record, not a description of the current tree.
 | 2.5 | [Enforce the status lifecycle](phases/phase-2.5-status-rules.md) | Done |
 | 2.6 | [Upgrade to .NET 10 (LTS)](phases/phase-2.6-dotnet10-upgrade.md) | Done |
 | 3 | [Deploy to AWS Lambda (Function URL)](phases/phase-3-aws-deploy.md) | **Parked** — plan done, $0/month, deferred behind local feature work |
-| 4 | [AI job-description analyzer](phases/phase-4-ai-analyzer.md) | **In progress** — built, tests not yet run |
-| 4.5 | [Resume import and parsing](phases/phase-4.5-resume-import.md) | **Proposed** — architecture under discussion |
+| 4 | [AI job-description analyzer](phases/phase-4-ai-analyzer.md) | **Done** — tests verified during Phase 4.5, all 10 passed unchanged |
+| 4.5 | [Document import: upload, parse, confirm, save](phases/phase-4.5-resume-import.md) | **Done** — PDF/DOCX/text → draft → human confirm → rows |
 | 5 | [ATS compatibility check](phases/phase-5-ats-check.md) | Not started |
 | 6 | [Front end](phases/phase-6-frontend.md) | Not started |
 

@@ -165,9 +165,12 @@ Full reasoning, the extraction triggers, and the decision record are in
   `src/Data/AppDbContext.cs` (Fluent API, one place) with EF migrations in
   `src/Migrations/`. An earlier draft of Phase 2 used DynamoDB; that was
   dropped in favour of a normalized relational model — see the Phase 2 doc.
-- **AI calls**: planned to go behind `Microsoft.Extensions.AI`'s
-  `IChatClient` (Phase 4), so Ollama (local, free) and a hosted API are
-  swappable via config, not code changes.
+- **AI calls**: behind `Microsoft.Extensions.AI`'s `IChatClient` (Phase 4), so
+  Ollama (local, free) and a hosted API are swappable via config, not code
+  changes. Registered in `src/Shared/ModelClient.cs`, **not** in the Ai module —
+  Phase 4.5 made Documents a second caller, and the rule that produced is that
+  **`Ai` owns the `ai_analyses` table, not the technology**. `IChatClient` is a
+  shared dependency any module may inject, like `AppDbContext`.
 - **Deployment target**: AWS Lambda behind a **Function URL** (no API Gateway
   — see Phase 3 doc), with PostgreSQL on **Neon's free tier**. The Lambda
   deliberately stays *out* of a VPC, so no NAT Gateway is ever needed. Both the
@@ -190,7 +193,7 @@ handler, map the route) — `Program.cs` only ever calls `Add*Module()` /
 `Map*Module()`.
 
 Modules: `Applications` (core), `Analytics` (read-only), `Ai` (Phase 4),
-`Ats` (Phase 5), `Identity` (later).
+`Documents` (Phase 4.5), `Ats` (Phase 5), `Identity` (later).
 
 **Two rules that matter:**
 - **A slice owns its use case end to end.** Handlers use `AppDbContext`
@@ -383,7 +386,9 @@ Tests and CI landed in **Phase 2.2**, scheduled straight after 2.1 because the g
 register called them the highest-value missing items. Findings still **recorded, not
 fixed** — don't re-discover them:
 - **Skill dedup is case-sensitive**, so `C#` and `c#` are two rows in the table whose
-  purpose is deduplication. Company dedup has the same defect. Both need a
+  purpose is deduplication. Company dedup has the same defect, and since Phase 4.5
+  so does `resumes.Label` — deliberately, to keep all three consistent rather than
+  fixing one and making them disagree. Both need a
   case-insensitive natural key, which is a migration and so its own phase. Note the
   *filters* added in 2.3 are case-insensitive (ILIKE), so searching finds both rows —
   which hides the problem without fixing it. Phase 2.4 is where it actually costs
@@ -448,10 +453,19 @@ through the GraphQL schema). A1 is *partly* fixed — read decision 11 before
 
 ## When asked to move to the next phase
 
-**Currently up next: Phase 4** (`docs/phases/phase-4-ai-analyzer.md`) — the AI
-job-description analyzer, behind `Microsoft.Extensions.AI`'s `IChatClient`, built
-against **Ollama locally** (priority 4). `docs/README.md` has the full phase
-status table.
+**Currently up next: Phase 5** (`docs/phases/phase-5-ats-check.md`) — the ATS
+compatibility check. `docs/README.md` has the full phase status table.
+
+Phase 5's step 1 ("store your resume text once") **is already done** — Phase 4.5
+built `resumes` and the import pipeline that fills it, and resume skills and
+posting skills are rows in the same shared `skills` table, so the gap query is a
+join. Read `docs/phases/phase-4.5-resume-import.md` before starting; a good part
+of Phase 5's answer already exists.
+
+Phase 4 is done (2026-08-27), and its story has a tail worth knowing: its tests
+were written but **never executed** — Docker was down that session — and were run
+for the first time during Phase 4.5, passing 10/10 unchanged. Don't repeat the
+pattern: a phase whose tests have not run is not verified, whatever the doc says.
 
 **Phase 3 is parked, not blocked** (2026-08-27). Its plan is complete, researched
 and costs $0/month; the decision was that *time* is better spent on local feature

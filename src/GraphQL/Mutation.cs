@@ -1,5 +1,6 @@
 using Jobkeep.Modules.Ai;
 using Jobkeep.Modules.Applications;
+using Jobkeep.Modules.Documents;
 
 namespace Jobkeep.GraphQL;
 
@@ -75,4 +76,37 @@ public class Mutation
         Guid applicationId,
         [Service] AnalyzePostingHandler handler, CancellationToken ct)
         => (await handler.HandleAsync(applicationId, ct)).ValueOrThrow();
+
+    // Phase 4.5 — the three writes in the review cycle. The upload that starts it
+    // is REST-only; see DocumentsModule.cs for why a file does not belong in a
+    // GraphQL schema.
+    //
+    // HotChocolate publishes the draft record as `ImportDraft` on the way out and
+    // `ImportDraftInput` on the way in, from the same CLR type — which is what
+    // keeps "the shape you reviewed" and "the shape you send back corrected"
+    // provably identical rather than two records that drift.
+    public async Task<ImportResponse> ReviewImport(
+        Guid id, ImportDraft draft,
+        [Service] ReviewImportHandler handler, CancellationToken ct)
+        => (await handler.HandleAsync(id, draft, ct)).ValueOrThrow();
+
+    // Re-runs the model over the stored text. The dividend of storing the
+    // extracted text between the two stages: a better prompt or a better model
+    // costs no re-upload (RestructureImport.cs).
+    public async Task<ImportResponse> RestructureImport(
+        Guid id,
+        [Service] RestructureImportHandler handler, CancellationToken ct)
+        => (await handler.HandleAsync(id, ct)).ValueOrThrow();
+
+    // The gate. Nothing an uploaded document proposes becomes a real row until
+    // this is called.
+    public async Task<CommitResponse> ConfirmImport(
+        Guid id,
+        [Service] CommitImportHandler handler, CancellationToken ct)
+        => (await handler.HandleAsync(id, ct)).ValueOrThrow();
+
+    public async Task<bool> DiscardImport(
+        Guid id,
+        [Service] DiscardImportHandler handler, CancellationToken ct)
+        => (await handler.HandleAsync(id, ct)).ValueOrThrow();
 }

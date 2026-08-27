@@ -20,7 +20,7 @@ public static class ApiHelpers
         string? location = null,
         string? description = null,
         string? notes = null,
-        string? resumeText = null)
+        Guid? resumeId = null)
     {
         var response = await client.PostAsJsonAsync("/applications", new
         {
@@ -29,7 +29,7 @@ public static class ApiHelpers
             location,
             description,
             notes,
-            resumeText,
+            resumeId,
         }, ct);
 
         response.EnsureSuccessStatusCode();

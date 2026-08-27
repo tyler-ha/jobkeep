@@ -50,7 +50,14 @@ public record ApplicationDetail(
     ApplicationStatus Status,
     DateOnly DateApplied,
     string? Notes,
-    string? ResumeText,
+    // Phase 4.5: which resume version was sent, by reference. This used to be the
+    // resume TEXT inlined into every application's detail response — a whole
+    // resume on the wire whenever you fetched a job you applied to, which was
+    // both the over-fetch A1 is about and the PII exposure the security audit
+    // records against ResumeText. The label is carried alongside the id so a
+    // client can render "backend-focused" without a second round trip.
+    Guid? ResumeId,
+    string? ResumeLabel,
     DateTime CreatedAtUtc,
     DateTime UpdatedAtUtc,
     PostingResponse Posting);
@@ -83,7 +90,12 @@ public static class ApplicationDetailProjection
             a.Status,
             a.DateApplied,
             a.Notes,
-            a.ResumeText,
+            a.ResumeId,
+            // Null-conditional would be the obvious spelling, but this is an
+            // expression tree EF translates to SQL: the explicit ternary becomes
+            // the LEFT JOIN's null case, which is what an application with no
+            // resume attached actually is.
+            a.Resume == null ? null : a.Resume.Label,
             a.CreatedAtUtc,
             a.UpdatedAtUtc,
             new PostingResponse(

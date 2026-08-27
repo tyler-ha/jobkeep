@@ -26,7 +26,10 @@ public record CreateApplicationRequest(
     string? Description,
     string? SourceUrl,
     string? Notes,
-    string? ResumeText);
+    // Phase 4.5: a resume is referenced, not pasted. The id comes from a
+    // committed document import (POST /imports/{id}/confirm) or from a resume
+    // created by hand.
+    Guid? ResumeId);
 
 public class CreateApplicationHandler
 {
@@ -48,7 +51,7 @@ public class CreateApplicationHandler
         var application = new JobApplication
         {
             Notes = request.Notes,
-            ResumeText = request.ResumeText,
+            ResumeId = request.ResumeId,
             Posting = new JobPosting
             {
                 Title = title,

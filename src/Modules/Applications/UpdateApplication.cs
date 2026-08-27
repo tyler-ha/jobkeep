@@ -25,7 +25,7 @@ public record UpdateApplicationRequest(
     ApplicationStatus? Status,
     string? Notes,
     string? Description,
-    string? ResumeText);
+    Guid? ResumeId);
 
 public class UpdateApplicationHandler
 {
@@ -75,7 +75,7 @@ public class UpdateApplicationHandler
         // Application-level fields.
         if (request.Status is not null) application.Status = request.Status.Value;
         if (request.Notes is not null) application.Notes = request.Notes;
-        if (request.ResumeText is not null) application.ResumeText = request.ResumeText;
+        if (request.ResumeId is not null) application.ResumeId = request.ResumeId;
 
         // Posting-level fields.
         if (request.Title is not null) application.Posting.Title = request.Title.Trim();

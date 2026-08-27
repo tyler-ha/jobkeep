@@ -16,9 +16,20 @@ public class JobApplication
     public DateOnly DateApplied { get; set; } = DateOnly.FromDateTime(DateTime.UtcNow);
     public string? Notes { get; set; }
 
-    // Phase 5 stores your resume text per application; the ATS result is your
-    // resume vs THIS posting, so it lives on the application, not the posting.
-    public string? ResumeText { get; set; }
+    // Which resume version you sent. Phase 4.5 replaced the old `ResumeText`
+    // column with this FK: the text used to be duplicated onto every application
+    // that shared a resume, and there was nowhere for the parsed records to live.
+    // See Models/Resume.cs for the full argument.
+    //
+    // Nullable, because an application logged by hand does not have to name a
+    // resume, and every application that existed before this phase had its text
+    // dropped rather than migrated (single-user local database; the column was
+    // scaffolding no endpoint had ever meaningfully filled).
+    public Guid? ResumeId { get; set; }
+    public Resume? Resume { get; set; }
+
+    // The ATS result is your resume vs THIS posting, so it lives on the
+    // application rather than on either side of the comparison.
     public AtsResult? AtsResult { get; set; }
 
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;

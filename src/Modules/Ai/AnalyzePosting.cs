@@ -121,17 +121,22 @@ public class AnalyzePostingHandler
     private readonly IChatClient _chat;
     private readonly IPostingContract _postings;
     private readonly AiOptions _options;
+    // The endpoint and model tag moved to ModelOptions in Phase 4.5 when a second
+    // module started calling a model; AiOptions keeps only what is this module's.
+    private readonly ModelOptions _model;
 
     // IChatClient is the abstraction the whole phase is built around: Ollama
     // today, a hosted provider later, decided in AiModule.cs by configuration.
     // Nothing below this line knows which one it is talking to.
     public AnalyzePostingHandler(
-        AppDbContext db, IChatClient chat, IPostingContract postings, AiOptions options)
+        AppDbContext db, IChatClient chat, IPostingContract postings,
+        AiOptions options, ModelOptions model)
     {
         _db = db;
         _chat = chat;
         _postings = postings;
         _options = options;
+        _model = model;
     }
 
     public async Task<SliceResult<AiAnalysisResponse>> HandleAsync(
@@ -182,7 +187,7 @@ public class AnalyzePostingHandler
             // does not introduce it. Rethrow and let the pipeline answer 500,
             // which is the honest answer.
             throw new InvalidOperationException(
-                $"The model at {_options.Endpoint} did not respond. Is `ollama serve` running?", ex);
+                $"The model at {_model.Endpoint} did not respond. Is `ollama serve` running?", ex);
         }
 
         AnalysisDraft? draft;
@@ -227,7 +232,7 @@ public class AnalyzePostingHandler
 
         analysis.Seniority = seniority;
         analysis.Summary = string.IsNullOrWhiteSpace(draft.Summary) ? null : draft.Summary.Trim();
-        analysis.ModelUsed = _options.Model;   // recorded so a later re-read knows what produced it
+        analysis.ModelUsed = _model.Model;   // recorded so a later re-read knows what produced it
         analysis.AnalyzedAtUtc = DateTime.UtcNow;
 
         await _db.SaveChangesAsync(ct);

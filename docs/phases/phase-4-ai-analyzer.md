@@ -1,6 +1,12 @@
 # Phase 4 — AI job-description analyzer
 
-**Status: In progress** (started 2026-08-27)
+**Status: Done** (2026-08-27)
+
+> The phase's code landed on 2026-08-27 but its 10 integration tests had never
+> executed — Docker Desktop was down for that whole session, so they compiled and
+> nothing more. They were run for the first time during Phase 4.5, and **all 10
+> passed unchanged**. Nothing about the analyzer needed fixing; it simply had not
+> been verified until then, and this doc said so rather than claiming otherwise.
 
 > The plan below is the original. What actually happened differs from it in
 > several places, and **"Deviations from the plan" is the accurate record** —

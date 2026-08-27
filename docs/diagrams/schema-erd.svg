@@ -1,136 +1,236 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 730" width="1000" height="730" role="img" aria-labelledby="t d">
-  <title id="t">JobKeep database schema</title>
-  <desc id="d">Entity relationship diagram of the JobKeep PostgreSQL schema. job_postings is the hub. companies has many job_postings, delete restricted. job_postings has many job_requirements, one ai_analyses row, and many posting_skills, all cascading on delete. skills has many posting_skills, delete restricted. job_postings has many job_applications, delete restricted. Each job_application has one ats_results row, cascading on delete.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 760" width="1280" height="760" role="img" aria-labelledby="erdTitle erdDesc" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif">
+  <title id="erdTitle">JobKeep database schema, as of migration ResumesAndDocumentImports</title>
+  <desc id="erdDesc">Entity-relationship diagram of 13 PostgreSQL tables. companies feeds job_postings, which feeds job_applications, ai_analyses, job_requirements and posting_skills. resumes feeds resume_skills, resume_experiences, resume_educations, and is referenced by job_applications. The shared skills table is joined from both posting_skills and resume_skills. document_imports stands alone with no foreign keys. Solid dark-green edges are ON DELETE RESTRICT; dashed rust edges are ON DELETE CASCADE.</desc>
 
-  <rect x="0" y="0" width="1000" height="730" fill="#FBFCFB"/>
+  <rect x="0" y="0" width="1280" height="760" fill="#FBFCFB"/>
 
   <defs>
-    <marker id="ar" viewBox="0 0 10 8" refX="9.5" refY="4" markerWidth="8" markerHeight="7" orient="auto">
-      <polygon points="0,0 10,4 0,8" fill="#0E5F58"/>
+    <marker id="restrictArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#0E5F58"/>
     </marker>
-    <marker id="ac" viewBox="0 0 10 8" refX="9.5" refY="4" markerWidth="8" markerHeight="7" orient="auto">
-      <polygon points="0,0 10,4 0,8" fill="#A8402F"/>
+    <marker id="cascadeArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#A8402F"/>
     </marker>
   </defs>
 
-  <g font-family="ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace">
+  <style>
+    .tbl   { fill:#FFFFFF; stroke:#C9D2CE; stroke-width:1.5; }
+    .hdr   { fill:#E8EEEB; }
+    .name  { fill:#16211F; font-size:15px; font-weight:600; }
+    .col   { fill:#16211F; font-size:12px; }
+    .type  { fill:#5B6C68; font-size:12px; }
+    .card  { fill:#5B6C68; font-size:11.5px; }
+    .rule  { stroke:#0E5F58; stroke-width:2; fill:none; }
+    .casc  { stroke:#A8402F; stroke-width:2; fill:none; stroke-dasharray:7 4; }
+    .h1    { fill:#16211F; font-size:20px; font-weight:600; }
+    .sub   { fill:#5B6C68; font-size:12.5px; }
+    .tag   { fill:#0E5F58; font-size:10.5px; font-weight:600; }
+  </style>
 
-    <!-- ============ edges (drawn first, boxes sit on top) ============ -->
-    <path d="M180,118 V190" fill="none" stroke="#0E5F58" stroke-width="1.6" marker-end="url(#ar)"/>
-    <path d="M300,215 H385 V179 H470" fill="none" stroke="#A8402F" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#ac)"/>
-    <path d="M300,229 H385 V289 H470" fill="none" stroke="#A8402F" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#ac)"/>
-    <path d="M300,243 H345 V399 H470" fill="none" stroke="#A8402F" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#ac)"/>
-    <path d="M760,399 H710" fill="none" stroke="#0E5F58" stroke-width="1.6" marker-end="url(#ar)"/>
-    <path d="M180,268 V430" fill="none" stroke="#0E5F58" stroke-width="1.6" marker-end="url(#ar)"/>
-    <path d="M180,508 V570" fill="none" stroke="#A8402F" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#ac)"/>
+  <text class="h1" x="40" y="42">JobKeep — database schema</text>
+  <text class="sub" x="40" y="63">13 tables · derived from `dotnet ef migrations script`, not from the model classes · migration ResumesAndDocumentImports (Phase 4.5)</text>
 
-    <g font-size="11" fill="#5B6C68">
-      <text x="192" y="152">1 : N</text>
-      <text x="427" y="173" text-anchor="middle">1 : N</text>
-      <text x="427" y="283" text-anchor="middle">1 : 1</text>
-      <text x="407" y="393" text-anchor="middle">1 : N</text>
-      <text x="735" y="393" text-anchor="middle">N : 1</text>
-      <text x="192" y="352">1 : N</text>
-      <text x="192" y="543">1 : 1</text>
-    </g>
-
-    <!-- ============ companies ============ -->
-    <rect x="60" y="40" width="240" height="78" rx="3" fill="#FFFFFF"/>
-    <rect x="60" y="40" width="240" height="26" fill="#E8EEEB"/>
-    <rect x="60" y="40" width="240" height="78" rx="3" fill="none" stroke="#C9D2CE"/>
-    <line x1="60" y1="66" x2="300" y2="66" stroke="#C9D2CE"/>
-    <text x="72" y="58" font-size="13" font-weight="600" fill="#16211F">companies</text>
-    <text x="72" y="86" font-size="11.5" fill="#16211F">Id</text>
-    <text x="288" y="86" font-size="10.5" fill="#5B6C68" text-anchor="end">uuid · PK</text>
-    <text x="72" y="106" font-size="11.5" fill="#16211F">Name</text>
-    <text x="288" y="106" font-size="10.5" fill="#5B6C68" text-anchor="end">varchar · UNIQUE</text>
-
-    <!-- ============ job_postings ============ -->
-    <rect x="60" y="190" width="240" height="78" rx="3" fill="#FFFFFF"/>
-    <rect x="60" y="190" width="240" height="26" fill="#E8EEEB"/>
-    <rect x="60" y="190" width="240" height="78" rx="3" fill="none" stroke="#C9D2CE"/>
-    <line x1="60" y1="216" x2="300" y2="216" stroke="#C9D2CE"/>
-    <text x="72" y="208" font-size="13" font-weight="600" fill="#16211F">job_postings</text>
-    <text x="72" y="236" font-size="11.5" fill="#16211F">Id</text>
-    <text x="288" y="236" font-size="10.5" fill="#5B6C68" text-anchor="end">uuid · PK</text>
-    <text x="72" y="256" font-size="11.5" fill="#16211F">CompanyId</text>
-    <text x="288" y="256" font-size="10.5" fill="#5B6C68" text-anchor="end">uuid · FK</text>
-
-    <!-- ============ job_applications ============ -->
-    <rect x="60" y="430" width="240" height="78" rx="3" fill="#FFFFFF"/>
-    <rect x="60" y="430" width="240" height="26" fill="#E8EEEB"/>
-    <rect x="60" y="430" width="240" height="78" rx="3" fill="none" stroke="#C9D2CE"/>
-    <line x1="60" y1="456" x2="300" y2="456" stroke="#C9D2CE"/>
-    <text x="72" y="448" font-size="13" font-weight="600" fill="#16211F">job_applications</text>
-    <text x="72" y="476" font-size="11.5" fill="#16211F">Id</text>
-    <text x="288" y="476" font-size="10.5" fill="#5B6C68" text-anchor="end">uuid · PK</text>
-    <text x="72" y="496" font-size="11.5" fill="#16211F">PostingId</text>
-    <text x="288" y="496" font-size="10.5" fill="#5B6C68" text-anchor="end">uuid · FK</text>
-
-    <!-- ============ ats_results ============ -->
-    <rect x="60" y="570" width="240" height="78" rx="3" fill="#FFFFFF"/>
-    <rect x="60" y="570" width="240" height="26" fill="#E8EEEB"/>
-    <rect x="60" y="570" width="240" height="78" rx="3" fill="none" stroke="#C9D2CE"/>
-    <line x1="60" y1="596" x2="300" y2="596" stroke="#C9D2CE"/>
-    <text x="72" y="588" font-size="13" font-weight="600" fill="#16211F">ats_results</text>
-    <text x="72" y="616" font-size="11.5" fill="#16211F">Id</text>
-    <text x="288" y="616" font-size="10.5" fill="#5B6C68" text-anchor="end">uuid · PK</text>
-    <text x="72" y="636" font-size="11.5" fill="#16211F">ApplicationId</text>
-    <text x="288" y="636" font-size="10.5" fill="#5B6C68" text-anchor="end">FK · UNIQUE</text>
-
-    <!-- ============ job_requirements ============ -->
-    <rect x="470" y="140" width="240" height="78" rx="3" fill="#FFFFFF"/>
-    <rect x="470" y="140" width="240" height="26" fill="#E8EEEB"/>
-    <rect x="470" y="140" width="240" height="78" rx="3" fill="none" stroke="#C9D2CE"/>
-    <line x1="470" y1="166" x2="710" y2="166" stroke="#C9D2CE"/>
-    <text x="482" y="158" font-size="13" font-weight="600" fill="#16211F">job_requirements</text>
-    <text x="482" y="186" font-size="11.5" fill="#16211F">Id</text>
-    <text x="698" y="186" font-size="10.5" fill="#5B6C68" text-anchor="end">uuid · PK</text>
-    <text x="482" y="206" font-size="11.5" fill="#16211F">PostingId</text>
-    <text x="698" y="206" font-size="10.5" fill="#5B6C68" text-anchor="end">uuid · FK</text>
-
-    <!-- ============ ai_analyses ============ -->
-    <rect x="470" y="250" width="240" height="78" rx="3" fill="#FFFFFF"/>
-    <rect x="470" y="250" width="240" height="26" fill="#E8EEEB"/>
-    <rect x="470" y="250" width="240" height="78" rx="3" fill="none" stroke="#C9D2CE"/>
-    <line x1="470" y1="276" x2="710" y2="276" stroke="#C9D2CE"/>
-    <text x="482" y="268" font-size="13" font-weight="600" fill="#16211F">ai_analyses</text>
-    <text x="482" y="296" font-size="11.5" fill="#16211F">Id</text>
-    <text x="698" y="296" font-size="10.5" fill="#5B6C68" text-anchor="end">uuid · PK</text>
-    <text x="482" y="316" font-size="11.5" fill="#16211F">PostingId</text>
-    <text x="698" y="316" font-size="10.5" fill="#5B6C68" text-anchor="end">FK · UNIQUE</text>
-
-    <!-- ============ posting_skills ============ -->
-    <rect x="470" y="360" width="240" height="78" rx="3" fill="#FFFFFF"/>
-    <rect x="470" y="360" width="240" height="26" fill="#E8EEEB"/>
-    <rect x="470" y="360" width="240" height="78" rx="3" fill="none" stroke="#C9D2CE"/>
-    <line x1="470" y1="386" x2="710" y2="386" stroke="#C9D2CE"/>
-    <text x="482" y="378" font-size="13" font-weight="600" fill="#16211F">posting_skills</text>
-    <text x="482" y="406" font-size="11.5" fill="#16211F">PostingId</text>
-    <text x="698" y="406" font-size="10.5" fill="#5B6C68" text-anchor="end">PK · FK</text>
-    <text x="482" y="426" font-size="11.5" fill="#16211F">SkillId</text>
-    <text x="698" y="426" font-size="10.5" fill="#5B6C68" text-anchor="end">PK · FK</text>
-
-    <!-- ============ skills ============ -->
-    <rect x="760" y="360" width="200" height="78" rx="3" fill="#FFFFFF"/>
-    <rect x="760" y="360" width="200" height="26" fill="#E8EEEB"/>
-    <rect x="760" y="360" width="200" height="78" rx="3" fill="none" stroke="#C9D2CE"/>
-    <line x1="760" y1="386" x2="960" y2="386" stroke="#C9D2CE"/>
-    <text x="772" y="378" font-size="13" font-weight="600" fill="#16211F">skills</text>
-    <text x="772" y="406" font-size="11.5" fill="#16211F">Id</text>
-    <text x="948" y="406" font-size="10.5" fill="#5B6C68" text-anchor="end">uuid · PK</text>
-    <text x="772" y="426" font-size="11.5" fill="#16211F">Name</text>
-    <text x="948" y="426" font-size="10.5" fill="#5B6C68" text-anchor="end">UNIQUE</text>
-
-    <!-- ============ legend ============ -->
-    <line x1="60" y1="678" x2="100" y2="678" stroke="#0E5F58" stroke-width="1.6"/>
-    <text x="110" y="682" font-size="11.5" fill="#5B6C68">ON DELETE RESTRICT — parent delete blocked</text>
-    <line x1="440" y1="678" x2="480" y2="678" stroke="#A8402F" stroke-width="1.6" stroke-dasharray="5 4"/>
-    <text x="490" y="682" font-size="11.5" fill="#5B6C68">ON DELETE CASCADE — children go with the parent</text>
-
-    <line x1="60" y1="698" x2="960" y2="698" stroke="#C9D2CE"/>
-    <text x="60" y="716" font-size="10.5" fill="#5B6C68">8 tables · 8 indexes (4 unique) · 7 foreign keys · 4 cascade, 3 restrict</text>
-    <text x="960" y="716" font-size="10.5" fill="#5B6C68" text-anchor="end">generated from EF migration 20260819115119_InitialCreate</text>
-
+  <!-- ============ row 1 (y=100) ============ -->
+  <g>
+    <rect class="tbl" x="280" y="100" width="200" height="86" rx="4"/>
+    <rect class="hdr" x="280" y="100" width="200" height="26" rx="4"/>
+    <rect class="hdr" x="280" y="118" width="200" height="8"/>
+    <text class="name" x="292" y="119">ai_analyses</text>
+    <text class="col"  x="292" y="143">Id <tspan class="tag">PK</tspan></text>
+    <text class="col"  x="292" y="161">PostingId <tspan class="tag">FK · UNIQUE</tspan></text>
+    <text class="type" x="292" y="178">Seniority text · Summary text</text>
   </g>
+
+  <g>
+    <rect class="tbl" x="520" y="100" width="200" height="86" rx="4"/>
+    <rect class="hdr" x="520" y="100" width="200" height="26" rx="4"/>
+    <rect class="hdr" x="520" y="118" width="200" height="8"/>
+    <text class="name" x="532" y="119">ats_results</text>
+    <text class="col"  x="532" y="143">Id <tspan class="tag">PK</tspan></text>
+    <text class="col"  x="532" y="161">ApplicationId <tspan class="tag">FK · UNIQUE</tspan></text>
+    <text class="type" x="532" y="178">3 × text[]  (Phase 5)</text>
+  </g>
+
+  <!-- ============ row 2 (y=250) ============ -->
+  <g>
+    <rect class="tbl" x="40" y="250" width="200" height="86" rx="4"/>
+    <rect class="hdr" x="40" y="250" width="200" height="26" rx="4"/>
+    <rect class="hdr" x="40" y="268" width="200" height="8"/>
+    <text class="name" x="52" y="269">companies</text>
+    <text class="col"  x="52" y="293">Id <tspan class="tag">PK</tspan></text>
+    <text class="col"  x="52" y="311">Name <tspan class="tag">UNIQUE</tspan></text>
+    <text class="type" x="52" y="328">varchar(200)</text>
+  </g>
+
+  <g>
+    <rect class="tbl" x="280" y="250" width="200" height="86" rx="4"/>
+    <rect class="hdr" x="280" y="250" width="200" height="26" rx="4"/>
+    <rect class="hdr" x="280" y="268" width="200" height="8"/>
+    <text class="name" x="292" y="269">job_postings</text>
+    <text class="col"  x="292" y="293">Id <tspan class="tag">PK</tspan></text>
+    <text class="col"  x="292" y="311">CompanyId <tspan class="tag">FK</tspan></text>
+    <text class="type" x="292" y="328">Salary numeric(12,2)</text>
+  </g>
+
+  <g>
+    <rect class="tbl" x="520" y="250" width="200" height="86" rx="4"/>
+    <rect class="hdr" x="520" y="250" width="200" height="26" rx="4"/>
+    <rect class="hdr" x="520" y="268" width="200" height="8"/>
+    <text class="name" x="532" y="269">job_applications</text>
+    <text class="col"  x="532" y="293">Id <tspan class="tag">PK</tspan></text>
+    <text class="col"  x="532" y="311">PostingId <tspan class="tag">FK</tspan> · ResumeId <tspan class="tag">FK?</tspan></text>
+    <text class="type" x="532" y="328">Status text · DateApplied date</text>
+  </g>
+
+  <g>
+    <rect class="tbl" x="760" y="250" width="200" height="86" rx="4"/>
+    <rect class="hdr" x="760" y="250" width="200" height="26" rx="4"/>
+    <rect class="hdr" x="760" y="268" width="200" height="8"/>
+    <text class="name" x="772" y="269">resumes</text>
+    <text class="col"  x="772" y="293">Id <tspan class="tag">PK</tspan></text>
+    <text class="col"  x="772" y="311">Label <tspan class="tag">UNIQUE</tspan></text>
+    <text class="type" x="772" y="328">SourceText text</text>
+  </g>
+
+  <g>
+    <rect class="tbl" x="1000" y="250" width="200" height="86" rx="4"/>
+    <rect class="hdr" x="1000" y="250" width="200" height="26" rx="4"/>
+    <rect class="hdr" x="1000" y="268" width="200" height="8"/>
+    <text class="name" x="1012" y="269">resume_experiences</text>
+    <text class="col"  x="1012" y="293">Id <tspan class="tag">PK</tspan></text>
+    <text class="col"  x="1012" y="311">ResumeId <tspan class="tag">FK</tspan></text>
+    <text class="type" x="1012" y="328">Highlights text[]</text>
+  </g>
+
+  <!-- ============ row 3 (y=400) ============ -->
+  <g>
+    <rect class="tbl" x="40" y="400" width="200" height="86" rx="4"/>
+    <rect class="hdr" x="40" y="400" width="200" height="26" rx="4"/>
+    <rect class="hdr" x="40" y="418" width="200" height="8"/>
+    <text class="name" x="52" y="419">job_requirements</text>
+    <text class="col"  x="52" y="443">Id <tspan class="tag">PK</tspan></text>
+    <text class="col"  x="52" y="461">PostingId <tspan class="tag">FK</tspan></text>
+    <text class="type" x="52" y="478">Kind text · IsMustHave bool</text>
+  </g>
+
+  <g>
+    <rect class="tbl" x="280" y="400" width="200" height="86" rx="4"/>
+    <rect class="hdr" x="280" y="400" width="200" height="26" rx="4"/>
+    <rect class="hdr" x="280" y="418" width="200" height="8"/>
+    <text class="name" x="292" y="419">posting_skills</text>
+    <text class="col"  x="292" y="443">(PostingId, SkillId) <tspan class="tag">PK</tspan></text>
+    <text class="col"  x="292" y="461">both <tspan class="tag">FK</tspan></text>
+    <text class="type" x="292" y="478">Source text · IsRequired bool</text>
+  </g>
+
+  <g>
+    <rect class="tbl" x="520" y="400" width="200" height="86" rx="4"/>
+    <rect class="hdr" x="520" y="400" width="200" height="26" rx="4"/>
+    <rect class="hdr" x="520" y="418" width="200" height="8"/>
+    <text class="name" x="532" y="419">skills</text>
+    <text class="col"  x="532" y="443">Id <tspan class="tag">PK</tspan></text>
+    <text class="col"  x="532" y="461">Name <tspan class="tag">UNIQUE</tspan></text>
+    <text class="type" x="532" y="478">shared — owned by no module</text>
+  </g>
+
+  <g>
+    <rect class="tbl" x="760" y="400" width="200" height="86" rx="4"/>
+    <rect class="hdr" x="760" y="400" width="200" height="26" rx="4"/>
+    <rect class="hdr" x="760" y="418" width="200" height="8"/>
+    <text class="name" x="772" y="419">resume_skills</text>
+    <text class="col"  x="772" y="443">(ResumeId, SkillId) <tspan class="tag">PK</tspan></text>
+    <text class="col"  x="772" y="461">both <tspan class="tag">FK</tspan></text>
+    <text class="type" x="772" y="478">Source text</text>
+  </g>
+
+  <g>
+    <rect class="tbl" x="1000" y="400" width="200" height="86" rx="4"/>
+    <rect class="hdr" x="1000" y="400" width="200" height="26" rx="4"/>
+    <rect class="hdr" x="1000" y="418" width="200" height="8"/>
+    <text class="name" x="1012" y="419">resume_educations</text>
+    <text class="col"  x="1012" y="443">Id <tspan class="tag">PK</tspan></text>
+    <text class="col"  x="1012" y="461">ResumeId <tspan class="tag">FK</tspan></text>
+    <text class="type" x="1012" y="478">YearText varchar(50)</text>
+  </g>
+
+  <!-- ============ detached ============ -->
+  <g>
+    <rect class="tbl" x="40" y="560" width="290" height="100" rx="4" stroke-dasharray="5 4"/>
+    <rect class="hdr" x="40" y="560" width="290" height="26" rx="4"/>
+    <rect class="hdr" x="40" y="578" width="290" height="8"/>
+    <text class="name" x="52" y="579">document_imports</text>
+    <text class="col"  x="52" y="603">Id <tspan class="tag">PK</tspan> · Status <tspan class="tag">INDEX</tspan></text>
+    <text class="col"  x="52" y="621">ExtractedText text · DraftJson jsonb</text>
+    <text class="type" x="52" y="639">CommittedEntityId uuid — deliberately NOT a FK:</text>
+    <text class="type" x="52" y="654">it points at resumes OR job_applications.</text>
+  </g>
+  <text class="sub" x="352" y="600">The review queue. An upload writes one row here and</text>
+  <text class="sub" x="352" y="618">nothing else; the rows above come into existence only</text>
+  <text class="sub" x="352" y="636">when a human confirms the draft (Phase 4.5).</text>
+
+  <!-- ============ edges ============ -->
+
+  <!-- companies -> job_postings : RESTRICT -->
+  <path class="rule" d="M 240 293 H 280" marker-end="url(#restrictArrow)"/>
+  <text class="card" x="243" y="286">1 : N</text>
+
+  <!-- job_postings -> ai_analyses : CASCADE, 1:1 (unique FK) -->
+  <path class="casc" d="M 380 250 V 186" marker-end="url(#cascadeArrow)"/>
+  <text class="card" x="388" y="222">1 : 1</text>
+
+  <!-- job_postings -> job_applications : RESTRICT -->
+  <path class="rule" d="M 480 293 H 520" marker-end="url(#restrictArrow)"/>
+  <text class="card" x="483" y="286">1 : N</text>
+
+  <!-- job_postings -> posting_skills : CASCADE -->
+  <path class="casc" d="M 380 336 V 400" marker-end="url(#cascadeArrow)"/>
+  <text class="card" x="388" y="372">1 : N</text>
+
+  <!-- job_postings -> job_requirements : CASCADE -->
+  <path class="casc" d="M 300 336 V 368 H 140 V 400" marker-end="url(#cascadeArrow)"/>
+  <text class="card" x="150" y="362">1 : N</text>
+
+  <!-- job_applications -> ats_results : CASCADE, 1:1 -->
+  <path class="casc" d="M 620 250 V 186" marker-end="url(#cascadeArrow)"/>
+  <text class="card" x="628" y="222">1 : 1</text>
+
+  <!-- resumes -> job_applications : RESTRICT (job_applications holds ResumeId) -->
+  <path class="rule" d="M 760 311 H 720" marker-end="url(#restrictArrow)"/>
+  <text class="card" x="722" y="304">1 : N</text>
+
+  <!-- resumes -> resume_skills : CASCADE -->
+  <path class="casc" d="M 860 336 V 400" marker-end="url(#cascadeArrow)"/>
+  <text class="card" x="868" y="372">1 : N</text>
+
+  <!-- resumes -> resume_experiences : CASCADE -->
+  <path class="casc" d="M 960 293 H 1000" marker-end="url(#cascadeArrow)"/>
+  <text class="card" x="962" y="286">1 : N</text>
+
+  <!-- resumes -> resume_educations : CASCADE -->
+  <path class="casc" d="M 940 336 V 368 H 1100 V 400" marker-end="url(#cascadeArrow)"/>
+  <text class="card" x="1040" y="362">1 : N</text>
+
+  <!-- skills -> posting_skills : RESTRICT -->
+  <path class="rule" d="M 520 443 H 480" marker-end="url(#restrictArrow)"/>
+  <text class="card" x="484" y="436">1 : N</text>
+
+  <!-- skills -> resume_skills : RESTRICT -->
+  <path class="rule" d="M 720 443 H 760" marker-end="url(#restrictArrow)"/>
+  <text class="card" x="722" y="436">1 : N</text>
+
+  <!-- ============ legend ============ -->
+  <g>
+    <rect x="700" y="560" width="540" height="100" rx="4" fill="#FFFFFF" stroke="#C9D2CE" stroke-width="1.5"/>
+    <text class="name" x="716" y="586">Delete behaviour — the one genuine decision in this schema</text>
+
+    <path class="rule" d="M 720 610 H 770" marker-end="url(#restrictArrow)"/>
+    <text class="col" x="782" y="614">ON DELETE RESTRICT — 5 edges</text>
+    <text class="type" x="782" y="630">never destroy a shared row or a record of what you did</text>
+
+    <path class="casc" d="M 720 646 H 770" marker-end="url(#cascadeArrow)"/>
+    <text class="col" x="782" y="650">ON DELETE CASCADE — 7 edges (children of an aggregate)</text>
+  </g>
+
+  <text class="sub" x="40" y="706">13 tables · 12 foreign keys (5 RESTRICT, 7 CASCADE) · 14 indexes, of which 5 are UNIQUE · enums stored as text, so rows read plainly in psql</text>
+  <text class="sub" x="40" y="726">Boxes show keys only. Full column lists live in src/Data/AppDbContext.cs, where the reasoning for each delete rule is written beside it.</text>
 </svg>
