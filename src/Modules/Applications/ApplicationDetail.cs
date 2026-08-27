@@ -63,9 +63,20 @@ public static class ApplicationDetailProjection
     // which is five round-trips returning columns nobody asked for
     // (architecture.md A1). This loads exactly the columns below.
     //
-    // Deliberately absent: AiAnalysis (Phase 4) and AtsResult (Phase 5). Neither
-    // is written yet, and adding them to the contract before they exist would
-    // publish a field that is always null.
+    // Deliberately absent: AiAnalysis and AtsResult (Phase 5).
+    //
+    // The reason for AiAnalysis changed in Phase 4 and the exclusion did not. It
+    // used to be "not written yet"; it is now a module boundary. `ai_analyses`
+    // belongs to the Ai module, and projecting it here would have Applications
+    // reading another module's table -- the same rule-2 crossing that Ai needed
+    // IPostingContract to avoid in the other direction. It is served by the Ai
+    // module at GET /applications/{id}/analysis instead (Modules/Ai/GetAnalysis.cs).
+    //
+    // The AI-extracted *skills* do appear below, because they are ordinary
+    // posting_skills rows that happen to carry Source = AiExtracted. Those belong
+    // to Applications, so there is no boundary to cross.
+    //
+    // AtsResult is still absent for the original reason: Phase 5 has not run.
     public static readonly Expression<Func<JobApplication, ApplicationDetail>> Expression =
         a => new ApplicationDetail(
             a.Id,

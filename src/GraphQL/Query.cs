@@ -1,3 +1,4 @@
+using Jobkeep.Modules.Ai;
 using Jobkeep.Modules.Analytics;
 using Jobkeep.Modules.Applications;
 
@@ -67,4 +68,15 @@ public class Query
         [Service] CompanyRollupHandler handler,
         CancellationToken ct)
         => (await handler.HandleAsync(top, ct)).ValueOrThrow();
+
+    // Phase 4 — reads back the stored analysis without re-running the model.
+    // The counterpart to the analyzePosting mutation, and the reason the analysis
+    // is not simply a field on ApplicationDetail: `ai_analyses` belongs to the Ai
+    // module, and ApplicationDetail's projection belongs to Applications. See
+    // Modules/Ai/GetAnalysis.cs.
+    public async Task<AnalysisSummaryResponse> GetAnalysis(
+        Guid applicationId,
+        [Service] GetAnalysisHandler handler,
+        CancellationToken ct)
+        => (await handler.HandleAsync(applicationId, ct)).ValueOrThrow();
 }

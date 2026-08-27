@@ -1,3 +1,4 @@
+using Jobkeep.Modules.Ai;
 using Jobkeep.Modules.Applications;
 
 namespace Jobkeep.GraphQL;
@@ -59,4 +60,19 @@ public class Mutation
         Guid applicationId, Guid requirementId,
         [Service] RemoveRequirementHandler handler, CancellationToken ct)
         => (await handler.HandleAsync(applicationId, requirementId, ct)).ValueOrThrow();
+
+    // Phase 4 — runs the local model over the posting's description and stores
+    // what it extracted. A mutation, not a query, on both surfaces: it writes an
+    // ai_analyses row and posting_skills rows.
+    //
+    // This is the first field on either surface whose cost is measured in seconds
+    // rather than milliseconds, and the first that can fail because something
+    // outside the process is not running. Neither changes the adapter — the rule
+    // about what a valid analysis is lives in the handler, so GraphQL and REST
+    // cannot disagree about it, which is the same reason every field above is
+    // three lines long.
+    public async Task<AiAnalysisResponse> AnalyzePosting(
+        Guid applicationId,
+        [Service] AnalyzePostingHandler handler, CancellationToken ct)
+        => (await handler.HandleAsync(applicationId, ct)).ValueOrThrow();
 }
