@@ -1,0 +1,25 @@
+# Phase 4.5 test fixtures are byte-exact documents. Git must not touch them.
+#
+# This file exists because of a bug that would only have appeared on someone
+# else's machine. `git add` reported "LF will be replaced by CRLF" for
+# tests/Jobkeep.Tests/Fixtures/resume.pdf — git's binary heuristic looks for NUL
+# bytes in the first block, and a small hand-built PDF is almost entirely ASCII,
+# so git classified it as text and offered to convert its line endings.
+#
+# For a PDF that is corruption, not a formatting preference. A PDF's trailing
+# xref table stores the **byte offset** of every object; rewriting LF to CRLF
+# shifts every one of those offsets and the file stops parsing. It would have
+# passed here, where the working copy is the original, and failed on a fresh
+# clone and in CI on Linux — the worst shape of bug to leave behind.
+#
+# The .docx and .doc fixtures were already detected as binary (they contain NUL
+# bytes) but are listed anyway: relying on a heuristic that has already been
+# wrong once for the same directory is not a decision, it is luck.
+tests/Jobkeep.Tests/Fixtures/*.pdf   binary
+tests/Jobkeep.Tests/Fixtures/*.docx  binary
+tests/Jobkeep.Tests/Fixtures/*.doc   binary
+
+# resume.txt is deliberately NOT marked binary. It is a text fixture, the
+# extractor normalises line endings as its first job, and there is a test that
+# pins exactly that — so a checkout that changes its EOLs is a case worth
+# exercising rather than one to suppress.
