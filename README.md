@@ -24,7 +24,7 @@ while building demonstrable C# + AWS + AI integration experience.
 | 2.4 | Analytics endpoints (skill demand, status funnel, company rollup) | Done — three `GROUP BY`s, on both surfaces |
 | 2.5 | Enforce the application status lifecycle | Done — one rule, both surfaces, no schema change |
 | 2.6 | Upgrade to .NET 10 (LTS) — .NET 8 EOL 10 Nov 2026 | Done — no C# changed; caught a critical CVE in a transitive package |
-| 3 | Deploy to AWS Lambda + API Gateway (+ RDS) | Not started |
+| 3 | Deploy to AWS Lambda (Function URL) + Neon Postgres | **Parked** (plan done, $0/month) |
 | 4 | AI job-description analyzer | Not started |
 | 5 | ATS compatibility check | Not started |
 | 6 | Front end | Not started |

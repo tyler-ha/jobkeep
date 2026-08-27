@@ -29,10 +29,11 @@ can. Prefer the defensible choice over the impressive-sounding one.
    tier or on-demand/serverless pricing. Never suggest always-on
    infrastructure (e.g. a provisioned EC2 instance or provisioned-capacity
    DynamoDB) without flagging the cost tradeoff explicitly. Note: storage is
-   PostgreSQL (see Architecture), which is *not* serverless — the deployed
-   DB runs on AWS RDS **free-tier** (free for 12 months, then always-on and
-   billable). Local dev uses Postgres in Docker (free). This tradeoff was made
-   deliberately for a cleaner relational model; keep flagging it.
+   PostgreSQL (see Architecture). Local dev uses Postgres in Docker (free);
+   the deployed DB is **Neon's free tier** (serverless Postgres, scales to
+   zero, $0). This replaced RDS free-tier in Phase 3 — see that doc for why,
+   and for the rule it produced: **nothing in the deployed architecture may
+   bill per hour.**
 2. **Each phase should end in something runnable.** The person has a
    history of abandoning projects when scope gets fuzzy. Don't let a
    phase sprawl — if a change is getting large, suggest splitting it.
@@ -167,9 +168,10 @@ Full reasoning, the extraction triggers, and the decision record are in
 - **AI calls**: planned to go behind `Microsoft.Extensions.AI`'s
   `IChatClient` (Phase 4), so Ollama (local, free) and a hosted API are
   swappable via config, not code changes.
-- **Deployment target**: AWS Lambda + API Gateway (serverless, pay-per-use —
-  see Phase 3 doc), with PostgreSQL on AWS RDS free-tier. Both the REST and
-  GraphQL endpoints ride the same Lambda.
+- **Deployment target**: AWS Lambda behind a **Function URL** (no API Gateway
+  — see Phase 3 doc), with PostgreSQL on **Neon's free tier**. The Lambda
+  deliberately stays *out* of a VPC, so no NAT Gateway is ever needed. Both the
+  REST and GraphQL endpoints ride the same Lambda.
 
 ### Where new code goes
 
@@ -446,13 +448,24 @@ through the GraphQL schema). A1 is *partly* fixed — read decision 11 before
 
 ## When asked to move to the next phase
 
-**Currently up next: Phase 3** (`docs/phases/phase-3-aws-deploy.md`) — deploy to
-AWS Lambda + API Gateway with PostgreSQL on RDS free-tier. Two things are due
-*at* that boundary, not after it: the **doc/security-audit sweep** (see
-"Documenting as you go" — cadence, and in a fresh session), and the audit's
-**transport & secrets hardening**, because RDS storage encryption can only be
-enabled when the instance is created. `docs/README.md` has the full phase status
-table.
+**Currently up next: Phase 4** (`docs/phases/phase-4-ai-analyzer.md`) — the AI
+job-description analyzer, behind `Microsoft.Extensions.AI`'s `IChatClient`, built
+against **Ollama locally** (priority 4). `docs/README.md` has the full phase
+status table.
+
+**Phase 3 is parked, not blocked** (2026-08-27). Its plan is complete, researched
+and costs $0/month; the decision was that *time* is better spent on local feature
+work first, and that deploying is only worth doing once there is enough tool to
+justify clicking the link. Nothing about it expires — the always-free grants have
+no clock. Read `docs/phases/phase-3-aws-deploy.md` before reopening it; the Aurora
+and API Gateway alternatives are already rejected there with reasons, and the
+account has **no free tier left**, so "t3.micro is free" style advice does not
+apply.
+
+Two things are due **when Phase 3 unparks**, not on a calendar: the
+**doc/security-audit sweep** (see "Documenting as you go" — cadence, and in a
+fresh session) and the audit's **transport & secrets hardening**. Both were tied
+to "before Phase 3 ships to AWS", so the trigger moved with the phase.
 
 Phase 2.6 is done (2026-08-26): `net10.0` everywhere, EF/Npgsql/`dotnet-ef` on
 the 10.x line, CI down to one SDK. **No C# changed** — the whole upgrade is four
