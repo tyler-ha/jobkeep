@@ -25,7 +25,8 @@ while building demonstrable C# + AWS + AI integration experience.
 | 2.5 | Enforce the application status lifecycle | Done — one rule, both surfaces, no schema change |
 | 2.6 | Upgrade to .NET 10 (LTS) — .NET 8 EOL 10 Nov 2026 | Done — no C# changed; caught a critical CVE in a transitive package |
 | 3 | Deploy to AWS Lambda (Function URL) + Neon Postgres | **Parked** (plan done, $0/month) |
-| 4 | AI job-description analyzer | Not started |
+| 4 | AI job-description analyzer (local Ollama) | **In progress** |
+| 4.5 | Resume import and parsing | **Proposed** |
 | 5 | ATS compatibility check | Not started |
 | 6 | Front end | Not started |
 
