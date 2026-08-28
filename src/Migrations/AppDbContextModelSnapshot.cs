@@ -18,7 +18,7 @@ namespace Jobkeep.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "8.0.11")
+                .HasAnnotation("ProductVersion", "10.0.11")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -66,15 +66,15 @@ namespace Jobkeep.Migrations
                     b.Property<DateTime>("CheckedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<List<string>>("FormattingRiskNotes")
+                    b.PrimitiveCollection<List<string>>("FormattingRiskNotes")
                         .IsRequired()
                         .HasColumnType("text[]");
 
-                    b.Property<List<string>>("MatchedKeywords")
+                    b.PrimitiveCollection<List<string>>("MatchedKeywords")
                         .IsRequired()
                         .HasColumnType("text[]");
 
-                    b.Property<List<string>>("MissingMustHaveKeywords")
+                    b.PrimitiveCollection<List<string>>("MissingMustHaveKeywords")
                         .IsRequired()
                         .HasColumnType("text[]");
 
@@ -114,6 +114,73 @@ namespace Jobkeep.Migrations
                     b.ToTable("companies", (string)null);
                 });
 
+            modelBuilder.Entity("Jobkeep.Models.DocumentImport", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("ByteCount")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("CommittedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CommittedEntityId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ContentHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DraftJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("ExtractedText")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(260)
+                        .HasColumnType("character varying(260)");
+
+                    b.Property<string>("Format")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("ModelUsed")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Warning")
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("document_imports", (string)null);
+                });
+
             modelBuilder.Entity("Jobkeep.Models.JobApplication", b =>
                 {
                     b.Property<Guid>("Id")
@@ -132,8 +199,8 @@ namespace Jobkeep.Migrations
                     b.Property<Guid>("PostingId")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("ResumeText")
-                        .HasColumnType("text");
+                    b.Property<Guid?>("ResumeId")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -146,6 +213,8 @@ namespace Jobkeep.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("PostingId");
+
+                    b.HasIndex("ResumeId");
 
                     b.ToTable("job_applications", (string)null);
                 });
@@ -260,6 +329,154 @@ namespace Jobkeep.Migrations
                     b.ToTable("posting_skills", (string)null);
                 });
 
+            modelBuilder.Entity("Jobkeep.Models.Resume", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
+
+                    b.Property<string>("FullName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Headline")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Location")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Phone")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("SourceFileName")
+                        .HasMaxLength(260)
+                        .HasColumnType("character varying(260)");
+
+                    b.Property<string>("SourceHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("SourceText")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Label")
+                        .IsUnique();
+
+                    b.ToTable("resumes", (string)null);
+                });
+
+            modelBuilder.Entity("Jobkeep.Models.ResumeEducation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Institution")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("Ordinal")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Qualification")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid>("ResumeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("YearText")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ResumeId");
+
+                    b.ToTable("resume_educations", (string)null);
+                });
+
+            modelBuilder.Entity("Jobkeep.Models.ResumeExperience", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Employer")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("EndText")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.PrimitiveCollection<List<string>>("Highlights")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
+                    b.Property<int>("Ordinal")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("ResumeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("StartText")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("Title")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ResumeId");
+
+                    b.ToTable("resume_experiences", (string)null);
+                });
+
+            modelBuilder.Entity("Jobkeep.Models.ResumeSkill", b =>
+                {
+                    b.Property<Guid>("ResumeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SkillId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.HasKey("ResumeId", "SkillId");
+
+                    b.HasIndex("SkillId");
+
+                    b.ToTable("resume_skills", (string)null);
+                });
+
             modelBuilder.Entity("Jobkeep.Models.Skill", b =>
                 {
                     b.Property<Guid>("Id")
@@ -313,7 +530,14 @@ namespace Jobkeep.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("Jobkeep.Models.Resume", "Resume")
+                        .WithMany("Applications")
+                        .HasForeignKey("ResumeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Posting");
+
+                    b.Navigation("Resume");
                 });
 
             modelBuilder.Entity("Jobkeep.Models.JobPosting", b =>
@@ -357,6 +581,47 @@ namespace Jobkeep.Migrations
                     b.Navigation("Skill");
                 });
 
+            modelBuilder.Entity("Jobkeep.Models.ResumeEducation", b =>
+                {
+                    b.HasOne("Jobkeep.Models.Resume", "Resume")
+                        .WithMany("Educations")
+                        .HasForeignKey("ResumeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Resume");
+                });
+
+            modelBuilder.Entity("Jobkeep.Models.ResumeExperience", b =>
+                {
+                    b.HasOne("Jobkeep.Models.Resume", "Resume")
+                        .WithMany("Experiences")
+                        .HasForeignKey("ResumeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Resume");
+                });
+
+            modelBuilder.Entity("Jobkeep.Models.ResumeSkill", b =>
+                {
+                    b.HasOne("Jobkeep.Models.Resume", "Resume")
+                        .WithMany("ResumeSkills")
+                        .HasForeignKey("ResumeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Jobkeep.Models.Skill", "Skill")
+                        .WithMany("ResumeSkills")
+                        .HasForeignKey("SkillId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Resume");
+
+                    b.Navigation("Skill");
+                });
+
             modelBuilder.Entity("Jobkeep.Models.Company", b =>
                 {
                     b.Navigation("Postings");
@@ -378,9 +643,22 @@ namespace Jobkeep.Migrations
                     b.Navigation("Requirements");
                 });
 
+            modelBuilder.Entity("Jobkeep.Models.Resume", b =>
+                {
+                    b.Navigation("Applications");
+
+                    b.Navigation("Educations");
+
+                    b.Navigation("Experiences");
+
+                    b.Navigation("ResumeSkills");
+                });
+
             modelBuilder.Entity("Jobkeep.Models.Skill", b =>
                 {
                     b.Navigation("PostingSkills");
+
+                    b.Navigation("ResumeSkills");
                 });
 #pragma warning restore 612, 618
         }

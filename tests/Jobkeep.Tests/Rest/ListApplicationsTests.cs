@@ -270,8 +270,7 @@ public sealed class ListApplicationsTests(PostgresFixture fixture) : Integration
         var id = await Client.CreateApplicationAsync(
             "Canva", "Backend Engineer", Ct,
             location: "Melbourne",
-            description: "A very long job ad nobody wants in a list row.",
-            resumeText: "PII that must not be listed.");
+            description: "A very long job ad nobody wants in a list row.");
         (await Client.AddSkillAsync(id, "C#", Ct)).EnsureSuccessStatusCode();
 
         var item = Assert.Single((await ListAsync(string.Empty)).Items);
@@ -284,8 +283,14 @@ public sealed class ListApplicationsTests(PostgresFixture fixture) : Integration
         // large and the résumé is personal data. Neither belongs in a list nobody asked
         // for it in.
         Assert.False(item.TryGetProperty("description", out _));
-        Assert.False(item.TryGetProperty("resumeText", out _));
         Assert.False(item.TryGetProperty("posting", out _));
+
+        // `resumeText` used to be named here too, as the other column that must
+        // never appear in a list row. Phase 4.5 deleted the column outright —
+        // the résumé moved to its own table and an application now carries only
+        // a ResumeId — so the assertion has nothing left to guard. The property
+        // list asserted above is the stronger check anyway: it is exhaustive, so
+        // a résumé field reappearing under any name fails it.
     }
 
     // ------------------------------------------------------------------

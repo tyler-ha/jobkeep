@@ -1,0 +1,17 @@
+Jane Doe
+jane.doe@example.com | +61 400 000 000 | Melbourne, Australia
+
+Backend engineer with experience building payment services in C# and PostgreSQL.
+
+EXPERIENCE
+Senior Engineer, Canva (Mar 2021 - Present)
+- Built payment reconciliation services in C# on AWS Lambda.
+- Migrated a reporting pipeline to PostgreSQL.
+Engineer, Atlassian (Jan 2018 - Feb 2021)
+- Maintained a Kubernetes platform used by 40 teams.
+
+EDUCATION
+Bachelor of Computer Science, University of Melbourne, 2017
+
+SKILLS
+C#, PostgreSQL, Kubernetes, AWS, Docker

@@ -12,4 +12,9 @@ public class Skill
     public string? Category { get; set; }               // "Language", "Cloud", ...
 
     [JsonIgnore] public List<PostingSkill> PostingSkills { get; set; } = new();   // back-ref
+
+    // Phase 4.5: the same shared row is now reachable from the resume side too.
+    // This is what makes "skills the postings ask for, minus skills my resume
+    // mentions" a join rather than a string comparison across two vocabularies.
+    [JsonIgnore] public List<ResumeSkill> ResumeSkills { get; set; } = new();     // back-ref
 }

@@ -26,6 +26,13 @@ public static class ApplicationsModule
         services.AddScoped<RemoveSkillFromPostingHandler>();
         services.AddScoped<AddRequirementToPostingHandler>();
         services.AddScoped<RemoveRequirementHandler>();
+
+        // The contract other modules use to reach Applications-owned tables.
+        // Registered by the owning module rather than by its callers, now that
+        // there are two of them (Ai in Phase 4, Documents in Phase 4.5) — a
+        // contract registered by whichever consumer happens to be wired first is
+        // a dependency nothing in Program.cs shows.
+        services.AddScoped<IPostingContract, PostingContract>();
         return services;
     }
 

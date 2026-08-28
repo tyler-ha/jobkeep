@@ -61,6 +61,8 @@ folded into a phase they didn't belong to.
 | **Phase 2.4** — analytics | 1 | 163 | 23.0M | Three read-only slices, both surfaces, 15 tests, and the module-boundary decision (13). **Corrected:** logged last time at 78 turns / 7.7M from inside the running session, and it went on to 163 / 23.0M — the session ran on to roughly double the turns and triple the tokens after the row was written. Still the cheapest feature phase since 2.1, but not by the margin the last version claimed. |
 | **Phase 2.5** — status lifecycle | 2 | 157 | 18.6M | One pure domain rule, the update slice, 31 new tests, plus the market check that set the transition table. **Corrected:** logged last time at 86 turns / 7.7M from inside the running session; it went on to 148 / 18.1M, and the phase's real total is 18.6M — a 2.7x correction (Phase 2.4's 3.0x is still the largest ratio). The session's tail was the two PRs and the handoff, not the phase work. Two sessions for one conversation because the work ran as a background job, which writes its own transcript alongside the foreground one; the 9-turn row is that foreground stub, not separate work. |
 | **Phase 2.6** — .NET 10 upgrade | 1 | 114 | 10.1M | Four project/config files, no C# changed, plus a critical-CVE patch the restore surfaced and the doc corrections. **Provisional — logged from inside the session it measures, so it is low.** See the header; assume the same shape as the four corrections above. |
+| **Phase 4** — AI job-description analyzer | 2 | 197 | 25.7M | `IChatClient` behind Ollama, two slices, `IPostingContract` (decision 14), 10 tests. **Now final**, and its story is the reason to distrust a phase's own status field: the code landed but the tests never ran (Docker was down), so the phase sat at *In progress* until Phase 4.5 ran them — 10/10 passed unchanged. |
+| **Phase 4.5** — document import | 4 | 691+ | 105.7M+ | PDF/DOCX/text extraction, a model structuring step, a human confirm-and-fix cycle, 7 slices, the first migration since InitialCreate, 39 new tests, both diagrams redrawn, **plus the pre-merge review that found ten defects in it**. **Now the most expensive item in the project**, past Phase 2.2's 62.2M. Two things it proves rather than suggests. First, the correction again: the build session was logged last time at 261 turns / 52.0M and finished at **305 / 66.7M** — the seventh mid-session row to be corrected upward. Second, and new: **the phase cost roughly twice what its own build session did.** The build was 66.7M; planning and Phase 4 verification (10.4M) and the review (28.6M) are the other half. A feature is not finished when it compiles, and the ledger had been quietly assuming otherwise. **The review row is provisional — written from inside the session it measures.** |
 | Architecture record | 1 | 162 | 19.8M | Writing `architecture.md` — the decision record and gap register. |
 | Schema + architecture diagrams | 1 | 162 | 19.9M | The `schema-diagram` skill and the two committed SVGs. |
 | Security & data audit | 1 | 110 | 13.4M | `security-and-data-audit.md`, F1–F18. |
@@ -68,7 +70,7 @@ folded into a phase they didn't belong to.
 | Docs audit + markdown skill | 2 | 74 | 5.6M | The phase-doc flow audit after the 2.2 renumber, and a markdown-audit skill built in a worktree. |
 | Tooling / skills | 5 | 21 | 700k | Skill installs and short setup sessions. |
 | | | | | |
-| **Total** | **29** | **2511** | **324.0M** | |
+| **Total** | **36** | **3578+** | **481.5M+** | Regenerated 2026-08-28 during the Phase 4.5 review. The jump from 427.7M is the corrected Phase 4.5 build session plus the review session, not a restatement of earlier rows. Provisional: the review session is still running. |
 
 ### What the numbers say
 
@@ -223,8 +225,28 @@ replay; `Total` = all four counters summed.
 | 2026-08-26 10:30 | `develop` | 163 | 533k | 22.2M | 204k | **23.0M** | `c0f17455` |
 | 2026-08-26 11:10 | `develop` | 148 | 592k | 17.4M | 153k | **18.1M** | `8abb49a7` |
 | 2026-08-26 11:10 | `develop` | 9 | 61k | 431k | 4k | **496k** | `a4832a88` |
-| 2026-08-26 11:56 | `phase-2.6/dotnet10` | 123 | 205k | 11.0M | 76k | **11.3M** | `05a00171` |
-| | | **2520** | **10.0M** | **312.1M** | **3.1M** | **325.2M** | 29 sessions |
+| 2026-08-26 11:56 | `phase-2.6/dotnet10` | 211 | 360k | 26.0M | 176k | **26.5M** | `05a00171` |
+| 2026-08-26 23:35 | `phase-2.6/dotnet10` | 82 | 1.0M | 8.5M | 133k | **9.7M** | `bf4d13ad` |
+| 2026-08-27 05:38 | `phase-4/ai-analyzer` | 184 | 896k | 23.7M | 240k | **24.9M** | `797994f8` |
+| 2026-08-27 09:30 | `worktree-phase-4.5-document-import` | 305 | 862k | 65.4M | 440k | **66.7M** | `1782fd4c` |
+| 2026-08-27 09:31 | `phase-4/ai-analyzer` | 13 | 163k | 660k | 2k | **826k** | `d0c5f8ab` |
+| 2026-08-27 12:10 | `phase-4/ai-analyzer` | 113 | 271k | 10.1M | 85k | **10.4M** | `9e8c6d6a` |
+| 2026-08-27 12:42 | `phase-4/ai-analyzer` | 231 | 879k | 24.5M | 171k | **25.5M** | `bb34563c` |
+| 2026-08-27 12:42 | `phase-4/ai-analyzer` | 42 | 176k | 2.9M | 17k | **3.1M** | `f3c691c2` |
+| | | **3578** | **14.5M** | **462.8M** | **4.3M** | **481.5M** | 36 sessions |
+
+The `1782fd4c` row did exactly what the last version of this paragraph predicted:
+written from inside its own live session at 261 turns / 52.0M, it finished at
+**305 / 66.7M**. That is the seventh consecutive upward correction, and the
+prediction being right is not the interesting part — the size of it is. Nobody
+guessed +28%.
+
+`bb34563c` is the Phase 4.5 review and is being written from inside its own live
+session, so it will be wrong in the same direction. `f3c691c2` is its foreground
+stub, not separate work: this session ran as a background job, which writes its
+own transcript alongside the foreground one. Same double-counting shape as
+`a4832a88` in Phase 2.5 — both halves are listed because the script sees two
+transcripts, and both are real spend.
 
 ---
 

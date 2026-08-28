@@ -50,7 +50,14 @@ public record ApplicationDetail(
     ApplicationStatus Status,
     DateOnly DateApplied,
     string? Notes,
-    string? ResumeText,
+    // Phase 4.5: which resume version was sent, by reference. This used to be the
+    // resume TEXT inlined into every application's detail response — a whole
+    // resume on the wire whenever you fetched a job you applied to, which was
+    // both the over-fetch A1 is about and the PII exposure the security audit
+    // records against ResumeText. The label is carried alongside the id so a
+    // client can render "backend-focused" without a second round trip.
+    Guid? ResumeId,
+    string? ResumeLabel,
     DateTime CreatedAtUtc,
     DateTime UpdatedAtUtc,
     PostingResponse Posting);
@@ -63,16 +70,32 @@ public static class ApplicationDetailProjection
     // which is five round-trips returning columns nobody asked for
     // (architecture.md A1). This loads exactly the columns below.
     //
-    // Deliberately absent: AiAnalysis (Phase 4) and AtsResult (Phase 5). Neither
-    // is written yet, and adding them to the contract before they exist would
-    // publish a field that is always null.
+    // Deliberately absent: AiAnalysis and AtsResult (Phase 5).
+    //
+    // The reason for AiAnalysis changed in Phase 4 and the exclusion did not. It
+    // used to be "not written yet"; it is now a module boundary. `ai_analyses`
+    // belongs to the Ai module, and projecting it here would have Applications
+    // reading another module's table -- the same rule-2 crossing that Ai needed
+    // IPostingContract to avoid in the other direction. It is served by the Ai
+    // module at GET /applications/{id}/analysis instead (Modules/Ai/GetAnalysis.cs).
+    //
+    // The AI-extracted *skills* do appear below, because they are ordinary
+    // posting_skills rows that happen to carry Source = AiExtracted. Those belong
+    // to Applications, so there is no boundary to cross.
+    //
+    // AtsResult is still absent for the original reason: Phase 5 has not run.
     public static readonly Expression<Func<JobApplication, ApplicationDetail>> Expression =
         a => new ApplicationDetail(
             a.Id,
             a.Status,
             a.DateApplied,
             a.Notes,
-            a.ResumeText,
+            a.ResumeId,
+            // Null-conditional would be the obvious spelling, but this is an
+            // expression tree EF translates to SQL: the explicit ternary becomes
+            // the LEFT JOIN's null case, which is what an application with no
+            // resume attached actually is.
+            a.Resume == null ? null : a.Resume.Label,
             a.CreatedAtUtc,
             a.UpdatedAtUtc,
             new PostingResponse(

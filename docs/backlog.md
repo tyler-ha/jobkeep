@@ -10,7 +10,7 @@ grow.
 when we actually decide to build it. Committed work lives in `phase-N-*.md` and
 the README status table — not here.
 
-Last reviewed: 2026-08-25.
+Last reviewed: 2026-08-28 (real-CV test; see the 2026-08-28 section).
 
 ## How this was sourced
 
@@ -57,7 +57,8 @@ Ordered roughly cheapest/most-Phase-2-shaped first.
 | **Data export (CSV/JSON)** | Export your applications | Low — read + serialize, no schema change | Could be a small Phase 2.x | Cheap, self-contained, ends runnable. |
 | **Reminders / follow-ups** | Date-based nudges ("follow up in 7 days", "interview tomorrow") | Medium — new entity + a due-date query; notifications later | Own phase (e.g. 2.5) | Flagship tracker feature. New entity = real scope. Notifications (email/push) are a *further* deferral tied to deploy. |
 | **Contacts / recruiter tracking** | Log who you spoke to at each company | Medium — new `Contact` entity + relationships | Own phase | Common in Huntr. New entity. |
-| **Document / resume versions** | Attach the specific resume/cover-letter version sent per application | Medium — new entity + storage decision (text now, files need blob storage → cost) | Own phase | Partially exists via `ResumeText`. File attachments would touch the cost priority (S3, etc.). |
+| **Keep the uploaded file itself** | Store the original PDF/DOCX, not just the text extracted from it | Medium — a storage decision with a bill attached | Own phase | **Deferred deliberately in Phase 4.5, at the user's request** (*"For now, no saving documents yet. We will have it in the backlog."*). Today the bytes are read, converted to text, hashed for provenance and dropped. Bringing them back means either `bytea` in Postgres — which eats Neon's free-tier 0.5 GB, the only genuinely scarce resource in the deployed plan — or S3, a new AWS surface. It would also reintroduce the filename/path-handling risk that currently **cannot** occur, since nothing is written to disk. Worth doing when there is a reason to re-download the exact file that was sent, not before. |
+| **Document / resume versions** | Attach the specific resume/cover-letter version sent per application | Low now — the hard part shipped | Own small phase | **Mostly done by Phase 4.5**: `resumes` is a labelled aggregate and `job_applications.ResumeId` points at the version used. What remains is cover letters, and the file attachment covered by the row above. |
 | **Audit / activity history** | "What changed and when" — a change log per entity | Medium-High — new table + write-path change on *every* mutation | Own phase | Touches everything; don't fold into an unrelated phase. `CreatedAtUtc`/`UpdatedAtUtc` exist but aren't a log — and per the audit (A8) they aren't even reliable yet; fix those first. |
 | **Authentication / multi-user** | Scope all data per user; turn the tool into a real product | High — architectural, every query gets user-scoped | Own phase, tied to deploy (Phase 3+) | Deliberately *not* a Phase 2 item — would violate the small-phase priority. Scoping root is decided in `architecture.md` decision 9 (`skills` stays global). |
 
@@ -69,7 +70,7 @@ everything else here: **not a commitment.**
 
 | Candidate | What it is | Cost / size | Likely home | Notes |
 |---|---|---|---|---|
-| **Document intake (text-only)** | A `Documents` slice: raw text + a `kind` (Resume / JobAd / CoverLetter), optionally linked to an application | Low — one table, one slice, **no blob storage** | Own small phase, before Phase 4 | The largest journey gap: **nothing in any doc uploads or parses a file.** Phase 4 says "*paste* a job description in"; Phase 5 says "store your resume text once". Text-only keeps the near-zero-cost priority intact and also de-duplicates `ResumeText`, which is finding F2. PDF/DOCX parsing stays deferred. |
+| ~~**Document intake (text-only)**~~ | — | — | — | **DONE, and larger than this row imagined — Phase 4.5.** It did not stay text-only: PDF and DOCX parsing shipped too (PdfPig, OpenXml), along with a human confirm-and-fix step before anything is written. `ResumeText` was not de-duplicated but deleted — the résumé moved to its own `resumes` table. See `docs/phases/phase-4.5-resume-import.md`. |
 | **AI-extracted requirements** | Extend Phase 4's prompt to write `job_requirements`, not just `posting_skills` | Low — prompt + inserts, table already exists | Fold into Phase 4 | Phase 4 extracts skills, seniority and a summary but never requirements — yet `job_requirements` exists *"for the Phase 5 ATS check"*. The AI phase currently feeds only half of the phase that depends on it. |
 | **Provenance on `job_requirements`** | A `Source` column mirroring `posting_skills.Source` (Parsed / AiExtracted) | Low — one column | With the row above | No way to tell a requirement you typed from one a model guessed. Harmless today, load-bearing the moment the row above ships. **Not recorded anywhere else**, including the audit. |
 | **Target profile** | Store the roles / seniority / skills you are aiming at | Medium — new entity + one analytics join | Own phase, after 2.3 | Upgrades the differentiator: Phase 2.4 answers *"what is in demand?"*; with a target it answers **"what is in demand that I do not have yet?"** — the question a job seeker actually has. |
@@ -83,7 +84,7 @@ evidence in [`security-and-data-audit.md`](security-and-data-audit.md).
 | Candidate | What it is | Cost / size | Likely home | Notes |
 |---|---|---|---|---|
 | **Audit & integrity baseline** | Interceptor-maintained timestamps, DB-side defaults, CHECK constraints, `xmin` concurrency token, bounded text, two missing indexes | Low — one migration + one interceptor, no auth needed | Small Phase 2.7 | The cheapest real fix on this list, and it corrects a column that is already wrong (A8). Best interview story in the audit. |
-| **Transport & secrets hardening** | `SSL Mode=VerifyFull`, RDS storage encryption, untrack `appsettings.Development.json`, connection string in SSM Parameter Store (free tier) | Low — config only, no schema | **Phase 3** | RDS storage encryption can only be enabled *at instance creation* — decide before the instance exists. |
+| **Transport & secrets hardening** | `SSL Mode=VerifyFull`, encryption at rest, untrack `appsettings.Development.json`, connection string in SSM Parameter Store (free tier) | Low — config only, no schema | **Phase 3** | Was written when Phase 3 targeted RDS, where storage encryption can only be enabled *at instance creation*. Phase 3 now uses Neon, which encrypts at rest and enforces TLS by default — so the deadline is gone, but the config items remain. |
 | **PII classification & retention** | Identify `ResumeText` / `Notes` / `Description` as personal information; decide whether they leave the machine once Phase 4 swaps off Ollama; retention rule per Privacy Act APP 11.2 | Low as a doc, Medium if purge is automated | Phase 4/5 guardrail | The one item here with an external obligation attached, not just good practice. |
 | **schema.org `JobPosting` gaps** | `validThrough` (expiry), `jobLocationType` (remote/hybrid), `identifier` (employer req id), source/channel | Low — four columns on `job_postings` | **Unowned** — 2.1 is Done; fold into 2.2 or its own small phase | Remote/hybrid is the most-filtered attribute in the current market and free-text `Location` cannot answer it. |
 
@@ -93,6 +94,56 @@ evidence in [`security-and-data-audit.md`](security-and-data-audit.md).
 |---|---|---|---|---|
 | **HotChocolate 14 → 16** | The GraphQL server is on the tail of the 14 line (14.3.1); 16.6.x is current | Medium — two majors of breaking changes | **Unowned** | Deliberately *not* done in Phase 2.6. The only thing forcing a move then was [GHSA-qr3m-xw4c-jqw3](https://github.com/advisories/GHSA-qr3m-xw4c-jqw3), and 14.3.1 patches it, so the 14 line is secure and supported for now. Pull this forward if a second advisory lands on 14, or if Phase 4/5 wants something only 15+ ships. Doing it inside a framework bump would have made any failure ambiguous. |
 | **GraphQL parse-depth limit** | A document-size / nesting guard in front of `/graphql` | Low | **Phase 3** (with rate limiting) | The advisory above is the argument: the parser runs *before* validation, so `MaxExecutionDepth` cannot protect it, and `StackOverflowException` is uncatchable. Patching HotChocolate fixed *this* parser bug; it did not give the app a way to reject an absurd document. Belongs with the rest of the deploy-time API hygiene. |
+
+
+### Added by the real-CV test (2026-08-28)
+
+Phase 4.5 was tested by uploading two real CVs of the same person — one exported
+to PDF from a heavily designed template, one an ordinary Word document. The two
+results were so far apart that the gap is the finding, and it is what these
+entries are about.
+
+**The headline number, same person, same model, same prompt:**
+
+| | PDF (designed, sidebar layout) | DOCX (ordinary, linear) |
+|---|---|---|
+| Full name | ✗ lost | ✓ |
+| Location | ✗ null | ✓ `Murrumbeena 3163 VIC` |
+| Skills | 22, mostly right, after a rewrite; **4 and all wrong** before it | ✓ **8, exactly the technical-skills list** |
+| Date ranges | detached column, model recovers most | ✓ clean |
+| Employer / title | unreliable | ✓ correct |
+
+The extractor rewrite (`bd624d8`) closed the worst of the PDF gap — reading order
+is now reconstructed from glyph geometry rather than taken from the content
+stream. What is left is deferred here rather than fixed, and the DOCX column is
+the reason: **the format is doing more of the work than the parser is.**
+
+| Candidate | What it is | Cost / size | Likely home | Notes |
+|---|---|---|---|---|
+| **Letter-spaced heading recovery** | A heading tracked out for effect (`M a s t e r  o f  I T`) has letter gaps as wide as word gaps, so the word extractor splits it into single characters | Medium — needs a per-font width heuristic, and a wrong one damages ordinary text | **Unowned** | This is what costs the full name on a designed PDF. Nothing in the geometry distinguishes tracking from word spacing; the fix is statistical (compare the gap against the median intra-word gap for that font size) and can regress documents that currently work. Not worth it for one field the user types anyway. |
+| **Detached date columns** | Dates in their own narrow column segment as their own block and arrive separated from the entries they belong to | Medium — a column-association pass over blocks | **Unowned** | Partly self-correcting: the model reassociates most of them once blocks carry structure. Would matter more if the draft were ever committed without review, which the confirm gate is specifically designed to prevent. |
+| **Employer / title pairing across a sidebar** | Which line is the employer and which the role, when both columns supply candidates | Medium | **Unowned** | Same shape as above and the same mitigation — the review screen exists for exactly this. |
+| **OCR for scanned PDFs** | A scanned CV is a picture; it opens fine and yields nothing | High — Tesseract or a hosted vision model, plus a real latency and cost story | **Unowned** | Already detected and reported rather than silently stored empty. A different project, and the only item here that is a capability rather than a refinement. |
+
+**The recommendation that falls out, and it is worth stating in an interview:**
+tell the user to upload a `.docx` when they have one. Not as an apology for the
+parser — a Word file *carries* its structure (paragraphs, tables, lists) while a
+PDF has thrown it away and left coordinates, so the DOCX path is reconstructing
+nothing. The measured difference above is that argument with numbers on it. The
+PDF path exists because people do not always have the original.
+
+**Libraries were reviewed at the same time and deliberately not changed.**
+`PdfPig` 0.1.16 is the current stable (0.1.17 is alpha) and is the best free
+option in .NET — the alternatives are AGPL (iText 7, copyleft, wrong for a
+portfolio repo), page-capped free editions (Free Spire), or commercial
+(IronPDF, Aspose, Syncfusion), and all of them fail the near-zero-cost priority.
+`DocumentFormat.OpenXml` 3.5.1 is Microsoft's own SDK and is already current.
+Neither of the defects found was a library gap; both were about preserving
+structure the library already exposes. One genuine capability gap exists —
+legacy `.doc`, which `NPOI.HWPF` could parse — and it is not taken: that package
+is a port of Apache POI's *scratchpad* module, has not moved in years, and the
+format has been superseded since 2007. Refusing `.doc` with a message telling the
+user to re-save is the defensible call, and is what ships.
 
 
 ## Convention / industry-standard adoptions (committed intent, unscheduled)

@@ -45,4 +45,13 @@
     <ProjectReference Include="../../src/Jobkeep.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Phase 4.5 fixture documents, copied next to the test assembly so
+         ExtractionTests can read them off disk. They are real files — a real PDF
+         PdfPig has to parse, a real .docx OpenXml has to open — because the whole
+         point of testing extraction is that it runs against bytes rather than
+         against a string pretending to be a document. See Fixtures/README.md. -->
+    <None Include="Fixtures/**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

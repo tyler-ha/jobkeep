@@ -25,7 +25,7 @@ public record UpdateApplicationRequest(
     ApplicationStatus? Status,
     string? Notes,
     string? Description,
-    string? ResumeText);
+    Guid? ResumeId);
 
 public class UpdateApplicationHandler
 {
@@ -72,10 +72,25 @@ public class UpdateApplicationHandler
                     application.Status, request.Status.Value));
         }
 
+        // Same check as the create slice, and for the same reason: ResumeId is a
+        // Restrict foreign key, so an id naming no resume is a DbUpdateException at
+        // SaveChanges rather than a message. Checked here, before anything is
+        // mutated, so a bad id leaves the whole update unapplied — the same
+        // property the status check above is written for.
+        if (request.ResumeId is not null
+            && !await _db.Resumes.AnyAsync(r => r.Id == request.ResumeId.Value, ct))
+            return SliceResult<ApplicationDetail>.Invalid($"Resume {request.ResumeId} not found.");
+
         // Application-level fields.
         if (request.Status is not null) application.Status = request.Status.Value;
         if (request.Notes is not null) application.Notes = request.Notes;
-        if (request.ResumeText is not null) application.ResumeText = request.ResumeText;
+        // Null means "not supplied", so a resume cannot be UNLINKED through this
+        // endpoint. That is the same limitation every other optional field here
+        // has — Notes and Location cannot be cleared either — and it is the cost of
+        // a partial-update shape that uses null as the absent marker. Worth
+        // changing deliberately for all of them if it ever bites, not for this one
+        // field in isolation.
+        if (request.ResumeId is not null) application.ResumeId = request.ResumeId;
 
         // Posting-level fields.
         if (request.Title is not null) application.Posting.Title = request.Title.Trim();
