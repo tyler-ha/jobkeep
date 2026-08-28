@@ -10,7 +10,7 @@ grow.
 when we actually decide to build it. Committed work lives in `phase-N-*.md` and
 the README status table — not here.
 
-Last reviewed: 2026-08-25.
+Last reviewed: 2026-08-28 (real-CV test; see the 2026-08-28 section).
 
 ## How this was sourced
 
@@ -94,6 +94,56 @@ evidence in [`security-and-data-audit.md`](security-and-data-audit.md).
 |---|---|---|---|---|
 | **HotChocolate 14 → 16** | The GraphQL server is on the tail of the 14 line (14.3.1); 16.6.x is current | Medium — two majors of breaking changes | **Unowned** | Deliberately *not* done in Phase 2.6. The only thing forcing a move then was [GHSA-qr3m-xw4c-jqw3](https://github.com/advisories/GHSA-qr3m-xw4c-jqw3), and 14.3.1 patches it, so the 14 line is secure and supported for now. Pull this forward if a second advisory lands on 14, or if Phase 4/5 wants something only 15+ ships. Doing it inside a framework bump would have made any failure ambiguous. |
 | **GraphQL parse-depth limit** | A document-size / nesting guard in front of `/graphql` | Low | **Phase 3** (with rate limiting) | The advisory above is the argument: the parser runs *before* validation, so `MaxExecutionDepth` cannot protect it, and `StackOverflowException` is uncatchable. Patching HotChocolate fixed *this* parser bug; it did not give the app a way to reject an absurd document. Belongs with the rest of the deploy-time API hygiene. |
+
+
+### Added by the real-CV test (2026-08-28)
+
+Phase 4.5 was tested by uploading two real CVs of the same person — one exported
+to PDF from a heavily designed template, one an ordinary Word document. The two
+results were so far apart that the gap is the finding, and it is what these
+entries are about.
+
+**The headline number, same person, same model, same prompt:**
+
+| | PDF (designed, sidebar layout) | DOCX (ordinary, linear) |
+|---|---|---|
+| Full name | ✗ lost | ✓ |
+| Location | ✗ null | ✓ `Murrumbeena 3163 VIC` |
+| Skills | 22, mostly right, after a rewrite; **4 and all wrong** before it | ✓ **8, exactly the technical-skills list** |
+| Date ranges | detached column, model recovers most | ✓ clean |
+| Employer / title | unreliable | ✓ correct |
+
+The extractor rewrite (`bd624d8`) closed the worst of the PDF gap — reading order
+is now reconstructed from glyph geometry rather than taken from the content
+stream. What is left is deferred here rather than fixed, and the DOCX column is
+the reason: **the format is doing more of the work than the parser is.**
+
+| Candidate | What it is | Cost / size | Likely home | Notes |
+|---|---|---|---|---|
+| **Letter-spaced heading recovery** | A heading tracked out for effect (`M a s t e r  o f  I T`) has letter gaps as wide as word gaps, so the word extractor splits it into single characters | Medium — needs a per-font width heuristic, and a wrong one damages ordinary text | **Unowned** | This is what costs the full name on a designed PDF. Nothing in the geometry distinguishes tracking from word spacing; the fix is statistical (compare the gap against the median intra-word gap for that font size) and can regress documents that currently work. Not worth it for one field the user types anyway. |
+| **Detached date columns** | Dates in their own narrow column segment as their own block and arrive separated from the entries they belong to | Medium — a column-association pass over blocks | **Unowned** | Partly self-correcting: the model reassociates most of them once blocks carry structure. Would matter more if the draft were ever committed without review, which the confirm gate is specifically designed to prevent. |
+| **Employer / title pairing across a sidebar** | Which line is the employer and which the role, when both columns supply candidates | Medium | **Unowned** | Same shape as above and the same mitigation — the review screen exists for exactly this. |
+| **OCR for scanned PDFs** | A scanned CV is a picture; it opens fine and yields nothing | High — Tesseract or a hosted vision model, plus a real latency and cost story | **Unowned** | Already detected and reported rather than silently stored empty. A different project, and the only item here that is a capability rather than a refinement. |
+
+**The recommendation that falls out, and it is worth stating in an interview:**
+tell the user to upload a `.docx` when they have one. Not as an apology for the
+parser — a Word file *carries* its structure (paragraphs, tables, lists) while a
+PDF has thrown it away and left coordinates, so the DOCX path is reconstructing
+nothing. The measured difference above is that argument with numbers on it. The
+PDF path exists because people do not always have the original.
+
+**Libraries were reviewed at the same time and deliberately not changed.**
+`PdfPig` 0.1.16 is the current stable (0.1.17 is alpha) and is the best free
+option in .NET — the alternatives are AGPL (iText 7, copyleft, wrong for a
+portfolio repo), page-capped free editions (Free Spire), or commercial
+(IronPDF, Aspose, Syncfusion), and all of them fail the near-zero-cost priority.
+`DocumentFormat.OpenXml` 3.5.1 is Microsoft's own SDK and is already current.
+Neither of the defects found was a library gap; both were about preserving
+structure the library already exposes. One genuine capability gap exists —
+legacy `.doc`, which `NPOI.HWPF` could parse — and it is not taken: that package
+is a port of Apache POI's *scratchpad* module, has not moved in years, and the
+format has been superseded since 2007. Refusing `.doc` with a message telling the
+user to re-save is the defensible call, and is what ships.
 
 
 ## Convention / industry-standard adoptions (committed intent, unscheduled)

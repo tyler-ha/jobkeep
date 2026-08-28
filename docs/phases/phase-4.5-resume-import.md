@@ -426,6 +426,42 @@ old path was merely deterministic about being wrong. A wrong **order** is
 recoverable by the model and by a human; the old failure silently destroyed
 **association**.
 
+### The DOCX control, run straight after
+
+The same person's CV as an ordinary Word document, same model, same prompt:
+
+| | PDF (designed) | DOCX (ordinary) |
+|---|---|---|
+| Full name | lost | **correct** |
+| Location | null | **`Murrumbeena 3163 VIC`** |
+| Skills | 22, mostly right | **8, exactly the technical-skills list** |
+| Employer / title | unreliable | **correct on both** |
+| Date ranges | detached column | **clean** |
+
+Nothing in the Documents module changed between the two runs. The DOCX path
+walks `Descendants<Paragraph>()` and gets paragraphs, tables and list items in
+document order because **a .docx still contains a document**; the PDF path is
+reconstructing structure that the export threw away. Two details worth keeping:
+
+- The skills table in that CV is a real Word table whose cells hold `● Python`,
+  `● Linux` and so on. The bullet glyphs did **not** reach the stored skill
+  names - the model stripped them. That was the risk worth checking, because a
+  stored `"● Python"` would never join to a posting's `"Python"`, which is the
+  entire premise of Phase 5, and it would fail silently.
+- The soft-skills table sitting right beside it was correctly **not** treated as
+  skills - the same trap `RecursiveXYCut` fell straight into on the PDF.
+
+What the DOCX run still gets wrong is the document's own formatting, not the
+parser's: `Monash University Melbourne` glues the institution to its location
+because the CV puts institution, location, qualification and dates on one line
+with no delimiter, and `Port Cities Outsourcing` loses its "Vietnam". The
+Leadership & Activities section is dropped entirely - the draft schema has no
+concept for unpaid roles, which is a schema question rather than a bug.
+
+**So the honest guidance is: upload the .docx when you have one.** Not as an
+apology for the PDF path - as the correct technical answer, with the table above
+as the evidence.
+
 ### The over-fitting risk, said out loud
 
 This was tuned against **one** document. One CV is not a corpus, and the
