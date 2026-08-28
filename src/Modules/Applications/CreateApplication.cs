@@ -48,6 +48,17 @@ public class CreateApplicationHandler
         if (string.IsNullOrEmpty(company) || string.IsNullOrEmpty(title))
             return SliceResult<ApplicationDetail>.Invalid("Company and Title are required.");
 
+        // Phase 4.5 turned the resume from a pasted string into a foreign key, and
+        // a foreign key can be wrong in a way a string could not. The FK is
+        // Restrict, so an id naming no resume fails at SaveChanges as a
+        // DbUpdateException — an unhandled 500 for what is plainly a bad request.
+        // Resolved first instead, which is what CompanyLookup already does for the
+        // other reference in this method: no reference in this codebase reaches the
+        // database unchecked.
+        if (request.ResumeId is not null
+            && !await _db.Resumes.AnyAsync(r => r.Id == request.ResumeId.Value, ct))
+            return SliceResult<ApplicationDetail>.Invalid($"Resume {request.ResumeId} not found.");
+
         var application = new JobApplication
         {
             Notes = request.Notes,

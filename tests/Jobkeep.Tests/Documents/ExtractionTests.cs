@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using Jobkeep.Models;
 using Jobkeep.Modules.Documents;
 using Jobkeep.Shared;
@@ -206,5 +207,55 @@ public class ExtractionTests
 
         Assert.Equal(ResultStatus.Ok, result.Status);
         Assert.Equal("Jane Doe\n\nEXPERIENCE\n\nCanva", result.Value!.Text);
+    }
+
+    // ------------------------------------------------------- zip bomb (review)
+
+    /// <summary>
+    /// Builds a real, valid zip whose single entry decompresses to
+    /// <paramref name="uncompressedBytes"/> of zeros. Deflate takes that to about
+    /// a thousandth of its size, which is the whole trick: the upload is tiny and
+    /// well under MaxBytes, and what it turns into is not.
+    /// </summary>
+    private static byte[] ZipOfZeros(int uncompressedBytes)
+    {
+        using var buffer = new MemoryStream();
+        using (var archive = new ZipArchive(buffer, ZipArchiveMode.Create, leaveOpen: true))
+        using (var entry = archive.CreateEntry("word/document.xml").Open())
+            entry.Write(new byte[uncompressedBytes]);
+        return buffer.ToArray();
+    }
+
+    [Fact]
+    public void ZipBomb_IsRefusedBeforeAnythingIsDecompressed()
+    {
+        // The upload cap bounds what ARRIVES; it does not bound what a zip turns
+        // into, and a .docx is a zip. Found in the Phase 4.5 review: nothing
+        // between the 5 MB cap and OpenXml opening the package.
+        var extractor = new DocumentTextExtractor(
+            new DocumentOptions { MaxDecompressedBytes = 1024 * 1024 });
+
+        var bomb = ZipOfZeros(4 * 1024 * 1024);
+
+        // The point, in one assertion: the archive is a rounding error next to
+        // what it claims to hold.
+        Assert.True(bomb.Length < 64 * 1024, $"fixture was {bomb.Length} bytes");
+
+        var result = extractor.Extract(bomb, "resume.docx");
+
+        Assert.Equal(ResultStatus.Invalid, result.Status);
+        Assert.Contains("unpacks to far more", result.Error);
+    }
+
+    [Fact]
+    public void AnOrdinaryDocx_IsNotMistakenForABomb()
+    {
+        // The guard is worthless if it also refuses real documents, and the real
+        // document is the checked-in fixture rather than something synthesised to
+        // pass. Runs at the shipped 64 MB ceiling, not a lowered one.
+        var extracted = Extract("resume.docx");
+
+        Assert.Equal(SourceFormat.Docx, extracted.Format);
+        Assert.Contains("Jane Doe", extracted.Text);
     }
 }

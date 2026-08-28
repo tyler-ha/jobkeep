@@ -256,6 +256,58 @@ endpoint and model tag. They are not tuning knobs; each one is the difference
 between a working analyzer and one that silently stores empty rows. Config is for
 things a deployment may legitimately change.
 
+### 10. It was verified a session later, because Docker was down.
+
+The phase was committed (`a79f9f0`) at the end of a session in which Docker
+Desktop never started. So the 10 integration tests **compiled but had never
+executed**, and there had been no end-to-end run against real Postgres — only
+the by-hand model probe below. The status stayed *In progress* until that gap
+closed, which it did on the same date in a fresh session.
+
+Result: **142 tests pass, 0 fail** (the 10 Ai tests among them), and the
+end-to-end round trip works. Nothing had to be fixed — the handoff's suspicion
+that `FakeChatClient` / `AnalyzerTests.AppWithModel` might have drifted when the
+handler moved off `GetResponseAsync<T>` was wrong; they had been rebuilt
+correctly.
+
+**The lesson is about the claim, not the code.** Code that compiles and is
+committed is not code that runs, and a phase that says *Done* on the strength of
+a build is making a claim it has not paid for. The cost of holding the status
+open for one session was nothing; the cost of a wrong *Done* would have been
+discovering it in Phase 5, on top of Phase 5's own bugs.
+
+## Verification — the end-to-end run
+
+Run against real Postgres and real Ollama (`llama3.2:3b`) on 2026-08-27, using a
+synthetic Melbourne senior-backend ad with an explicit "Nice to have" section
+(Kubernetes / React / Terraform) to test the required-vs-nice split directly.
+
+| | Result |
+|---|---|
+| Suite | **142 passed, 0 failed**, 18s (Testcontainers Postgres) |
+| Latency | **8.4s cold, then ~3.1s warm**, stable to ±0.1s |
+| Seniority | `Senior` — correct, identical on all 7 runs |
+| Summary | 3 real sentences, no instruction echo |
+| Skills | 13, with Kubernetes / React / Terraform flagged nice-to-have and the rest required — **correct on both counts** |
+| Re-analysis | `skillsAdded` went 10 → 3 → 0 and stayed 0 — **idempotent**, no duplicate rows on re-run |
+| `GET /analysis` | 0.05s, no inference — the read slice does what it was added for |
+
+**One finding worth keeping: `Temperature = 0` is not the same as determinism.**
+Runs 2-7 were identical. **Run 1, the cold one, was not** — it returned 10 skills
+and marked every one required, dropping the "Nice to have" section entirely. The
+same request on the same warm model then returned 13 with the split correct, six
+times running.
+
+So the honest characterisation is **6 of 7 identical, with the outlier on the
+first inference after model load**. Greedy sampling removes the sampler as a
+source of variance; it does not make the whole stack reproducible. This matters
+for Phase 4.5, where a wrong first parse would be *stored*: the design answer is
+that re-running must be cheap and non-destructive, which is exactly what
+`POST /imports/{id}/reparse` was built to be.
+
+This also supersedes the "flickers between 7 and 9 items" note above, which was
+measured before the ad had a nice-to-have section and on fewer runs.
+
 ## Cost notes
 
 - Local dev via Ollama: **$0, always.** This is the whole phase now.

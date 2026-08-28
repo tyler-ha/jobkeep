@@ -56,6 +56,10 @@ public class ReviewImportHandler
                 $"This is a {import.Kind} import, so the draft must carry its "
                 + $"{(import.Kind == DocumentKind.Resume ? "resume" : "posting")} half.");
 
+        // Null lists in the body become empty ones before anything stores them —
+        // see DraftSanitiser for why a deserializer can produce them at all.
+        normalised = normalised.Sanitise();
+
         import.DraftJson = JsonSerializer.Serialize(normalised, DraftMapper.Json);
 
         // ModelUsed is cleared once a human has edited the draft. It records what

@@ -88,10 +88,24 @@ public class ImportDocumentHandler
         // The label defaults to the filename without its extension. The user is
         // expected to change it at review — it is how THEY organise resumes, and
         // the document contains no evidence about it (see ResumeDraft.Label).
+        //
+        // A label the USER typed is validated, not clipped: silently storing
+        // something other than what they wrote is the worse failure, and it is
+        // also what CommitImport does with the same value, so the two agree.
+        // A label DERIVED from the filename is clipped, because the user never
+        // chose it - a 200-character filename is ordinary, resumes.Label is
+        // varchar(100), and a default nobody typed should not be the thing that
+        // turns confirm into a database error.
+        if (label is not null && label.Trim().Length > DraftLimits.MaxLabelLength)
+            return SliceResult<ImportResponse>.Invalid(
+                $"That label is {label.Trim().Length} characters. Keep it under {DraftLimits.MaxLabelLength}.");
+
         var resolvedLabel = string.IsNullOrWhiteSpace(label)
             ? Path.GetFileNameWithoutExtension(safeName)
             : label.Trim();
         if (string.IsNullOrWhiteSpace(resolvedLabel)) resolvedLabel = "Imported resume";
+        if (resolvedLabel.Length > DraftLimits.MaxLabelLength)
+            resolvedLabel = resolvedLabel[..DraftLimits.MaxLabelLength].TrimEnd();
 
         // -------------------------------------------------------------------
         // Save the extraction BEFORE calling the model
@@ -116,7 +130,15 @@ public class ImportDocumentHandler
             ByteCount = bytes.Length,
             ContentHash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant(),
             ExtractedText = extracted.Text,
-            DraftJson = "{}",
+            // The empty draft, not "{}" — and it carries the resolved label. Both
+            // degraded paths below (no text layer, model unusable) return without
+            // ever writing a draft, and storing a placeholder there meant the
+            // upload response showed the label the caller asked for while the
+            // stored row did not: a later GET or confirm re-derived it from the
+            // filename. Seeding the real shape here makes the response and the row
+            // agree whatever happens next.
+            DraftJson = JsonSerializer.Serialize(
+                EmptyDraft(kind, resolvedLabel), DraftMapper.Json),
             Warning = extracted.Warning
         };
 
@@ -199,12 +221,16 @@ public class ImportDocumentHandler
 
         try
         {
-            return JsonSerializer.Deserialize<ImportDraft>(import.DraftJson, DraftMapper.Json)
-                   ?? EmptyDraft(import.Kind, import.FileName);
+            var draft = JsonSerializer.Deserialize<ImportDraft>(import.DraftJson, DraftMapper.Json);
+            return draft is null
+                ? EmptyDraft(import.Kind, Path.GetFileNameWithoutExtension(import.FileName))
+                // Rows stored before DraftSanitiser existed can hold null lists,
+                // so the guard is on the way out as well as on the way in.
+                : draft.Sanitise();
         }
         catch (JsonException)
         {
-            return EmptyDraft(import.Kind, import.FileName);
+            return EmptyDraft(import.Kind, Path.GetFileNameWithoutExtension(import.FileName));
         }
     }
 }

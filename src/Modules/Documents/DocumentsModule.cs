@@ -32,6 +32,22 @@ public class DocumentOptions
     // a bigger limit plus an honest warning rather than chunking.
     public int MaxStructureChars { get; set; } = 24000;
 
+    // The ceiling on what a .docx is allowed to expand to once unzipped, and the
+    // only limit here that exists purely for an attacker rather than for a user.
+    //
+    // MaxBytes bounds what arrives; it does not bound what that turns into. A
+    // .docx is a zip, and zip is a compressing format: a few hundred KB of
+    // deliberately crafted archive decompresses to gigabytes, which is a
+    // memory-exhaustion DoS that costs the attacker one small upload. The
+    // extractor therefore checks the archive's declared uncompressed total, and
+    // then checks the text it actually accumulates, because a crafted archive
+    // can lie about the first number.
+    //
+    // 64 MB is roughly thirteen times the input cap - far above any real resume
+    // (a text-heavy .docx unzips to perhaps 10x, and a resume is tens of KB
+    // either way) and far below the ratios a bomb needs to do damage.
+    public long MaxDecompressedBytes { get; set; } = 64 * 1024 * 1024;
+
     // The review queue is not paged — it is a list of things you have not
     // finished. This caps it so an unbounded query can never be issued.
     public int MaxListSize { get; set; } = 200;
@@ -83,6 +99,17 @@ public static class DocumentsModule
     {
         var group = app.MapGroup("/imports").WithTags("Documents");
 
+        // Resolved here rather than injected into the upload lambda because the
+        // size limits below are endpoint METADATA: they have to be known when the
+        // route is mapped, not when a request arrives. The lambda still takes
+        // DocumentOptions separately, for the check it makes on its own.
+        var uploadOptions = app.ServiceProvider.GetRequiredService<DocumentOptions>();
+
+        // The envelope a multipart body carries on top of the file itself:
+        // boundaries, part headers, and the three small text fields. 16 KB is far
+        // more than that costs and far less than a second file would.
+        const long MultipartEnvelopeSlack = 16 * 1024;
+
         // POST /imports — multipart/form-data: file, kind, and optionally label
         // and sourceUrl.
         //
@@ -111,11 +138,13 @@ public static class DocumentsModule
             DocumentOptions options,
             CancellationToken ct) =>
         {
-            // Checked against the declared length before a byte is read, so an
-            // oversized upload is refused rather than buffered and then refused.
-            // The extractor checks the real length again — this one is a claim by
-            // the client, and the authoritative check is over the bytes actually
-            // received.
+            // The friendly refusal, not the enforcing one. The limits attached
+            // to this route (see below) are what stop an oversized body from
+            // being read at all; by the time this line runs the form has already
+            // been bound, so anything still oversized here is within those
+            // limits and merely over the app's own cap. The extractor checks the
+            // real length again - file.Length is a claim by the client, and the
+            // authoritative check is over the bytes actually received.
             if (file.Length > options.MaxBytes)
                 return Results.BadRequest(
                     $"That file is {file.Length / 1024}KB. The limit is {options.MaxBytes / 1024}KB.");
@@ -139,6 +168,36 @@ public static class DocumentsModule
         // lands, this line is one of the things that has to be revisited, which
         // is why it is a paragraph and not a fluent call nobody reads.
         .DisableAntiforgery()
+        // -------------------------------------------------------------------
+        // Where the size cap is ACTUALLY enforced
+        // -------------------------------------------------------------------
+        // The `file.Length > MaxBytes` check inside the handler is not the first
+        // line of defence, and the comment above it used to imply it was. By the
+        // time a [FromForm] parameter is bound, ASP.NET Core has already read the
+        // whole multipart body — files over 64 KB spool to a temp file on disk —
+        // so without these two limits a 30 MB upload is written to disk in full
+        // and only then answered "the limit is 5120KB". The framework defaults
+        // are 128 MB for a multipart body and 30 MB for the request, both an
+        // order of magnitude above anything this endpoint wants.
+        //
+        // These two do the refusing, before the bytes are stored:
+        //   - multipartBodyLengthLimit stops the form reader mid-stream and is
+        //     what a client sending an oversized part actually hits.
+        //   - RequestSizeLimit is the belt to that braces: it bounds the whole
+        //     request, so a body that is oversized in some way the multipart
+        //     reader would not count still cannot get through.
+        //
+        // The handler's own check stays. It is cheap, it produces the friendly
+        // message with the real numbers in it, and it is the one that fires when
+        // a client declares a length under the cap — these limits are about what
+        // an attacker can make the server DO, not about what a user is told.
+        .WithFormOptions(multipartBodyLengthLimit: uploadOptions.MaxBytes)
+        // Attached as metadata rather than through a fluent helper because
+        // minimal APIs do not have one - RequestSizeLimitAttribute is an MVC
+        // type that also implements IRequestSizeLimitMetadata, which is what
+        // routing reads to set the request body limit for this endpoint.
+        .WithMetadata(new RequestSizeLimitAttribute(
+            uploadOptions.MaxBytes + MultipartEnvelopeSlack))
         .WithSummary("Upload a resume or job ad; returns a draft to review.");
 
         // GET /imports?status=AwaitingReview — the review queue. Defaults to what

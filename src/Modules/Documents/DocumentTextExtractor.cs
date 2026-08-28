@@ -1,4 +1,5 @@
 using System.Text;
+using System.IO.Compression;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Wordprocessing;
 using Jobkeep.Models;
@@ -152,6 +153,38 @@ public class DocumentTextExtractor : IDocumentTextExtractor
 
     private SliceResult<ExtractedDocument> ExtractDocx(byte[] bytes)
     {
+        // ---------------------------------------------------------------------
+        // Zip bomb guard, before OpenXml is handed the bytes
+        // ---------------------------------------------------------------------
+        // A .docx is a zip, so MaxBytes bounds the upload but not the work. This
+        // reads only the central directory - it decompresses nothing - and sums
+        // what the archive CLAIMS each entry unzips to. A bomb that declares its
+        // real size dies here, cheaply, before OpenXml opens a single part.
+        //
+        // A crafted archive can of course understate those numbers, which is why
+        // this is not the only check: the accumulation loop below bounds the text
+        // that actually comes out. Two cheap bounds beat one clever one.
+        try
+        {
+            using var probe = new MemoryStream(bytes, writable: false);
+            using var archive = new ZipArchive(probe, ZipArchiveMode.Read);
+
+            long declared = 0;
+            foreach (var entry in archive.Entries)
+            {
+                declared += entry.Length;
+                if (declared > _options.MaxDecompressedBytes)
+                    return SliceResult<ExtractedDocument>.Invalid(
+                        "That .docx unpacks to far more than a document should. "
+                        + "It has been refused rather than opened.");
+            }
+        }
+        catch (InvalidDataException)
+        {
+            return SliceResult<ExtractedDocument>.Invalid(
+                "That file is a zip archive but its contents could not be read.");
+        }
+
         string text;
         try
         {
@@ -170,7 +203,18 @@ public class DocumentTextExtractor : IDocumentTextExtractor
             // body. Walking descendants picks them up in document order.
             var builder = new StringBuilder();
             foreach (var paragraph in body.Descendants<Paragraph>())
+            {
                 builder.AppendLine(paragraph.InnerText);
+
+                // The second bound, over what actually came out rather than what
+                // the archive declared. Rejecting rather than truncating: half a
+                // resume imported silently is worse than an honest refusal, and
+                // nothing legitimate reaches this size.
+                if (builder.Length > _options.MaxDecompressedBytes)
+                    return SliceResult<ExtractedDocument>.Invalid(
+                        "That .docx contains far more text than a document should. "
+                        + "It has been refused rather than parsed.");
+            }
 
             text = builder.ToString();
         }

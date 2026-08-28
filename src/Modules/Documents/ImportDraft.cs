@@ -220,6 +220,57 @@ internal sealed class RequirementExtraction
     public bool MustHave { get; set; }
 }
 
+// Column widths the draft has to respect, in one place.
+//
+// Only Label is here, and only because THREE places need to agree on it:
+// ImportDocument validates a user-supplied label against it, clips a
+// filename-derived default to it, and CommitImport validates it again at the
+// gate. The rest of the widths live as literals beside CommitImport's Clip
+// calls, because each is used exactly once and a table of constants far from
+// the code that uses them is harder to check against the migration, not easier.
+internal static class DraftLimits
+{
+    public const int MaxLabelLength = 100;
+}
+
+// ---------------------------------------------------------------------------
+// Null collections are a JSON problem, not a C# one
+// ---------------------------------------------------------------------------
+// The records above declare their lists non-nullable, and under nullable
+// reference types that reads like a guarantee. It is not one across a
+// deserializer: System.Text.Json does not enforce NRT annotations, so a PUT body
+// of {"resume":{"label":"x"}} binds Skills, Experience and Education as null and
+// the compiler never sees it. The commit then walks those lists and the user gets
+// a 500 for a request that was merely incomplete.
+//
+// Coalescing is the right answer rather than rejecting: a client sending only the
+// fields it changed is being reasonable, and an absent list means "no items",
+// which is a draft this feature must be able to express anyway — a resume with no
+// education section is normal.
+//
+// Applied on the way IN (ReviewImport, before the draft is stored) and on the way
+// OUT (ImportDocumentHandler.ReadDraft), because rows written before this existed
+// can already hold nulls. One level down too: sanitising the top-level lists is
+// not enough when the objects inside them carry lists of their own.
+internal static class DraftSanitiser
+{
+    public static ImportDraft Sanitise(this ImportDraft draft) =>
+        new(Sanitise(draft.Resume), Sanitise(draft.Posting));
+
+    private static ResumeDraft? Sanitise(ResumeDraft? d) => d is null ? null : d with
+    {
+        Skills = d.Skills ?? [],
+        Experience = (d.Experience ?? []).Select(x => x with { Highlights = x.Highlights ?? [] }).ToList(),
+        Education = d.Education ?? []
+    };
+
+    private static PostingDraft? Sanitise(PostingDraft? d) => d is null ? null : d with
+    {
+        Skills = d.Skills ?? [],
+        Requirements = d.Requirements ?? []
+    };
+}
+
 // Turns the model's shapes into the public draft shapes, dropping the empty
 // strings the schema forces the model to emit.
 //

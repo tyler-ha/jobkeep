@@ -1,7 +1,9 @@
 # Phase 4.5 — Document import: upload, parse, confirm, save
 
-**Status: Done** (2026-08-27). Built, tested (171 tests green), and checked by
-hand against the real model.
+**Status: Done** (2026-08-27), reviewed and hardened before merge (2026-08-28).
+Built, tested (**184 tests green**, up from 171), and checked by hand against the
+real model. Ten defects found by the pre-merge review are fixed and pinned - see
+"Pre-merge review" below, which is the most useful section in this document.
 
 > Numbered 4.5 rather than inserted as a new 5 on purpose. Renumbering the phase
 > docs cost 10.2M tokens the one time it was done (see `CLAUDE.md`, "Build cost"),
@@ -250,19 +252,123 @@ and it is the concrete return on decision 1.
   single-user local database, never deployed, the column was Phase 5 scaffolding
   no endpoint meaningfully filled. The migration says so in a comment.
 
+## Pre-merge review — what a second read found
+
+The module was built, tested and committed in one session, and **nobody had read
+it since**. Before opening the PR it got a deliberate review, on the grounds that
+it is the first code in this project that accepts a file from outside. Ten
+defects came out, and all ten are now fixed with a regression test each
+(`tests/Jobkeep.Tests/Documents/ImportHardeningTests.cs`, plus two in
+`ExtractionTests.cs`).
+
+**The tests were verified by breaking the code again.** Every fix was reverted and
+the suite re-run: all ten failed, and the three “the guard does not also refuse
+the real thing” tests still passed. A regression test that has never seen the bug
+it names is a comment with a `[Fact]` on it.
+
+### The one worth remembering as a general fact
+
+**`System.Text.Json` does not enforce nullable reference types.** `List<string>
+Skills` on a record is a compile-time claim with no runtime enforcement: a PUT
+body that simply omits `skills` deserializes it to `null`, stores `null`, and the
+confirm that reads it back dereferences `null` — a 500 for a request whose only
+sin was leaving a field out, which is the most ordinary thing a client does.
+
+The fix is `DraftSanitiser` in `ImportDraft.cs`, applied at three boundaries: on
+the way in (`ReviewImport`), on the way out (`ImportDocument.ReadDraft`, which
+also covers rows written before it existed), and one level down, because
+sanitising the top-level lists is not enough when the objects inside them carry
+lists of their own.
+
+### The pattern the ten share
+
+An import carries content from three sources with three different trust levels —
+**a document, a language model, and a person** — and almost every defect was a
+place where the code treated one of them like another.
+
+| # | Defect | Trust confusion |
+|---|---|---|
+| 1 | Null collections from a partial PUT crashed the confirm | Deserializer output trusted to honour the C# types |
+| 2 | Model fields wider than their columns → 22001 → unhandled 500 | Model output trusted to fit the schema |
+| 3 | A user-typed label was silently truncated at upload but rejected at confirm | Two gates disagreeing about the same value |
+| 4 | A 250-character filename became a label the column could not hold | Filename trusted as a default |
+| 5 | The label was dropped entirely when the model failed | The degraded path forgot the user's own input |
+| 6 | Rejected requirements were dropped in silence | Partial success reported as success |
+| 7 | The posting commit was not atomic — an application could exist with none of its skills | Multi-step write without a transaction |
+| 8 | `resumeId` was handed to EF unchecked → FK violation → 500 | A foreign key trusted to point at something |
+| 9 | The 5 MB cap was not enforced where the comment said it was | A check placed after the bytes were already buffered |
+| 10 | A `.docx` is a zip, and nothing bounded what it decompressed to | Input size trusted to bound the work |
+
+Two more that are not defects but were tightened in the same pass: a client
+cancelling an upload was being reported as an Ollama outage
+(`DocumentStructurer`'s catch filter now distinguishes them), and the posting
+commit now runs inside an explicit transaction — safe to add because the app
+configures no retrying execution strategy.
+
+### The two that are actually about the attack surface
+
+**9 — the size cap was documentation, not enforcement.** The handler's
+`file.Length > MaxBytes` check runs *after* `[FromForm]` binding, and binding
+reads the whole multipart body first, spooling anything over 64 KB to a temp
+file. The framework defaults are 128 MB for a multipart body and 30 MB for the
+request. So a 30 MB upload was written to disk in full and only then answered
+“the limit is 5120KB”. The cap is now endpoint metadata —
+`WithFormOptions(multipartBodyLengthLimit:)` plus `RequestSizeLimitAttribute` —
+so the refusal happens mid-stream. The handler's check stays: it is what produces
+the friendly message with the real numbers in it.
+
+**10 — the input cap bounded what arrived, not what it became.** A `.docx` is a
+zip, and zip compresses: a few hundred KB of crafted archive decompresses to
+gigabytes. `MaxDecompressedBytes` (64 MB, ~13x the input cap) is now checked
+twice — once against the archive's declared uncompressed total, read from the
+central directory without decompressing anything, and once against the text
+actually accumulated, because a crafted archive can understate the first number.
+Two cheap bounds beat one clever one. The test builds a real zip that is under
+64 KB and claims 4 MB.
+
+This one is the reason the review was worth doing at all. Everything else on the
+list is a 500 someone would have hit and reported; this is the one an attacker
+reaches with a single small upload, and no test would ever have found it by
+accident.
+
+### One decision the review settled rather than found
+
+**Model output is clipped; a label the user typed is refused.** The asymmetry is
+deliberate and now consistent across both gates. A model asked to copy a job
+title out of a resume will occasionally return the whole line it found it on —
+nothing the user did caused that and nothing they can do fixes it, so shortening
+it and committing beats a hard failure, which is the same call the review screen
+already embodies. A label is the one field on that screen the user typed
+themselves, so silently storing something else is the worse failure — and a
+clipped label could collide with an existing one under the uniqueness rule.
+`DraftLimits.MaxLabelLength` is the single number all three places now read.
+
+### One thing the review looked for and did not find
+
+The filename handling was already right: `Path.GetFileName` plus truncation, used
+only as a display label, with the bytes never touching a filesystem path. That is
+decision 5 paying for itself — the traversal class is unreachable rather than
+mitigated.
+
 ## Security
 
 File upload is the biggest change to this app's risk profile since it was written.
 What was done, none of it expensive:
 
-- **Size cap enforced before anything parses** (5 MB), checked twice: against the
-  declared length at the endpoint, then against the bytes actually received.
+- **Size cap enforced before anything parses** (5 MB), and enforced where it says
+  it is — as endpoint metadata (`multipartBodyLengthLimit` + a request size
+  limit), so an oversized body is refused mid-stream rather than spooled to disk
+  and then refused. The handler's own check remains for the friendly message, and
+  the extractor checks the bytes actually received. See “Pre-merge review”, 9.
 - **Content sniffing, not extension trust** — magic bytes decide the format.
 - **Nothing reaches a filesystem path.** No file is ever written, so the
   filename-traversal class is unreachable rather than mitigated. This is the
   strongest argument for decision 5.
 - **Parsers treated as processing hostile input** — a malformed PDF or zip returns
   400, never an unhandled 500.
+- **Zip bombs bounded** (review finding 10). A `.docx` is a zip, so the upload cap
+  does not bound the work: `MaxDecompressedBytes` (64 MB) is checked against the
+  archive's declared uncompressed total *and* against the text actually extracted.
 - **Invalid UTF-8 is refused**, not silently replaced with U+FFFD.
 - **The list endpoint never returns résumé text**, matching the Phase 2.3 fix that
   removed `ResumeText` from the list projection.

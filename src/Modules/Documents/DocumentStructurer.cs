@@ -137,7 +137,14 @@ public class DocumentStructurer : IDocumentStructurer
         {
             response = await _chat.GetResponseAsync(prompt, chatOptions, ct);
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        // The `ct` guard keeps a caller who hung up out of this branch. A cancelled
+        // request surfaces as TaskCanceledException too, and without the guard an
+        // ordinary browser navigation away from the upload page was reported — and
+        // logged — as "Ollama is down", which is a false alarm about the one
+        // dependency most likely to actually be down. Cancellation is rethrown and
+        // handled as cancellation.
+        catch (Exception ex) when (ex is HttpRequestException
+                                   || (ex is TaskCanceledException && !ct.IsCancellationRequested))
         {
             // The model server being down is operational, not the caller's fault,
             // and there is no SliceResult status for "dependency unavailable".
