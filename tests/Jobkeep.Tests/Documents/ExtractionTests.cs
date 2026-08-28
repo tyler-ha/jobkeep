@@ -209,6 +209,53 @@ public class ExtractionTests
         Assert.Equal("Jane Doe\n\nEXPERIENCE\n\nCanva", result.Value!.Text);
     }
 
+    // ------------------------------------------------- two columns (Phase 4.5b)
+
+    [Fact]
+    public void TwoColumnPdf_KeepsEachColumnTogether_RatherThanInterleavingThem()
+    {
+        // The defect a real exported CV found, reduced to one fixture.
+        //
+        // A PDF stores glyphs with coordinates, not a document. Nothing in the
+        // format records that a page has two columns, so an extractor that
+        // trusts the order the content stream happens to draw in emits a sidebar
+        // and a body zipped together line by line. two-column.pdf writes its
+        // operators in exactly that interleaved order, on purpose, so the old
+        // behaviour is reproducible rather than anecdotal:
+        //
+        //     CONTACT           EXPERIENCE          <- one line, both columns
+        //     jane@example.test Northwind Traders
+        //
+        // Which is not a cosmetic problem. It destroys WHICH FACTS BELONG
+        // TOGETHER, and everything downstream inherits that: on the real resume
+        // this was found with, every genuine skill was missed because the skills
+        // lived in body bullets while the text sitting where skills belonged had
+        // come from the other column.
+        var extracted = Extract("two-column.pdf");
+
+        // The failing assertion, stated as the thing a reader can picture: no
+        // single line may carry text from both columns.
+        Assert.DoesNotContain("CONTACT EXPERIENCE", extracted.Text);
+        Assert.DoesNotContain("jane@example.test Northwind", extracted.Text);
+
+        // And the positive half - each column arrives contiguous, so a consumer
+        // can tell an employer from the line under it.
+        Assert.Contains("Northwind Traders\nSenior Engineer", extracted.Text);
+        Assert.Contains("jane@example.test\n0400 000 000", extracted.Text);
+
+        // Nothing was dropped on the way. A reading-order fix that loses text is
+        // a worse bug than the one it fixes, and a segmenter that mis-groups can
+        // do exactly that.
+        foreach (var line in new[]
+                 {
+                     "CONTACT", "jane@example.test", "0400 000 000", "Melbourne",
+                     "SKILLS", "PostgreSQL", "EXPERIENCE", "Northwind Traders",
+                     "Senior Engineer", "Cut median settlement latency by forty percent.",
+                     "Contoso Freight", "Engineer"
+                 })
+            Assert.Contains(line, extracted.Text);
+    }
+
     // ------------------------------------------------------- zip bomb (review)
 
     /// <summary>

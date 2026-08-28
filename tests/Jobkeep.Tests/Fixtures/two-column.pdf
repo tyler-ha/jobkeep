@@ -1,0 +1,49 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 577 >>
+stream
+BT
+/F1 11 Tf
+1 0 0 1 56 760 Tm (CONTACT) Tj
+1 0 0 1 250 760 Tm (EXPERIENCE) Tj
+1 0 0 1 56 738 Tm (jane@example.test) Tj
+1 0 0 1 250 738 Tm (Northwind Traders) Tj
+1 0 0 1 56 716 Tm (0400 000 000) Tj
+1 0 0 1 250 716 Tm (Senior Engineer) Tj
+1 0 0 1 56 694 Tm (Melbourne) Tj
+1 0 0 1 250 694 Tm (Built payment reconciliation services in C#.) Tj
+1 0 0 1 56 672 Tm (SKILLS) Tj
+1 0 0 1 250 672 Tm (Cut median settlement latency by forty percent.) Tj
+1 0 0 1 56 650 Tm (C#) Tj
+1 0 0 1 250 650 Tm (Contoso Freight) Tj
+1 0 0 1 56 628 Tm (PostgreSQL) Tj
+1 0 0 1 250 628 Tm (Engineer) Tj
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000121 00000 n 
+0000000247 00000 n 
+0000000875 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+972
+%%EOF

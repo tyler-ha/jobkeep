@@ -1,7 +1,9 @@
 # Phase 4.5 — Document import: upload, parse, confirm, save
 
-**Status: Done** (2026-08-27), reviewed and hardened before merge (2026-08-28).
-Built, tested (**184 tests green**, up from 171), and checked by hand against the
+**Status: Done** (2026-08-27), reviewed and hardened before merge (2026-08-28),
+then tested against a real exported CV, which forced the PDF extractor to be
+rewritten (2026-08-28).
+Built, tested (**185 tests green**, up from 171), and checked by hand against the
 real model. Ten defects found by the pre-merge review are fixed and pinned - see
 "Pre-merge review" below, which is the most useful section in this document.
 
@@ -350,6 +352,91 @@ only as a display label, with the bytes never touching a filesystem path. That i
 decision 5 paying for itself — the traversal class is unreachable rather than
 mitigated.
 
+## The real-CV test — and the extractor rewrite it forced
+
+Run 2026-08-28 against a real two-page CV exported from a word processor, through
+the live app on real Postgres and real Ollama. It is the by-hand check the
+fixtures section said was needed, and it found what that section predicted.
+
+**The pipeline worked: 201 in 15.7s, one `document_imports` row, nothing else
+written.** The model reassembled employer, title and date range from three
+clusters sitting ten lines apart in the extracted text — genuinely good work.
+
+**And the extraction underneath it was wrong.** The CV is a sidebar layout, and
+`ContentOrderTextExtractor` orders by the content stream, so it emitted every
+date, then every section heading, then every employer, each cluster torn from the
+entries it belonged to — and two columns of one line concatenated without even a
+space:
+
+```
+'Learning Management Platform courseSoftware Architecture'
+```
+
+Everything downstream inherited it. Most damagingly, **all four extracted skills
+were wrong** — they were LinkedIn Learning course titles that happened to sit
+where skills belong, while every real skill (Python, Docker, PostgreSQL, ReactJS,
+Spring Boot, AWS, OpenCV, TensorFlow, Flask) was inside body bullets and missed
+entirely. For a feature whose whole point is feeding Phase 5's skills-gap join,
+that is a total failure wearing a 201.
+
+### What replaced it
+
+PdfPig's document-layout analysis, already in the referenced package — **no new
+dependency**: `NearestNeighbourWordExtractor` → `DocstrumBoundingBoxes` →
+`UnsupervisedReadingOrderDetector`. Glyphs to words by spacing, words to blocks
+by density, blocks to reading order. Blocks are then separated by a blank line,
+which the old path could not do at all, so the model receives paragraph
+boundaries instead of one undifferentiated wall.
+
+Measured on the same CV, same model, same prompt:
+
+| | Before | After |
+|---|---|---|
+| Skills | **4, all wrong** | **22, every real one found** |
+| Date ranges | all in `start`, `end` null | correctly split |
+| Experience entries | 3, with two projects merged | 4, separated |
+| Full name | correct | **lost** |
+
+### The segmenter was chosen by measurement, not by reading docs
+
+`RecursiveXYCut` looked better on paper for a Manhattan layout and isolated the
+sidebar more cleanly in the raw text. Through the model it was **much worse**: it
+returned the "Skills and Ability" soft-skill sentences as skills and gave all
+five experience entries the same employer. `DefaultPageSegmenter` preserved the
+name but bled contact details back into the experience bullets.
+
+Docstrum won on the thing that matters and lost on a field the user types anyway.
+Worth stating plainly because it is the whole argument for testing through the
+real surface: **the raw text that reads best to a human was not the one that
+parsed best.**
+
+### What it still gets wrong, recorded not fixed
+
+- **Letter-spaced headings** (`M a s t e r  o f  I T`) split into single
+  characters — tracking makes letter gaps as wide as word gaps, and no geometry
+  distinguishes them. This is what costs the full name.
+- **A narrow date column** still segments as its own block, so dates arrive
+  detached from their entries. The model mostly recovers them; it did not before.
+- **Employer/title pairing** is still unreliable across a sidebar.
+
+All three are recoverable at the review screen, and none destroys which facts
+belong together — which is the line. The accepted cost of the fix, stated: this
+is a heuristic over geometry and it can mis-segment an unusual layout, where the
+old path was merely deterministic about being wrong. A wrong **order** is
+recoverable by the model and by a human; the old failure silently destroyed
+**association**.
+
+### The over-fitting risk, said out loud
+
+This was tuned against **one** document. One CV is not a corpus, and the
+comparison above could be measuring what suits this layout rather than what suits
+resumes. Two things limit the damage: the committed fixture
+(`tests/Jobkeep.Tests/Fixtures/two-column.pdf`) is synthetic and minimal rather
+than a copy of the CV, so the test pins the *principle* — columns stay separate —
+and not this document's quirks; and the suite's 185 tests, including every
+existing PDF assertion, pass unchanged. The next real CV should be run through it
+before the choice is treated as settled.
+
 ## Security
 
 File upload is the biggest change to this app's risk profile since it was written.
@@ -382,10 +469,12 @@ and no cookies, and is one of the things that must be revisited when auth lands.
 ## Known gaps
 
 - **Requirement `Kind` is unreliable** (finding 2). Fix it on the review screen.
-- **No real-word-processor PDF in the fixtures.** The checked-in PDF is
-  hand-assembled; multi-column layouts, subset fonts and kerning written as
-  individual `Tj` operators are where PDF extraction gets genuinely hard, and none
-  is exercised. The by-hand check is what covers it.
+- **Real-word-processor PDFs are partly covered now.** Multi-column layout was the
+  hole this bullet named, a real CV fell straight into it, and the fix plus a
+  synthetic `two-column.pdf` fixture closed it — see “The real-CV test” above.
+  Still open: subset fonts, ligatures, letter-spaced headings (which cost the
+  full name) and a narrow date column. The by-hand check remains what covers
+  those, and it is worth repeating on the next real CV.
 - **Case-sensitive dedup** applies to `resumes.Label` too, deliberately (decision 2).
 - **No OCR**, so a scanned PDF cannot be imported. It is detected and reported
   rather than stored as an empty resume.

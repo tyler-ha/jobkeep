@@ -16,6 +16,7 @@ the extractor's entire job is to deal with the file formats.
 | `resume.docx` | A minimal Word package whose **last two lines are inside a table** | That extraction walks `Descendants<Paragraph>()`. Resume templates lay out contact and skills blocks in tables, and a paragraph in a cell is not a child of the body |
 | `resume.txt` | The same content as plain UTF-8 | The plain-text path, and content-sniffing (it is also uploaded as `.md` in one test) |
 | `legacy.doc` | An OLE2 signature and 512 zero bytes | The pre-2007 `.doc` refusal. Only the signature matters — the point is that it is detected and rejected with an actionable message, not parsed |
+| `two-column.pdf` | A sidebar and a body whose text operators are written **interleaved** — sidebar line, body line, sidebar line | Reading order. An extractor that trusts the content stream emits `CONTACT EXPERIENCE` as one line; only one that reconstructs order from glyph coordinates puts each column back. Added after a real exported CV proved the old path wrong |
 
 ## Provenance
 
@@ -32,8 +33,21 @@ from the table above.
 
 ## What they do NOT cover
 
-A PDF produced by a **real** word processor — multi-column layouts, embedded
-subset fonts, ligatures, kerning written as individual `Tj` operators. Those are
-where PDF extraction gets genuinely hard, and none of them is exercised here.
-The by-hand check against a real exported resume is what covers that, and the
-Phase 4.5 doc records what it found.
+Multi-column layout **is** covered now, by `two-column.pdf`, and the story of how
+it got here is the argument for by-hand checks: the gap was recorded in this file
+as a known hole, a real exported CV was uploaded, and it failed exactly where the
+hole said it would. The fixture is the reduction of that failure to one page.
+
+Still not covered, and still where PDF extraction gets genuinely hard: embedded
+**subset fonts**, ligatures, and kerning written as individual `Tj` operators.
+Two more from the same real CV, both of which the fix does *not* solve:
+
+- **Letter-spaced headings.** A title tracked out for effect (`M a s t e r`) has
+  letter gaps as wide as word gaps, so the word extractor splits it into single
+  characters. Nothing in the geometry distinguishes the two cases.
+- **A narrow date column.** Dates in their own column, vertically offset from the
+  entries they belong to, segment as their own block and arrive detached.
+
+Both are recorded rather than fixed, because both are recoverable at the review
+screen and neither destroys which facts belong together — which is the line this
+phase draws. See the Phase 4.5 doc, "The real-CV test".

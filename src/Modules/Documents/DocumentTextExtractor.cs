@@ -5,7 +5,10 @@ using DocumentFormat.OpenXml.Wordprocessing;
 using Jobkeep.Models;
 using Jobkeep.Shared;
 using UglyToad.PdfPig;
+using UglyToad.PdfPig.DocumentLayoutAnalysis.PageSegmenter;
+using UglyToad.PdfPig.DocumentLayoutAnalysis.ReadingOrderDetector;
 using UglyToad.PdfPig.DocumentLayoutAnalysis.TextExtractor;
+using UglyToad.PdfPig.DocumentLayoutAnalysis.WordExtractor;
 
 namespace Jobkeep.Modules.Documents;
 
@@ -109,16 +112,73 @@ public class DocumentTextExtractor : IDocumentTextExtractor
             using var stream = new MemoryStream(bytes, writable: false);
             using var pdf = PdfDocument.Open(stream);
 
-            // ContentOrderTextExtractor rather than page.Text: the raw text
-            // property returns glyphs in the order the content stream happens to
-            // draw them, which for a two-column resume interleaves the columns
-            // into nonsense. This one orders by the document's content structure,
-            // which is right far more often and never worse.
+            // -----------------------------------------------------------------
+            // Reading order is reconstructed from geometry, not taken on trust
+            // -----------------------------------------------------------------
+            // A PDF stores glyphs with coordinates, not a document. Nothing in
+            // the format records that a page has two columns, so "the order of
+            // the text" is a question every extractor has to answer for itself,
+            // and the cheap answers are wrong on exactly the documents this
+            // feature exists for.
+            //
+            // This used to call ContentOrderTextExtractor, whose comment claimed
+            // it was "right far more often and never worse". A real two-column
+            // resume disproved the second half: it orders by the content stream,
+            // so a sidebar layout came out as every date, then every section
+            // heading, then every employer - each cluster torn from the entries
+            // it belonged to, and two columns of one line concatenated without
+            // even a space ("...Platform courseSoftware Architecture"). The model
+            // downstream then had to reassemble a document from confetti. It did
+            // better than expected and still lost every real skill, because the
+            // skills were in bullets and the things sitting where skills belong
+            // were course titles from the other column.
+            //
+            // The three-stage pipeline below is PdfPig's document-layout
+            // analysis, already in the referenced package - no new dependency:
+            //
+            //   1. NearestNeighbourWordExtractor  glyphs -> words, by spacing
+            //   2. DocstrumBoundingBoxes          words  -> blocks, by density
+            //   3. UnsupervisedReadingOrderDetector  blocks -> reading order
+            //
+            // Step 2 is what understands columns: Docstrum measures the spacing
+            // between nearest-neighbour words and groups what is genuinely
+            // adjacent, so a sidebar becomes its own blocks rather than being
+            // interleaved with the body. Step 3 then orders those blocks the way
+            // a person reads them.
+            //
+            // The cost, stated: this is a heuristic over geometry and it can
+            // mis-segment an unusual layout, where the old path was merely
+            // deterministic about being wrong. That trade is worth taking because
+            // a wrong ORDER is recoverable by the model and by the human review
+            // screen, while the old failure silently destroyed which facts
+            // belonged together.
             var builder = new StringBuilder();
             foreach (var page in pdf.GetPages())
             {
-                builder.AppendLine(ContentOrderTextExtractor.GetText(page));
-                builder.AppendLine();
+                var words = page.GetWords(NearestNeighbourWordExtractor.Instance);
+                var blocks = DocstrumBoundingBoxes.Instance.GetBlocks(words);
+
+                if (blocks.Count == 0)
+                {
+                    // Segmentation found nothing to group - a page of pure
+                    // graphics, or a layout Docstrum could not read. Fall back
+                    // rather than silently dropping the page; the old extractor
+                    // is still better than nothing, and this is the only path on
+                    // which it runs.
+                    builder.AppendLine(ContentOrderTextExtractor.GetText(page));
+                    builder.AppendLine();
+                    continue;
+                }
+
+                // A blank line between blocks, which the old path could not
+                // provide at all. Blocks are semantic groups, so this hands the
+                // model paragraph boundaries instead of one undifferentiated
+                // wall - the same structure Normalise() preserves deliberately.
+                foreach (var block in UnsupervisedReadingOrderDetector.Instance.Get(blocks))
+                {
+                    builder.AppendLine(block.Text);
+                    builder.AppendLine();
+                }
             }
             text = builder.ToString();
         }
