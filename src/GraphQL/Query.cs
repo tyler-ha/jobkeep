@@ -1,6 +1,7 @@
 using Jobkeep.Modules.Ai;
 using Jobkeep.Modules.Analytics;
 using Jobkeep.Modules.Applications;
+using Jobkeep.Modules.Ats;
 using Jobkeep.Modules.Documents;
 using Jobkeep.Models;
 
@@ -102,4 +103,14 @@ public class Query
         [Service] GetImportHandler handler,
         CancellationToken ct)
         => (await handler.HandleAsync(id, ct)).ValueOrThrow();
+
+    // Phase 5 — the stored ATS check. A query, not a mutation, because it reads
+    // and nothing else; the checkAts mutation is what computes it. Same split as
+    // analysis/analyzePosting above, and for the same reason: the answer is
+    // stored so that reading it back cannot quietly become a different answer.
+    public async Task<AtsCheckResponse> GetAtsResult(
+        Guid applicationId,
+        [Service] GetAtsResultHandler handler,
+        CancellationToken ct)
+        => (await handler.HandleAsync(applicationId, ct)).ValueOrThrow();
 }

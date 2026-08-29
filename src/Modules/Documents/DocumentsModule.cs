@@ -91,6 +91,7 @@ public static class DocumentsModule
         services.AddScoped<RestructureImportHandler>();
         services.AddScoped<CommitImportHandler>();
         services.AddScoped<DiscardImportHandler>();
+        services.AddScoped<AddSkillToResumeHandler>();
 
         return services;
     }
@@ -249,6 +250,25 @@ public static class DocumentsModule
             DiscardImportHandler handler,
             CancellationToken ct) =>
             (await handler.HandleAsync(id, ct)).ToHttpResult(_ => Results.NoContent()));
+
+        // A second group, under a second path prefix, in the same module — because
+        // a module owns its routes, and Documents owns `resume_skills`. The URL
+        // follows the resource (/resumes/...) while the code follows the owner, the
+        // same split AiModule.cs makes when it maps routes under /applications.
+        var resumes = app.MapGroup("/resumes").WithTags("Documents");
+
+        // POST /resumes/{id}/skills — add a skill to a resume by name.
+        //
+        // The mirror of POST /applications/{id}/skills, and the first write to
+        // `resume_skills` outside the import cycle. See AddSkillToResume.cs for why
+        // that asymmetry was worth closing.
+        resumes.MapPost("/{id:guid}/skills", async (
+            Guid id,
+            AddSkillToResumeRequest request,
+            AddSkillToResumeHandler handler,
+            CancellationToken ct) =>
+            (await handler.HandleAsync(id, request, ct)).ToHttpResult())
+            .WithSummary("Add a skill to a resume, reusing the shared skill row.");
 
         return app;
     }

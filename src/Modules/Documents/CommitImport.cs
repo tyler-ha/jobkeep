@@ -131,7 +131,11 @@ public class CommitImportHandler
             // exactly the layer this phase exists to make optional.
             SourceText = import.ExtractedText,
             SourceFileName = import.FileName,
-            SourceHash = import.ContentHash
+            SourceHash = import.ContentHash,
+            // Phase 5 reads this to decide whether to warn about PDF layout.
+            // It is the format extraction DETECTED from the bytes, so a .docx
+            // renamed to .pdf does not trigger a PDF warning.
+            SourceFormat = import.Format
         };
 
         var ordinal = 0;

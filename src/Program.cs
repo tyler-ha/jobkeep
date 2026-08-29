@@ -4,6 +4,7 @@ using Jobkeep.GraphQL;
 using Jobkeep.Modules.Ai;
 using Jobkeep.Modules.Analytics;
 using Jobkeep.Modules.Applications;
+using Jobkeep.Modules.Ats;
 using Jobkeep.Modules.Documents;
 using Jobkeep.Shared;
 using Microsoft.EntityFrameworkCore;
@@ -47,6 +48,13 @@ builder.Services.AddModelClient(builder.Configuration);
 // into real rows. Reaches Applications through IPostingContract and through that
 // module's own use-case handlers, never its tables directly.
 builder.Services.AddDocumentsModule(builder.Configuration);
+
+// Phase 5. Owns `ats_results` and reads five tables it does not own — posting
+// skills, skills and requirements from Applications, resumes and resume skills
+// from Documents. No contract, and no IConfiguration: architecture.md decision 17
+// makes a cross-module *read* ordinary, and the two limits this module imposes on
+// its one model call are constants rather than settings (AtsModule.cs).
+builder.Services.AddAtsModule();
 
 builder.Services.ConfigureHttpJsonOptions(o =>
 {
@@ -109,6 +117,9 @@ app.MapAiModule();
 
 // Every /imports route: upload, review, correct, confirm, discard.
 app.MapDocumentsModule();
+
+// The ATS check, GET and POST, under /applications/{id}/ats-check.
+app.MapAtsModule();
 
 // Serves POST /graphql for queries + the Nitro (Banana Cake Pop) IDE at GET /graphql.
 app.MapGraphQL();

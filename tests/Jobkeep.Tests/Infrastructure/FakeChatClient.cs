@@ -36,12 +36,33 @@ public sealed class FakeChatClient(string json) : IChatClient
     /// <summary>The prompt the analyzer actually sent, for tests that assert on it.</summary>
     public string? LastPrompt { get; private set; }
 
+    /// <summary>
+    /// When set, every call throws this instead of answering — the model server being
+    /// unreachable.
+    ///
+    /// <para>
+    /// Added in Phase 5, and it tests something the canned-reply mode cannot. The ATS
+    /// check has four stages and only one of them needs a model, so an outage there is
+    /// supposed to <em>degrade</em>: it returns the skill gap and the formatting notes
+    /// with a warning rather than failing. That is a behavioural promise, and the only
+    /// way to hold it to account is to make the model actually fail. Phase 4's analyzer
+    /// takes the opposite path on purpose — there the model IS the feature — so this
+    /// flag is what lets both be asserted rather than assumed.
+    /// </para>
+    /// </summary>
+    public Exception? Throws { get; init; }
+
+    /// <summary>A fake standing in for `ollama serve` not running.</summary>
+    public static FakeChatClient Unreachable() =>
+        new("{}") { Throws = new HttpRequestException("Connection refused (localhost:11434)") };
+
     public Task<ChatResponse> GetResponseAsync(
         IEnumerable<ChatMessage> messages,
         ChatOptions? options = null,
         CancellationToken cancellationToken = default)
     {
         LastPrompt = string.Join("\n", messages.Select(m => m.Text));
+        if (Throws is not null) throw Throws;
         return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, json)));
     }
 

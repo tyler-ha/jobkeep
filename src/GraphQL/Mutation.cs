@@ -1,5 +1,6 @@
 using Jobkeep.Modules.Ai;
 using Jobkeep.Modules.Applications;
+using Jobkeep.Modules.Ats;
 using Jobkeep.Modules.Documents;
 
 namespace Jobkeep.GraphQL;
@@ -109,4 +110,26 @@ public class Mutation
         Guid id,
         [Service] DiscardImportHandler handler, CancellationToken ct)
         => (await handler.HandleAsync(id, ct)).ValueOrThrow();
+
+    // The resume-side mirror of addSkillToPosting, and the first write to
+    // `resume_skills` that is not part of the import cycle. Both halves of the
+    // shared-skills join are now editable by hand on both surfaces, which is what
+    // lets a user correct an ATS near-miss (the resume that says PostgreSQL in
+    // prose and SQL in its skill list) without re-importing the document.
+    public async Task<ResumeSkillResponse> AddSkillToResume(
+        Guid resumeId, AddSkillToResumeRequest input,
+        [Service] AddSkillToResumeHandler handler, CancellationToken ct)
+        => (await handler.HandleAsync(resumeId, input, ct)).ValueOrThrow();
+
+    // Phase 5 — the ATS check. A mutation because it writes an ats_results row,
+    // even though most of what it does is read.
+    //
+    // `resumeId` is nullable on both surfaces and means the same thing on both:
+    // omit it to check against the resume the application was sent with. That is
+    // the handler's rule, not this adapter's — the surfaces cannot disagree about
+    // it because neither of them decides it.
+    public async Task<AtsCheckResponse> CheckAts(
+        Guid applicationId, Guid? resumeId,
+        [Service] CheckAtsHandler handler, CancellationToken ct)
+        => (await handler.HandleAsync(applicationId, resumeId, ct)).ValueOrThrow();
 }
