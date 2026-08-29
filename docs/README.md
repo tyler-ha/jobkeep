@@ -34,7 +34,8 @@ phase doc is a historical record, not a description of the current tree.
 | 4 | [AI job-description analyzer](phases/phase-4-ai-analyzer.md) | **Done** — tests verified during Phase 4.5, all 10 passed unchanged |
 | 4.5 | [Document import: upload, parse, confirm, save](phases/phase-4.5-resume-import.md) | **Done** — PDF/DOCX/text → draft → human confirm → rows |
 | 5 | [ATS compatibility check](phases/phase-5-ats-check.md) | **Done** — skill gap is a SQL join, not a model call; degrades when the model is down |
-| 6 | [Front end](phases/phase-6-frontend.md) | Design approved, build not started |
+| 6 | [Front end](phases/phase-6-frontend.md) | **In progress** — staged 6.1–6.4; 6.1 (backend unblock: CORS, résumé reads) done, scaffold next |
+| 7 | [Feature expansion after the front end](phases/phase-7-feature-expansion.md) | **Placeholder** — not a feature list; what changes about *building* one once there are two halves |
 
 **If a phase doc contradicts `architecture.md`, follow `architecture.md` and fix
 the phase doc as part of the work.** The phase docs were written before the

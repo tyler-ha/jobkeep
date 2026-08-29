@@ -56,6 +56,50 @@ builder.Services.AddDocumentsModule(builder.Configuration);
 // its one model call are constants rather than settings (AtsModule.cs).
 builder.Services.AddAtsModule();
 
+// ---------------------------------------------------------------------------
+// CORS, for the Phase 6 front end
+// ---------------------------------------------------------------------------
+// The front end's dev server and this API are different origins — :5173 and
+// :5080 — so every fetch from a screen is a cross-origin request. Without a
+// policy the browser refuses them all, and it refuses them *client*-side, which
+// is why this is the kind of gap that gets misdiagnosed as a broken front end.
+//
+// Three choices here, each of which would be wrong to make differently:
+//
+//   * A NAMED policy with an explicit origin list, not AllowAnyOrigin. A
+//     permissive policy that reaches production is a genuine finding, and
+//     "temporary" wildcards are exactly the ones that ship. It is also not a
+//     choice that stays available: AllowAnyOrigin and AllowCredentials are
+//     mutually exclusive in ASP.NET Core, so writing the wildcard now would
+//     have to be undone the moment auth lands and requests start carrying a
+//     credential. Better to be in the shape that survives that.
+//
+//   * Origins from CONFIG, not from code — the same argument the connection
+//     string above makes. The dev server's port is a local fact, a deployed
+//     front end's origin is a deployment fact, and neither is a code change.
+//     appsettings.Development.json holds the default.
+//
+//   * Registered always, APPLIED only in Development (see UseCors below).
+//     AddCors here is inert; nothing happens until middleware runs. A deployed
+//     environment therefore has no CORS at all until someone deliberately adds
+//     its front-end origin, which is the right default for an API that is about
+//     to sit on a public Function URL with no authentication in front of it.
+//
+// What auth will have to revisit: AllowCredentials is deliberately NOT set. Add
+// it only alongside the origin list staying explicit, and re-read the
+// antiforgery paragraph in DocumentsModule.cs at the same time — that one is
+// switched off precisely because there are no cookies for a browser to attach
+// yet, and both decisions change together.
+const string DevCorsPolicy = "localdev";
+var allowedOrigins = builder.Configuration
+    .GetSection("Cors:AllowedOrigins").Get<string[]>()
+    ?? ["http://localhost:5173"];
+
+builder.Services.AddCors(options => options.AddPolicy(DevCorsPolicy, policy => policy
+    .WithOrigins(allowedOrigins)
+    .AllowAnyHeader()
+    .AllowAnyMethod()));
+
 builder.Services.ConfigureHttpJsonOptions(o =>
 {
     // Serialize/accept enums by name ("Interviewing", "FullTime") instead of by
@@ -101,6 +145,12 @@ if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
+
+    // Development-only, and before the Map* calls below — CORS has to run early
+    // enough to answer the preflight OPTIONS itself, which never reaches an
+    // endpoint. See the AddCors block above for why a deployed environment gets
+    // no policy until one is added on purpose.
+    app.UseCors(DevCorsPolicy);
 }
 
 // Every /applications route, REST side. One call, because the module owns its

@@ -104,6 +104,21 @@ public class Query
         CancellationToken ct)
         => (await handler.HandleAsync(id, ct)).ValueOrThrow();
 
+    // Phase 6 step 6.1 — the résumé read surface, which did not exist until the
+    // front end needed a picker. Same adapter pattern; the list/detail split (no
+    // résumé text in the list, text in the detail) is decided in the handlers, so
+    // a GraphQL client cannot select its way past it.
+    public async Task<List<ResumeSummary>> GetResumes(
+        [Service] ListResumesHandler handler,
+        CancellationToken ct)
+        => (await handler.HandleAsync(ct)).ValueOrThrow();
+
+    public async Task<ResumeDetail> GetResume(
+        Guid id,
+        [Service] GetResumeHandler handler,
+        CancellationToken ct)
+        => (await handler.HandleAsync(id, ct)).ValueOrThrow();
+
     // Phase 5 — the stored ATS check. A query, not a mutation, because it reads
     // and nothing else; the checkAts mutation is what computes it. Same split as
     // analysis/analyzePosting above, and for the same reason: the answer is

@@ -121,6 +121,14 @@ public class Mutation
         [Service] AddSkillToResumeHandler handler, CancellationToken ct)
         => (await handler.HandleAsync(resumeId, input, ct)).ValueOrThrow();
 
+    // Phase 6 step 6.1 — the inverse, added when the front-end design turned
+    // "add a skill" into a drag. Unlinks the resume_skills join row; the shared
+    // `skills` row survives, exactly as on the posting side.
+    public async Task<bool> RemoveSkillFromResume(
+        Guid resumeId, string skillName,
+        [Service] RemoveSkillFromResumeHandler handler, CancellationToken ct)
+        => (await handler.HandleAsync(resumeId, skillName, ct)).ValueOrThrow();
+
     // Phase 5 — the ATS check. A mutation because it writes an ats_results row,
     // even though most of what it does is read.
     //
