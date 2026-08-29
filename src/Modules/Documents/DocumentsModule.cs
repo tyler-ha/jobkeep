@@ -130,8 +130,31 @@ public static class DocumentsModule
         // both surfaces. That keeps the rule where it matters, because the rule
         // is about business logic having one implementation, and "receive a file"
         // is transport, not logic.
+        // -------------------------------------------------------------------
+        // The missing [FromForm] on `file` is load-bearing. Do not add it back.
+        // -------------------------------------------------------------------
+        // It used to carry one. Minimal APIs never needed it — an IFormFile binds
+        // from the multipart body by parameter name on its own — and Swashbuckle
+        // 10 *refuses* an action that has both an IFormFile and a [FromForm]
+        // parameter. It refuses by throwing rather than by skipping the operation,
+        // so one unrepresentable route took down the entire document:
+        // GET /swagger/v1/swagger.json answered 500 and Swagger UI showed "Fetch
+        // error" for every endpoint in the app, not just this one.
+        //
+        // The three scalars below keep their [FromForm] and must: without it a
+        // minimal API binds a simple type from the route or query string, not the
+        // form, so removing them would quietly move `kind`, `label` and `sourceUrl`
+        // off the multipart body. Only the file's attribute was ever redundant,
+        // and only the file's attribute is the one Swashbuckle objects to.
+        //
+        // This shipped in Phase 4.5 and went unnoticed until the end of Phase 5,
+        // because nothing was watching. The durable half of the fix is therefore
+        // the test that now pins the document
+        // (tests/Jobkeep.Tests/Documents/SwaggerDocumentTests.cs): a generated
+        // artefact with no build step behind it goes stale silently, which is the
+        // failure mode already recorded against the committed SVG diagrams.
         group.MapPost("/", async (
-            [FromForm] IFormFile file,
+            IFormFile file,
             [FromForm] DocumentKind kind,
             [FromForm] string? label,
             [FromForm] string? sourceUrl,

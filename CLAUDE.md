@@ -369,6 +369,14 @@ You can still exercise endpoints by hand via Swagger, the Nitro IDE, or
   back means something is returning an entity.
 - **`appsettings*.json` contain `//` comments.** ASP.NET's config reader accepts
   them; strict JSON parsers won't. Don't "fix" them.
+- **Never put `[FromForm]` on an `IFormFile` parameter.** Swashbuckle 10 refuses
+  an action carrying both, and it refuses by *throwing*, so one unrepresentable
+  route makes `GET /swagger/v1/swagger.json` answer 500 and Swagger UI show "Fetch
+  error" for **every** endpoint. A minimal API binds `IFormFile` from the
+  multipart body without the attribute; the scalars beside it still need it, or
+  they bind from the query string instead. This shipped in Phase 4.5 and went
+  unnoticed for two phases — `tests/Jobkeep.Tests/Documents/SwaggerDocumentTests.cs`
+  now pins it.
 
 ## Conventions
 

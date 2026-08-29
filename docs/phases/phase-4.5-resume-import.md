@@ -504,6 +504,24 @@ and no cookies, and is one of the things that must be revisited when auth lands.
 
 ## Known gaps
 
+- **Fixed on 2026-08-29, two phases late: this route broke Swagger for the whole
+  app.** `[FromForm]` on the `IFormFile` parameter is something Swashbuckle 10
+  refuses outright, and it refuses by throwing rather than by skipping the
+  operation — so `GET /swagger/v1/swagger.json` answered 500 and Swagger UI showed
+  "Fetch error" on every endpoint in the app, not just this one. The attribute was
+  redundant (a minimal API binds `IFormFile` from the multipart body without it);
+  the three scalars beside it keep theirs, or they would bind from the query
+  string instead.
+
+  Worth recording as a *process* finding rather than a bug. It shipped here, the
+  suite went 185 → 202 → 212 green across two later phases, CI passed every push,
+  and the only human-facing surface this app has was unusable the whole time —
+  found by opening it, by hand, at the end of Phase 5. The generated OpenAPI
+  document had nothing watching it, which is the failure mode already recorded
+  against the committed SVG diagrams: **a generated artefact with no build step
+  behind it goes stale silently.** The difference is that this one *can* be
+  checked, so it now is — `tests/Jobkeep.Tests/Documents/SwaggerDocumentTests.cs`,
+  verified by putting the attribute back and watching both tests fail.
 - **Requirement `Kind` is unreliable** (finding 2). Fix it on the review screen.
 - **Real-word-processor PDFs are partly covered now.** Multi-column layout was the
   hole this bullet named, a real CV fell straight into it, and the fix plus a
