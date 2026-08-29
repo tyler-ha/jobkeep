@@ -58,6 +58,17 @@ public class Resume
     public string? SourceFileName { get; set; }
     public string? SourceHash { get; set; }
 
+    // The format the bytes actually were, carried through from the import that
+    // created this resume. Phase 5's formatting check reads it.
+    //
+    // A *detected* format, never the filename extension — DocumentTextExtractor
+    // sniffs the bytes precisely because an extension is a claim, and a check
+    // that warns you about PDFs would be worthless if a renamed .docx triggered
+    // it. Nullable: rows created before Phase 5 have no record of their format,
+    // and the format rule treats null as "unknown, say nothing", which is honest
+    // rather than guessing.
+    public SourceFormat? SourceFormat { get; set; }
+
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
 

@@ -27,7 +27,7 @@ while building demonstrable C# + AWS + AI integration experience.
 | 3 | Deploy to AWS Lambda (Function URL) + Neon Postgres | **Parked** (plan done, $0/month) |
 | 4 | AI job-description analyzer (local Ollama) | Done — behind `IChatClient`, local model only |
 | 4.5 | Document import (PDF/DOCX/text) with a confirm step | Done — upload → parse → review → confirm → rows |
-| 5 | ATS compatibility check | Not started |
+| 5 | ATS compatibility check | Done — deterministic skill gap + one model call; no score, on purpose |
 | 6 | Front end | Not started |
 
 Full detail for each phase, including cost notes and interview talking

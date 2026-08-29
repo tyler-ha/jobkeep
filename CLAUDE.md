@@ -199,10 +199,13 @@ Modules: `Applications` (core), `Analytics` (read-only), `Ai` (Phase 4),
 - **A slice owns its use case end to end.** Handlers use `AppDbContext`
   directly — EF's `DbContext` is already a unit-of-work plus a repository, so
   a hand-written repository over it is a layer that mostly forwards calls.
-- **A module never reads another module's tables.** Modules share one
-  database but not each other's data; cross-module access goes through a
-  public contract on the owning module. This is what keeps a future service
-  extraction a code-move rather than a redesign.
+- **A module never *writes* another module's tables.** Modules share one
+  database. Reading across the boundary is free; writing needs a contract on
+  the owning module, or a call to one of its own use cases, because a second
+  writer re-decides invariants the owner owns. This is what keeps a future
+  service extraction a code-move rather than a redesign. Narrowed to writes in
+  Phase 5 — architecture.md decision 17; the old wording ("never reads another
+  module's tables") is superseded.
 
 ### Migration state (read this before editing `src/`)
 
@@ -453,14 +456,44 @@ through the GraphQL schema). A1 is *partly* fixed — read decision 11 before
 
 ## When asked to move to the next phase
 
-**Currently up next: Phase 5** (`docs/phases/phase-5-ats-check.md`) — the ATS
-compatibility check. `docs/README.md` has the full phase status table.
+**Currently up next: Phase 6** (`docs/phases/phase-6-frontend.md`) — the front
+end. `docs/README.md` has the full phase status table. A doc/security-audit sweep
+is due before Phase 6 (see "Documenting as you go" — cadence, and in a fresh
+session). **Its stack is already decided and its design is already approved** —
+React, dnd-kit, lucide-react, no component kit, eight approved screens. Read the
+phase doc rather than re-opening any of that; the user asked to be asked before
+any new dependency is added.
 
-Phase 5's step 1 ("store your resume text once") **is already done** — Phase 4.5
-built `resumes` and the import pipeline that fills it, and resume skills and
-posting skills are rows in the same shared `skills` table, so the gap query is a
-join. Read `docs/phases/phase-4.5-resume-import.md` before starting; a good part
-of Phase 5's answer already exists.
+Phase 5 is done (2026-08-28): `Modules/Ats/`, two slices, both surfaces. Four
+things from it are worth carrying forward, and the first two change how new work
+should be written:
+
+- **Decision 17 narrowed rule 2: the boundary is about writes, not reads.** A
+  module may read another module's tables; only a write needs a contract. This
+  supersedes rule 2's old wording and generalises decision 13, so a new
+  cross-module *reader* needs no exception and no contract. Do not add a third
+  method to `IPostingContract` for posting skills — decision 17 exists so that
+  you do not have to.
+- **Use a model only where a query cannot answer.** The plan said to prompt the
+  model for the keyword match; it shipped as a SQL set difference over the shared
+  `skills` table, which is exact, instant and free. The model now answers only
+  free-text requirement coverage. Three of the check's four stages need no model,
+  so it **degrades** on an outage rather than failing — and the warning is stored,
+  because an unstored one lets a later read of an empty `UnmetRequirements` claim
+  every requirement is met.
+- **The skill gap matches skill *rows*, not skill *text*, and the verification
+  proved it costs something.** Run against the real CV and a real Melbourne ad, it
+  reported `PostgreSQL` as missing even though the CV names it in prose — the
+  resume's structured skill list says `SQL`. Same family as the case-sensitive
+  dedup gap already recorded below; fix them together, not separately, because
+  both want a normalised natural key on `skills`. The **correction path** shipped
+  with the phase — `POST /resumes/{id}/skills` and the `addSkillToResume` mutation
+  (`Modules/Documents/AddSkillToResume.cs`) — so a near-miss costs one click
+  rather than a re-import. It is not the synonym fix, and it is the first write to
+  `resume_skills` outside the Phase 4.5 import cycle; it is also what backs the
+  CV-centre drag in the Phase 6 design.
+- **`ats_results` is 1:1 with the application and its `ResumeId` says which
+  resume the surviving row judged.** Re-checking overwrites; latest wins.
 
 Phase 4 is done (2026-08-27), and its story has a tail worth knowing: its tests
 were written but **never executed** — Docker was down that session — and were run
@@ -509,10 +542,13 @@ phase doc:
   `Parity/SurfaceParityTests.cs`. Don't read it as licence to unit-test the slices.
 
 Phase 2.4 is done (2026-08-26): `Modules/Analytics/`, read-only, three `GROUP BY`
-slices on both surfaces. Its one architectural consequence is **decision 13** — a
-read-only reporting module is allowed to read other modules' tables, which rule 2
-otherwise forbids. Read that before adding a second cross-module reader, because the
-exception is scoped to *read-only reporting* and does not generalise.
+slices on both surfaces. Its one architectural consequence was **decision 13** — a
+read-only reporting module allowed to read other modules' tables, which rule 2 then
+forbade. **Phase 5 generalised it into decision 17: the boundary rule is about
+writes, not reads.** A module may read another module's tables; only a write needs a
+contract. So a second cross-module reader needs no exception — read decision 17, not
+13, and note that rule 2's old wording ("a module only queries the tables it owns")
+is superseded.
 
 Read the relevant `docs/phases/phase-N-*.md` file first — it already has the
 plan. Implement it, update that doc's "Status" field to "Done" when

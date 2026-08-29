@@ -96,16 +96,16 @@
     <line x1="270" y1="539" x2="710" y2="539" stroke="#E8EEEB"/>
 
     <text x="270" y="556" font-size="10.5" fill="#16211F">Ats</text>
-    <text x="710" y="556" font-size="9.5" fill="#5B6C68" text-anchor="end">ats_results · phase 5</text>
+    <text x="710" y="556" font-size="9.5" fill="#5B6C68" text-anchor="end">ats_results · reads 5 tables it does not own · phase 5</text>
     <line x1="270" y1="565" x2="710" y2="565" stroke="#E8EEEB"/>
 
     <text x="270" y="582" font-size="10.5" fill="#0E5F58">skills</text>
     <text x="710" y="582" font-size="9.5" fill="#0E5F58" text-anchor="end">shared — owned by no module, joined from both sides</text>
     <line x1="270" y1="591" x2="710" y2="591" stroke="#C9D2CE"/>
 
-    <text x="490" y="606" font-size="9.5" fill="#8A9793" text-anchor="middle">a module never reads another module's tables. Cross-module access goes through</text>
-    <text x="490" y="619" font-size="9.5" fill="#8A9793" text-anchor="middle">a contract (decision 14) or that module's own use case (decision 15).</text>
-    <text x="490" y="632" font-size="9.5" fill="#8A9793" text-anchor="middle">Analytics is the read-only exception (decision 13).</text>
+    <text x="490" y="606" font-size="9.5" fill="#8A9793" text-anchor="middle">the boundary is about writes, not reads (decision 17). A module may read another</text>
+    <text x="490" y="619" font-size="9.5" fill="#8A9793" text-anchor="middle">module's tables; to write them it needs a contract (decision 14) or that module's</text>
+    <text x="490" y="632" font-size="9.5" fill="#8A9793" text-anchor="middle">own use case (decision 15). Analytics (13) and Ats are readers, so neither needs one.</text>
 
     <path d="M490,642 V672" fill="none" stroke="#0E5F58" stroke-width="1.6" marker-end="url(#an)"/>
 
@@ -113,7 +113,7 @@
     <rect x="740" y="470" width="216" height="72" rx="3" fill="#FFFFFF" stroke="#C9D2CE" stroke-dasharray="4 3"/>
     <text x="848" y="490" font-size="10" font-weight="600" fill="#16211F" text-anchor="middle">Shared/ModelClient.cs</text>
     <text x="848" y="506" font-size="9" fill="#5B6C68" text-anchor="middle">IChatClient → Ollama, local</text>
-    <text x="848" y="521" font-size="9" fill="#8A9793" text-anchor="middle">injected by Ai AND Documents:</text>
+    <text x="848" y="521" font-size="9" fill="#8A9793" text-anchor="middle">injected by Ai, Documents and Ats:</text>
     <text x="848" y="534" font-size="9" fill="#8A9793" text-anchor="middle">a dependency, not a module's property</text>
     <line x1="730" y1="506" x2="740" y2="506" stroke="#C9D2CE" stroke-width="1.2"/>
 
@@ -135,7 +135,7 @@
     <line x1="110" y1="838" x2="870" y2="838" stroke="#E8EEEB"/>
     <text x="110" y="856" font-size="9.5" fill="#5B6C68">Earlier versions had a second, dashed lane: the Phase 2 routes going through IJobApplicationRepository. Phase 2.3 deleted it, so there is one lane.</text>
     <text x="110" y="869" font-size="9.5" fill="#5B6C68">The deployment target stopped being RDS in Phase 3 — nothing in the deployed plan may bill per hour.</text>
-    <text x="870" y="869" font-size="9.5" fill="#8A9793" text-anchor="end">as-built end of Phase 4.5 · one deployable</text>
+    <text x="870" y="869" font-size="9.5" fill="#8A9793" text-anchor="end">as-built end of Phase 5 · one deployable</text>
 
   </g>
 </svg>

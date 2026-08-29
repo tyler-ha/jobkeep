@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 760" width="1280" height="760" role="img" aria-labelledby="erdTitle erdDesc" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif">
-  <title id="erdTitle">JobKeep database schema, as of migration ResumesAndDocumentImports</title>
-  <desc id="erdDesc">Entity-relationship diagram of 13 PostgreSQL tables. companies feeds job_postings, which feeds job_applications, ai_analyses, job_requirements and posting_skills. resumes feeds resume_skills, resume_experiences, resume_educations, and is referenced by job_applications. The shared skills table is joined from both posting_skills and resume_skills. document_imports stands alone with no foreign keys. Solid dark-green edges are ON DELETE RESTRICT; dashed rust edges are ON DELETE CASCADE.</desc>
+  <title id="erdTitle">JobKeep database schema, as of migration AtsCheckPhase5</title>
+  <desc id="erdDesc">Entity-relationship diagram of 13 PostgreSQL tables. companies feeds job_postings, which feeds job_applications, ai_analyses, job_requirements and posting_skills. resumes feeds resume_skills, resume_experiences, resume_educations, and is referenced by both job_applications and ats_results. The shared skills table is joined from both posting_skills and resume_skills. document_imports stands alone with no foreign keys. Solid dark-green edges are ON DELETE RESTRICT; dashed rust edges are ON DELETE CASCADE.</desc>
 
   <rect x="0" y="0" width="1280" height="760" fill="#FBFCFB"/>
 
@@ -28,7 +28,7 @@
   </style>
 
   <text class="h1" x="40" y="42">JobKeep — database schema</text>
-  <text class="sub" x="40" y="63">13 tables · derived from `dotnet ef migrations script`, not from the model classes · migration ResumesAndDocumentImports (Phase 4.5)</text>
+  <text class="sub" x="40" y="63">13 tables · derived from `dotnet ef migrations script`, not from the model classes · migration AtsCheckPhase5 (Phase 5)</text>
 
   <!-- ============ row 1 (y=100) ============ -->
   <g>
@@ -46,9 +46,9 @@
     <rect class="hdr" x="520" y="100" width="200" height="26" rx="4"/>
     <rect class="hdr" x="520" y="118" width="200" height="8"/>
     <text class="name" x="532" y="119">ats_results</text>
-    <text class="col"  x="532" y="143">Id <tspan class="tag">PK</tspan></text>
-    <text class="col"  x="532" y="161">ApplicationId <tspan class="tag">FK · UNIQUE</tspan></text>
-    <text class="type" x="532" y="178">3 × text[]  (Phase 5)</text>
+    <text class="col"  x="532" y="141">ApplicationId <tspan class="tag">FK · UNIQUE</tspan></text>
+    <text class="col"  x="532" y="159">ResumeId <tspan class="tag">FK?</tspan></text>
+    <text class="type" x="532" y="177">5 × text[] · Warning text</text>
   </g>
 
   <!-- ============ row 2 (y=250) ============ -->
@@ -87,9 +87,9 @@
     <rect class="hdr" x="760" y="250" width="200" height="26" rx="4"/>
     <rect class="hdr" x="760" y="268" width="200" height="8"/>
     <text class="name" x="772" y="269">resumes</text>
-    <text class="col"  x="772" y="293">Id <tspan class="tag">PK</tspan></text>
-    <text class="col"  x="772" y="311">Label <tspan class="tag">UNIQUE</tspan></text>
-    <text class="type" x="772" y="328">SourceText text</text>
+    <text class="col"  x="772" y="291">Id <tspan class="tag">PK</tspan> · Label <tspan class="tag">UNIQUE</tspan></text>
+    <text class="col"  x="772" y="309">SourceText text</text>
+    <text class="type" x="772" y="327">SourceFormat text — detected, not the extension</text>
   </g>
 
   <g>
@@ -194,6 +194,10 @@
   <path class="casc" d="M 620 250 V 186" marker-end="url(#cascadeArrow)"/>
   <text class="card" x="628" y="222">1 : 1</text>
 
+  <!-- resumes -> ats_results : RESTRICT (Phase 5 — which resume was judged) -->
+  <path class="rule" d="M 860 250 V 212 H 730 V 186" marker-end="url(#restrictArrow)"/>
+  <text class="card" x="770" y="206">1 : N</text>
+
   <!-- resumes -> job_applications : RESTRICT (job_applications holds ResumeId) -->
   <path class="rule" d="M 760 311 H 720" marker-end="url(#restrictArrow)"/>
   <text class="card" x="722" y="304">1 : N</text>
@@ -224,13 +228,13 @@
     <text class="name" x="716" y="586">Delete behaviour — the one genuine decision in this schema</text>
 
     <path class="rule" d="M 720 610 H 770" marker-end="url(#restrictArrow)"/>
-    <text class="col" x="782" y="614">ON DELETE RESTRICT — 5 edges</text>
+    <text class="col" x="782" y="614">ON DELETE RESTRICT — 6 edges</text>
     <text class="type" x="782" y="630">never destroy a shared row or a record of what you did</text>
 
     <path class="casc" d="M 720 646 H 770" marker-end="url(#cascadeArrow)"/>
     <text class="col" x="782" y="650">ON DELETE CASCADE — 7 edges (children of an aggregate)</text>
   </g>
 
-  <text class="sub" x="40" y="706">13 tables · 12 foreign keys (5 RESTRICT, 7 CASCADE) · 14 indexes, of which 5 are UNIQUE · enums stored as text, so rows read plainly in psql</text>
+  <text class="sub" x="40" y="706">13 tables · 13 foreign keys (6 RESTRICT, 7 CASCADE) · 15 indexes, of which 5 are UNIQUE · enums stored as text, so rows read plainly in psql</text>
   <text class="sub" x="40" y="726">Boxes show keys only. Full column lists live in src/Data/AppDbContext.cs, where the reasoning for each delete rule is written beside it.</text>
 </svg>

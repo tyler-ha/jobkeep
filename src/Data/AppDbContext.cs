@@ -133,6 +133,8 @@ public class AppDbContext : DbContext
             // List<string> -> Postgres text[] (Npgsql handles the array mapping).
             e.Property(r => r.MatchedKeywords).HasColumnType("text[]");
             e.Property(r => r.MissingMustHaveKeywords).HasColumnType("text[]");
+            e.Property(r => r.MissingNiceToHaveKeywords).HasColumnType("text[]");
+            e.Property(r => r.UnmetRequirements).HasColumnType("text[]");
             e.Property(r => r.FormattingRiskNotes).HasColumnType("text[]");
 
             // 1:1 — one ATS result per application; cascade on application delete.
@@ -140,6 +142,17 @@ public class AppDbContext : DbContext
                 .WithOne(a => a.AtsResult)
                 .HasForeignKey<AtsResult>(r => r.ApplicationId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // Phase 5 — which resume was judged. Restrict, matching
+            // job_applications.ResumeId: deleting a resume must not silently
+            // delete the evidence of what it was checked against. The result
+            // stays 1:1 with the application (re-checking overwrites, latest
+            // wins, the shape ai_analyses already uses), so this column is what
+            // tells you which resume the surviving row read.
+            e.HasOne(r => r.Resume)
+                .WithMany()
+                .HasForeignKey(r => r.ResumeId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         // -------------------------------------------------------------------
@@ -177,6 +190,9 @@ public class AppDbContext : DbContext
             e.Property(r => r.Location).HasMaxLength(200);
             e.Property(r => r.SourceFileName).HasMaxLength(260);
             e.Property(r => r.SourceHash).HasMaxLength(64);
+            // Same string-enum treatment as document_imports.Format, so the two
+            // columns recording the same fact read the same way in psql.
+            e.Property(r => r.SourceFormat).HasConversion<string>().HasMaxLength(20);
 
             // Unique label, so importing twice under one name is a conflict the
             // user resolves rather than two rows called the same thing. Same
