@@ -1,0 +1,284 @@
+/* The app shell — the frame every screen sits in. */
+
+.shell {
+  display: grid;
+  grid-template-columns: var(--nav-w) minmax(0, 1fr);
+  min-height: 100vh;
+}
+
+/* ---- Navigation --------------------------------------------------------- */
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-6);
+  padding: var(--s-5) var(--s-4);
+  border-right: 1px solid var(--rule);
+  background: var(--ground);
+  position: sticky;
+  top: 0;
+  height: 100vh;
+}
+
+.wordmark {
+  font-family: var(--font-display);
+  font-variation-settings: 'wdth' var(--display-wdth);
+  font-size: var(--t-md);
+  font-weight: 800;
+  letter-spacing: var(--track-display);
+  padding: var(--s-1) var(--s-2);
+  color: var(--ink);
+  text-decoration: none;
+  align-self: flex-start;
+}
+
+.nav-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.nav-link {
+  display: block;
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-sm);
+  color: var(--muted);
+  text-decoration: none;
+  font-size: var(--t-sm);
+  font-weight: 500;
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
+}
+
+.nav-link:hover {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--rule) 45%, transparent);
+}
+
+/* The active item is marked, not tabbed. The swipe is the brand's own device
+ * and it is the one place amber is allowed to take a surface in the chrome —
+ * ink on amber is 11.25, so the label gets more legible, not less. */
+.nav-link[aria-current='page'] {
+  color: var(--ink);
+  font-weight: 600;
+  background: none;
+}
+
+.nav-link[aria-current='page'] .nav-label {
+  position: relative;
+  isolation: isolate;
+}
+
+.nav-link[aria-current='page'] .nav-label::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 0.1em -0.3em 0.04em -0.26em;
+  background: var(--pop);
+  border-radius: 0.55em 0.35em 0.5em 0.3em / 0.5em 0.6em 0.35em 0.45em;
+  transform: rotate(-0.5deg);
+}
+
+.nav-foot {
+  margin-top: auto;
+  font-size: var(--t-xs);
+  color: var(--muted);
+  padding: 0 var(--s-3);
+}
+
+/* ---- Main --------------------------------------------------------------- */
+
+.main {
+  padding: var(--s-6) var(--s-7);
+  max-width: var(--shell-max);
+}
+
+.screen-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-4);
+  margin-bottom: var(--s-5);
+}
+
+.screen-head p {
+  color: var(--muted);
+  font-size: var(--t-sm);
+  margin-top: var(--s-2);
+}
+
+/* ---- Card --------------------------------------------------------------- */
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-1);
+  padding: var(--s-4);
+}
+
+/* ---- Status chip -------------------------------------------------------- */
+
+/* The label is always the -dark on the tint, never the base. That single rule
+ * is what keeps every chip above 4.5:1 without checking them one at a time. */
+.chip {
+  display: inline-block;
+  padding: 2px var(--s-2);
+  border-radius: var(--r-pill);
+  font-size: var(--t-xs);
+  font-weight: 600;
+  letter-spacing: var(--track-tight);
+}
+
+.chip[data-status='Applied'] {
+  background: var(--pri-tint);
+  color: var(--pri-dark);
+}
+.chip[data-status='Interviewing'] {
+  background: var(--pop-tint);
+  color: var(--pop-dark);
+}
+.chip[data-status='Offer'] {
+  background: var(--sec-tint);
+  color: var(--sec-dark);
+}
+/* Closed, not failed — these get the neutral, not the alert. Rejected is a
+ * state the user can move back out of, and colouring it like an error would
+ * say otherwise. */
+.chip[data-status='Rejected'],
+.chip[data-status='Withdrawn'] {
+  background: color-mix(in srgb, var(--rule) 55%, transparent);
+  color: var(--muted);
+}
+
+/* ---- States ------------------------------------------------------------- */
+
+.state {
+  border: 1px dashed var(--rule-strong);
+  border-radius: var(--r-md);
+  padding: var(--s-6);
+  max-width: var(--measure);
+  background: color-mix(in srgb, var(--card) 55%, transparent);
+}
+
+.state h2 {
+  font-size: var(--t-md);
+  margin-bottom: var(--s-2);
+}
+
+.state p {
+  color: var(--muted);
+  font-size: var(--t-sm);
+}
+
+.state ul {
+  margin-top: var(--s-3);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+.state li {
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+  color: var(--muted);
+  background: var(--ground);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-sm);
+  padding: 2px var(--s-2);
+}
+
+/* An unreachable API is not the user's mistake, so it is stated plainly and
+ * on a card — red text never sits directly on the warm ground (4.18, under AA). */
+.error {
+  background: var(--card);
+  border: 1px solid color-mix(in srgb, var(--alert) 35%, var(--rule));
+  border-radius: var(--r-md);
+  padding: var(--s-4);
+  max-width: var(--measure);
+}
+
+.error strong {
+  color: var(--alert);
+  display: block;
+  margin-bottom: var(--s-1);
+}
+
+.error p {
+  font-size: var(--t-sm);
+  color: var(--muted);
+}
+
+/* ---- Table -------------------------------------------------------------- */
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--s-4);
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  padding: var(--s-3) var(--s-4);
+  box-shadow: var(--shadow-1);
+  transition:
+    box-shadow var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+
+.row:hover {
+  box-shadow: var(--shadow-2);
+  border-color: var(--rule-strong);
+}
+
+.row-title {
+  font-weight: 600;
+  font-size: var(--t-base);
+  overflow-wrap: anywhere;
+}
+
+.row-company {
+  color: var(--muted);
+  font-size: var(--t-sm);
+}
+
+.row-date {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--t-xs);
+  color: var(--muted);
+}
+
+@media (max-width: 900px) {
+  .shell {
+    grid-template-columns: 1fr;
+  }
+  .nav {
+    position: static;
+    height: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--rule);
+  }
+  .nav-list {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: var(--s-1);
+  }
+  .nav-foot {
+    display: none;
+  }
+  .main {
+    padding: var(--s-5) var(--s-4);
+  }
+  .row {
+    grid-template-columns: 1fr auto;
+    row-gap: var(--s-2);
+  }
+}

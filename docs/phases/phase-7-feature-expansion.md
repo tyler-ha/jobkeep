@@ -66,13 +66,44 @@ Two consequences worth stating plainly, because both are easy to get wrong:
 
 ## Where front-end code goes
 
-**To be filled in by step 6.2**, when the app is actually scaffolded. It should
-end up as short and as prescriptive as the "Where new code goes" block in
-`CLAUDE.md`: one paragraph naming the directory a screen goes in, the directory a
-shared component goes in, and where the API calls live.
+Filled in by step 6.2, 2026-08-29, once the scaffold actually existed.
 
-Left deliberately empty rather than guessed. A structure invented before the
-scaffold exists would be wrong in the specifics and would still get followed.
+The front end lives in **`web/`** at the repo root — deliberately not under
+`src/`, which holds the .NET project and may contain exactly one `.slnx`.
+
+```
+web/src/routes/<Screen>.tsx   — one file per screen; it owns its own data fetching
+web/src/components/           — a component only moves here once a SECOND screen needs it
+web/src/lib/api.ts            — the fetch core: base URL, ApiError, shared domain types
+web/src/styles/tokens.css     — the design tokens. The palette lives here and nowhere else.
+web/src/styles/base.css       — reset, element defaults, browser surfaces
+web/src/styles/shell.css      — the app frame and the shared primitives
+web/src/App.tsx               — routes and navigation only
+```
+
+A new screen is a new file in `routes/`, plus one `<Route>` and (if it is a
+destination rather than a detail view) one entry in the `NAV` array in
+`App.tsx`. That mirrors the backend rule it sits opposite: a new slice is a new
+file plus two lines in its module.
+
+**Three rules, and they are the front-end counterparts of the backend's two:**
+
+- **A screen owns its use case end to end**, the same way a slice does. It calls
+  `api` directly. Do not introduce a store, a service layer, or a hook library
+  over the top of a fetch that one screen makes — that is the repository mistake
+  from Phase 2.3 in a different language.
+- **`tokens.css` is the only place a colour is defined.** A raw hex anywhere else
+  is a bug. This rule exists because the artboards used 145 unnamed hex values
+  across eight screens; naming them was step 6.2's main work, and it only stays
+  true if nothing reintroduces a literal.
+- **On a tinted surface, the label is the `-dark` token, never the base.** This is
+  what keeps the UI at WCAG 2.2 AA without auditing each component: every
+  dark-on-tint pair clears AA text, and `--sec` on `--sec-tint` does not.
+
+Anything the API returns gets a type in `lib/api.ts` mirroring the backend
+record, with the source file named in a comment. The shapes are easy to guess
+wrong — the list item is `company`, not `companyName`, and `dateApplied` is a
+`DateOnly` string, not a timestamp.
 
 ## Which backlog items visibly reshape the front end
 

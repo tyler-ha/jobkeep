@@ -7,7 +7,7 @@ that runs.
 | Step | | Status |
 |---|---|---|
 | 6.1 | Backend unblock — CORS, résumé reads, the skill-removal inverse | **Done** (2026-08-29) |
-| 6.2 | Scaffold the React app; lift the canvas tokens into `tokens.css` | Not started |
+| 6.2 | Scaffold the React app; lift the canvas tokens into `tokens.css` | **Done** (2026-08-29) |
 | 6.3 | The eight approved screens | Not started |
 | 6.4 | Root `README.md`: architecture diagram, screenshots, phase story | Not started |
 
@@ -27,7 +27,7 @@ The "pick Blazor or React" step is **closed**. Confirmed with the user on
 | Drag and drop | **dnd-kit** |
 | Icons | **lucide-react**, plus hand-drawn SVG for the ~8 that carry the identity |
 | Component kit | **None.** Hand-rolled CSS |
-| Build tool | **Undecided** — step 6.2 asks before choosing |
+| Build tool | **Vite** + **react-router** — confirmed 2026-08-29 (step 6.2) |
 
 The user asked to be **asked before any new dependency is added**. Keep doing that.
 
@@ -144,13 +144,64 @@ line of React was written.
 
 No migration, no schema change, so `docs/diagrams/` is untouched.
 
-## Step 6.2 — scaffold (next)
+## Step 6.2 — scaffold (done, 2026-08-29)
 
-Ask about the build tool first, then scaffold and lift the canvas tokens into a
-`tokens.css`. **Fill in "where front-end code goes" in
-[`phase-7-feature-expansion.md`](phase-7-feature-expansion.md) as part of this
-step** — that doc holds an empty slot for it deliberately, because a guessed
-structure is worse than an admitted gap.
+`web/` at the repo root: Vite 8, React 19, TypeScript 6, react-router 7. Vite
+because `Cors:AllowedOrigins` already named `:5173`, and because it builds to
+static files, which keeps the parked Phase 3 S3 plan viable unchanged. The dev
+port is pinned with `strictPort` — a silent fallback to 5174 would fail every
+preflight and read like a React bug.
+
+**No dev-server proxy, on purpose.** Phase 6.1 added a real CORS policy so the
+browser makes a genuine cross-origin request in development. A proxy would hide
+that behind a same-origin illusion and the first deploy would be the first time
+CORS was ever exercised. Verified end to end this session: preflight returns 204
+with `Access-Control-Allow-Origin: http://localhost:5173`, and the Applications
+screen renders the two seeded rows.
+
+### What the token work actually found
+
+The plan said "lift the canvas tokens into `tokens.css`". Doing it surfaced
+something the brief had not recorded: **the palette is a nine-token ramp, not
+three colours.** The artboards consistently use a dark shade and a pale tint of
+each hue — 145 raw hex occurrences across the eight screens, none of them named.
+
+| | base | dark (text) | tint (surface) |
+|---|---|---|---|
+| Blue | `#1A5CD6` | `#0F3E96` | `#E4EDFC` |
+| Green | `#0E8A5F` | `#0A6446` | `#DFF3E9` |
+| Amber | `#FFC53D` | `#7A5200` | `#FFF2CF` |
+
+That produces one rule that makes AA automatic: **on a tinted surface the label
+is always the `-dark`, never the base.** Dark-on-tint passes AA text everywhere
+(blue 8.29, green 6.20, amber 6.21); `--sec` on `--sec-tint` is 3.76 and fails.
+It also retires a problem the palette looked like it had — `--pop` cannot carry
+text at 1.58, but `--pop-dark` reaches 6.92, so amber text was always available.
+
+Two one-off strays (`#EFECE6`, `#EDEFF3`) were collapsed into `--ground`; both
+sit at ~1.07 against it, differences no eye can resolve. One token was added
+that the artboards did not have: `--rule-strong` `#958C7B`, the lightest warm
+neutral clearing the 3.0 non-text threshold on both grounds, because `--rule` at
+1.32 is decoration and cannot be a control's only border. The first value picked
+for it was chosen by eye and measured 1.87 — worth recording, since it is
+exactly the mistake the ramp exists to prevent.
+
+### The one visual change from the artboards
+
+The **3px coloured left border was removed**, on all eight instances. The design
+skill's detector flags it as the most recognisable tell of generated UI, and it
+was never on-identity here: the brand's device is a marker stroke, not a tab.
+
+- On **Pipeline** it was redundant — the card sits in a status column whose
+  header already states the status in the same colour, so the border re-encoded
+  what position already said.
+- On **ATS check** and **Job post** it was doing real work, marking text quoted
+  verbatim from the ad. There it is replaced by an actual highlighter swipe
+  (`.marked` in `base.css`), which is stronger than the flat tint it sat on, is
+  the brand's own device, and keeps ink-on-amber at 11.25.
+
+The artboards were **not** re-cut. They remain the approved record; the decision
+lives in the code and in this note.
 
 ## Step 6.3 — the screens
 
