@@ -63,8 +63,9 @@ folded into a phase they didn't belong to.
 | **Phase 2.6** — .NET 10 upgrade | 1 | 114 | 10.1M | Four project/config files, no C# changed, plus a critical-CVE patch the restore surfaced and the doc corrections. **Provisional — logged from inside the session it measures, so it is low.** See the header; assume the same shape as the four corrections above. |
 | **Phase 4** — AI job-description analyzer | 2 | 197 | 25.7M | `IChatClient` behind Ollama, two slices, `IPostingContract` (decision 14), 10 tests. **Now final**, and its story is the reason to distrust a phase's own status field: the code landed but the tests never ran (Docker was down), so the phase sat at *In progress* until Phase 4.5 ran them — 10/10 passed unchanged. |
 | **Phase 4.5** — document import | 4 | 941 | 180.4M | PDF/DOCX/text extraction, a model structuring step, a human confirm-and-fix cycle, 7 slices, the first migration since InitialCreate, 39 new tests, both diagrams redrawn, **plus the pre-merge review that found ten defects in it**. **Now the most expensive item in the project**, past Phase 2.2's 62.2M. Two things it proves rather than suggests. First, the correction again: the build session was logged last time at 261 turns / 52.0M and finished at **305 / 66.7M** — the seventh mid-session row to be corrected upward. Second, and new: **the phase cost roughly twice what its own build session did.** The build was 66.7M; planning and Phase 4 verification (10.4M) and the review (28.6M) are the other half. A feature is not finished when it compiles, and the ledger had been quietly assuming otherwise. **Corrected, and it is the project's worst miss:** the review row was logged at 231 turns / 25.5M and finished at **481 / 100.2M** — 3.9x, making that single session more expensive than the entire Phase 2.2 build. The phase now costs **more than Phases 0 through 2.6 combined**, and the split is the point: 66.7M to build it, 100.2M to review it. |
-| **Phase 5** — ATS compatibility check | 3 | 293+ | 48.2M+ | `Modules/Ats/`, two slices, both surfaces, one migration, 17 tests, both diagrams redrawn, and **decision 17** — the module boundary narrowed from "never read another module's tables" to "never write them". Then the wrap-up session: `AddSkillToResume`, the correction path for the PostgreSQL near-miss the verification found, 10 more tests (suite 185 → 212), the commit and the PR. **Corrected, and it is the ninth consecutive upward correction:** the build session was logged last time at 140+ turns / 20.8M+ from inside itself and finished at **208 / 40.0M** — 1.9x, the *smallest* ratio in the ledger, and the reason is the one the row already claimed: the plan was written in a previous session and read at the start of this one, so almost none of the deliberation replayed. Reading a plan is cheap; deriving it twice is not. |
+| **Phase 5** — ATS compatibility check | 3 | 417 | 69.1M | `Modules/Ats/`, two slices, both surfaces, one migration, 17 tests, both diagrams redrawn, and **decision 17** — the module boundary narrowed from "never read another module's tables" to "never write them". Then the wrap-up session: `AddSkillToResume`, the correction path for the PostgreSQL near-miss the verification found, 10 more tests (suite 185 → 212), the commit and the PR. **Corrected, and it is the ninth consecutive upward correction:** the build session was logged last time at 140+ turns / 20.8M+ from inside itself and finished at **208 / 40.0M** — 1.9x, the *smallest* ratio in the ledger, and the reason is the one the row already claimed: the plan was written in a previous session and read at the start of this one, so almost none of the deliberation replayed. Reading a plan is cheap; deriving it twice is not. **Now final, and the tenth consecutive upward correction — this one the largest ratio yet.** The wrap-up session was logged from inside itself at 85 turns / 8.2M and finished at **207 / 29.0M**: 3.5x, past Phase 4.5's 3.9x-on-a-bigger-base as the worst *ratio* in the ledger. What it bought is worth naming, because it was not phase work: `AddSkillToResume`, the branch cleanup, two PRs, a handoff — and the Swagger outage, found by opening the UI by hand and fixed in the same session. Mechanical housekeeping at the expensive end of a long session, which is exactly the pattern Phase 2.5 identified and nobody has yet acted on. |
 | **Phase 6** — design, before any code | 1 | 129 | 24.1M | Eight approved app screens on a design canvas, two rejected palettes before the approved one, and the stack decision (React, dnd-kit, lucide-react, no component kit). **No repo change at all** — the entire session's output is an artifact and a decision record, which is the cheapest kind of session to reproduce and the easiest to lose. It is logged as its own row rather than folded into Phase 6's build because the build has not started, and a phase row that mixes design with implementation cannot answer "what did deciding cost". |
+| **Phase 6.1** — backend unblock | 1 | 149+ | 21.1M+ | CORS, `GET /resumes`, `GET /resumes/{id}`, the skill-removal inverse, 14 tests (suite 214 → 228) — plus the checkpoint: a tag, the phase doc restructured around a frozen API snapshot, and `phase-7-feature-expansion.md`. **Provisional — logged from inside the session it measures, so it is low.** Ten rows have now been corrected upward; assume this one will be too. Worth watching for a different reason, though: it is the first row where the *documentation* was the larger half of the work by intent rather than by accident, and the whole session ran off a plan written in the same session rather than a previous one — the opposite of the Phase 5 build's cheap shape. |
 | Architecture record | 1 | 162 | 19.8M | Writing `architecture.md` — the decision record and gap register. |
 | Schema + architecture diagrams | 1 | 162 | 19.9M | The `schema-diagram` skill and the two committed SVGs. |
 | Security & data audit | 1 | 110 | 13.4M | `security-and-data-audit.md`, F1–F18. |
@@ -72,7 +73,7 @@ folded into a phase they didn't belong to.
 | Docs audit + markdown skill | 2 | 74 | 5.6M | The phase-doc flow audit after the 2.2 renumber, and a markdown-audit skill built in a worktree. |
 | Tooling / skills | 5 | 21 | 700k | Skill installs and short setup sessions. |
 | | | | | |
-| **Total** | **40** | **4250** | **628.5M** | Regenerated 2026-08-29 at the end of Phase 5. The rows above account for 39 of the 40 sessions; the odd one out is a short stub with no phase of its own. Provisional in one place only: the wrap-up session is still running as this is written, so the Phase 5 row and this total are both lower bounds — which, ten rows in, is now the expected state of the most recent row rather than a caveat on it.
+| **Total** | **41** | **4523** | **670.4M** | Regenerated 2026-08-29 at the end of Phase 6.1. The Phase 6.1 figure moved from 138 turns / 19.0M to 149 / 21.1M between writing the row and refreshing the table below it, which is the provisional warning demonstrating itself inside one edit. The rows above account for 40 of the 41 sessions; the odd one out is a short stub with no phase of its own. Provisional in one place only: the Phase 6.1 session is still running as this is written, so that row and this total are both lower bounds — which, eleven rows in, is the expected state of the most recent row rather than a caveat on it. Phase 5 is now final.
 
 ### What the numbers say
 
@@ -237,9 +238,10 @@ replay; `Total` = all four counters summed.
 | 2026-08-27 12:42 | `phase-4/ai-analyzer` | 42 | 176k | 2.9M | 17k | **3.1M** | `f3c691c2` |
 | 2026-08-28 04:19 | `phase-5/ats-check` | 208 | 1.3M | 38.4M | 319k | **40.0M** | `806ebce7` |
 | 2026-08-28 09:56 | `phase-5/ats-check` | 129 | 543k | 23.2M | 375k | **24.1M** | `ecc5bc15` |
-| 2026-08-29 10:36 | `phase-5/ats-check` | 83 | 343k | 7.8M | 47k | **8.1M** | `70078cc1` |
+| 2026-08-29 10:36 | `phase-5/ats-check` | 207 | 488k | 28.4M | 130k | **29.0M** | `70078cc1` |
 | 2026-08-29 10:36 | `phase-5/ats-check` | 2 | 110k | 0 | 362 | **110k** | `d7e50ea0` |
-| | | **4250** | **17.1M** | **606.1M** | **5.3M** | **628.5M** | 40 sessions |
+| 2026-08-29 11:21 | `phase-6.1/frontend-unblock` | 149 | 416k | 20.6M | 135k | **21.1M** | `79c0efc5` |
+| | | **4523** | **17.7M** | **647.2M** | **5.5M** | **670.4M** | 41 sessions |
 
 The `1782fd4c` row did exactly what the version of this paragraph before it
 predicted: written from inside its own live session at 261 turns / 52.0M, it
@@ -271,8 +273,10 @@ pointed at the start of a session rather than the end of one.
 
 `ecc5bc15` is the Phase 6 design session and `70078cc1` the Phase 5 wrap-up;
 `d7e50ea0` is that wrap-up's foreground stub, the same background-job
-double-transcript shape as `a4832a88` and `f3c691c2`. `70078cc1` is being logged
-from inside itself, so assume it too is a lower bound.
+double-transcript shape as `a4832a88` and `f3c691c2`. `70078cc1` finished at
+**207 / 29.0M**, up from the 85 / 8.2M it was logged at from inside itself.
+`79c0efc5` is Phase 6.1 and is now the one being logged from inside itself, so
+assume it is a lower bound.
 
 ---
 
