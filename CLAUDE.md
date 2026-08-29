@@ -464,13 +464,23 @@ through the GraphQL schema). A1 is *partly* fixed — read decision 11 before
 
 ## When asked to move to the next phase
 
-**Currently up next: Phase 6** (`docs/phases/phase-6-frontend.md`) — the front
-end. `docs/README.md` has the full phase status table. A doc/security-audit sweep
-is due before Phase 6 (see "Documenting as you go" — cadence, and in a fresh
-session). **Its stack is already decided and its design is already approved** —
-React, dnd-kit, lucide-react, no component kit, eight approved screens. Read the
-phase doc rather than re-opening any of that; the user asked to be asked before
-any new dependency is added.
+**Currently up next: Phase 6 step 6.2** (`docs/phases/phase-6-frontend.md`) —
+scaffold the React app. The phase is **staged 6.1-6.4** because it is too big to be
+one runnable unit, and step **6.1 is done** (2026-08-29): CORS, `GET /resumes`,
+`GET /resumes/{id}` and the `DELETE /resumes/{id}/skills/{skillName}` inverse. Read
+the phase doc rather than the sub-step list here; `docs/README.md` has the full
+table. A doc/security-audit sweep is still due (see "Documenting as you go" —
+cadence, and in a fresh session). **The stack is already decided and the design is
+already approved** — React, dnd-kit, lucide-react, no component kit, eight approved
+screens; the build tool is the one open choice and 6.2 asks about it. Don't re-open
+any of the rest; the user asked to be asked before any new dependency is added.
+
+**The commit before any front-end code exists is tagged `checkpoint/backend-complete`**,
+and `docs/phases/phase-6-frontend.md` freezes the API surface as at that point. From
+here **a feature has two halves** — a slice *and* a screen — so estimates carried
+over from Phases 2-5 are about half the real cost. That, and the checklist it
+implies, is `docs/phases/phase-7-feature-expansion.md`; it is deliberately not a
+feature list, because `docs/backlog.md` already is one.
 
 Phase 5 is done (2026-08-28): `Modules/Ats/`, two slices, both surfaces. Four
 things from it are worth carrying forward, and the first two change how new work
