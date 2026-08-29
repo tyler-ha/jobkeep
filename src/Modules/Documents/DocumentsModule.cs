@@ -92,6 +92,9 @@ public static class DocumentsModule
         services.AddScoped<CommitImportHandler>();
         services.AddScoped<DiscardImportHandler>();
         services.AddScoped<AddSkillToResumeHandler>();
+        services.AddScoped<ListResumesHandler>();
+        services.AddScoped<GetResumeHandler>();
+        services.AddScoped<RemoveSkillFromResumeHandler>();
 
         return services;
     }
@@ -292,6 +295,40 @@ public static class DocumentsModule
             CancellationToken ct) =>
             (await handler.HandleAsync(id, request, ct)).ToHttpResult())
             .WithSummary("Add a skill to a resume, reusing the shared skill row.");
+
+        // DELETE /resumes/{id}/skills/{skillName} — the inverse of the above, and
+        // what makes the ATS check's drag undoable. 204: the resource is gone, and
+        // there is nothing useful to say about it.
+        //
+        // The name is a path segment, so a skill containing a slash cannot be
+        // addressed. Deliberate, and the same limitation
+        // DELETE /applications/{id}/skills/{skillName} already carries: a skill
+        // name is a short vocabulary token, `C#` and `.NET` survive URL encoding
+        // fine, and a query parameter would make this route disagree in shape with
+        // its posting-side mirror for a case that does not occur.
+        resumes.MapDelete("/{id:guid}/skills/{skillName}", async (
+            Guid id,
+            string skillName,
+            RemoveSkillFromResumeHandler handler,
+            CancellationToken ct) =>
+            (await handler.HandleAsync(id, skillName, ct)).ToHttpResult(_ => Results.NoContent()))
+            .WithSummary("Remove a skill from a resume; the shared skill row survives.");
+
+        // GET /resumes — the shelf. Summaries only; ListResumes.cs explains why
+        // the resume text is not in them.
+        resumes.MapGet("/", async (
+            ListResumesHandler handler,
+            CancellationToken ct) =>
+            (await handler.HandleAsync(ct)).ToHttpResult())
+            .WithSummary("List resume versions, newest-updated first.");
+
+        // GET /resumes/{id} — one resume in full, text included.
+        resumes.MapGet("/{id:guid}", async (
+            Guid id,
+            GetResumeHandler handler,
+            CancellationToken ct) =>
+            (await handler.HandleAsync(id, ct)).ToHttpResult())
+            .WithSummary("One resume: structured records plus the text they came from.");
 
         return app;
     }
