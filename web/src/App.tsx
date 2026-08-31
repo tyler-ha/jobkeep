@@ -43,7 +43,7 @@ export default function App() {
           ))}
         </ul>
 
-        <p className="nav-foot">Phase 6.2 — scaffold</p>
+        <p className="nav-foot">Local build · API on :5080</p>
       </nav>
 
       <main className="main">
@@ -54,8 +54,18 @@ export default function App() {
           <Route path="/applications/:id" element={<JobPost />} />
           <Route path="/pipeline" element={<Pipeline />} />
           <Route path="/resumes" element={<Resumes />} />
+          {/* Same screen, master-detail. The shelf selects the first résumé
+              when the bare path is opened, so this is the address the app
+              actually links to — and it makes one CV shareable as a link. */}
+          <Route path="/resumes/:id" element={<Resumes />} />
           <Route path="/import" element={<Import />} />
+          {/* The queue and the review are one screen: /import is the queue plus
+              the uploader, /import/:id is the draft beside the document. */}
+          <Route path="/import/:id" element={<Import />} />
           <Route path="/ats-check" element={<AtsCheck />} />
+          {/* The board needs a job. The bare /ats-check above is the picker;
+              this is what every link on the app actually points at. */}
+          <Route path="/applications/:id/ats-check" element={<AtsCheck />} />
           <Route path="/insights" element={<Insights />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
