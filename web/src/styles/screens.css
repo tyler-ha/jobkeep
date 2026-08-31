@@ -1,0 +1,1956 @@
+/* Per-screen blocks. shell.css holds the frame and the shared primitives; this
+ * file holds what belongs to one screen. No colour is defined here — every
+ * value comes from tokens.css, and a raw hex in this file is a bug.
+ *
+ * The rule that keeps the whole thing at WCAG 2.2 AA without auditing each
+ * component: on a tinted surface, the label is the -dark, never the base. */
+
+/* =========================================================================
+   Applications
+   ========================================================================= */
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+  margin-bottom: var(--s-4);
+}
+
+/* Search, with the column it searches built into the control. The API's company
+ * and title filters are ANDed, so one box across both is not one request — the
+ * selector is what makes a single box honest. */
+.field-search {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+  padding-left: var(--s-3);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-pill);
+  background: var(--card);
+}
+
+.field-search:focus-within {
+  outline: 2px solid var(--pri);
+  outline-offset: 2px;
+}
+
+/* The ring belongs to the whole control, not to the two things inside it. */
+.field-search :is(select, input):focus-visible {
+  outline: none;
+}
+
+.field-search-icon {
+  color: var(--muted);
+  flex: none;
+}
+
+.field-search-select {
+  border: none;
+  background: none;
+  font-size: var(--t-sm);
+  font-weight: 600;
+  color: var(--ink);
+  padding: var(--s-2) 0;
+}
+
+.field-search-input {
+  border: none;
+  background: none;
+  padding: var(--s-2) var(--s-3) var(--s-2) 0;
+  width: 22ch;
+  border-radius: 0 var(--r-pill) var(--r-pill) 0;
+}
+
+.field-search-input::-webkit-search-cancel-button {
+  cursor: pointer;
+}
+
+/* Status filters. Not tabs in the ARIA sense — there is no panel per button —
+ * so they are toggles and say so with aria-pressed. */
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1);
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-pill);
+  font-size: var(--t-sm);
+  font-weight: 500;
+  color: var(--muted);
+  border: 1px solid transparent;
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
+}
+
+.tab:hover {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--rule) 45%, transparent);
+}
+
+.tab[aria-pressed='true'] {
+  background: var(--pri-tint);
+  border-color: color-mix(in srgb, var(--pri) 30%, transparent);
+  color: var(--pri-dark);
+  font-weight: 600;
+}
+
+.tab-count {
+  font-size: var(--t-xs);
+  color: var(--muted);
+}
+
+.tab[aria-pressed='true'] .tab-count {
+  color: var(--pri-dark);
+}
+
+/* ---- The table ---------------------------------------------------------- */
+
+/* One object on the warm ground, not eight floating cards. Rows are separated
+ * by a hairline; the density is the point. */
+.table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-1);
+  overflow: hidden;
+  font-size: var(--t-sm);
+}
+
+.table th {
+  text-align: left;
+  font-family: var(--font-body);
+  font-size: var(--t-xs);
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: var(--track-tight);
+  padding: 0;
+  border-bottom: 1px solid var(--rule);
+  background: var(--ground);
+  white-space: nowrap;
+}
+
+.table th,
+.table td {
+  padding: var(--s-3) var(--s-4);
+}
+
+.th-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  padding: var(--s-3) var(--s-4);
+  margin: calc(-1 * var(--s-3)) calc(-1 * var(--s-4));
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  width: calc(100% + 2 * var(--s-4));
+}
+
+.th-sort:hover {
+  color: var(--ink);
+}
+
+.table th[aria-sort] .th-sort {
+  color: var(--ink);
+}
+
+.table td {
+  border-bottom: 1px solid var(--rule);
+  vertical-align: baseline;
+}
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.table-row {
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+
+.table-row:hover {
+  background: var(--ground);
+}
+
+/* The one authored motion on this screen, and one of the two functional uses of
+ * amber the brief allows: the row that just landed. Ink on amber is 11.25, so
+ * the row gets more legible while it is marked, not less. */
+@keyframes landed {
+  0%,
+  40% {
+    background-color: var(--pop-tint);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.table-row[data-landed] {
+  animation: landed 2.4s var(--ease-out) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .table-row[data-landed] {
+    animation: none;
+    background-color: var(--pop-tint);
+  }
+}
+
+.cell-company {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.cell-role a {
+  font-weight: 500;
+  color: var(--ink);
+  text-decoration-color: color-mix(in srgb, var(--ink) 25%, transparent);
+}
+
+.cell-sub {
+  display: block;
+  color: var(--muted);
+  font-size: var(--t-xs);
+  margin-top: 2px;
+}
+
+.col-skills {
+  color: var(--muted);
+}
+
+.skill-run {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.col-date {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--t-xs);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-4);
+  margin-top: var(--s-4);
+  flex-wrap: wrap;
+}
+
+.pager-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+}
+
+/* ---- Add form ----------------------------------------------------------- */
+
+/* Inline, not a modal — adding a job needs neither interruption nor protected
+ * focus, and you are usually copying from an ad in the next tab. */
+.add-form {
+  margin-bottom: var(--s-5);
+  width: 100%;
+}
+
+.add-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-3) var(--s-4);
+  width: 100%;
+}
+
+.field-wide {
+  grid-column: 1 / -1;
+}
+
+.add-actions {
+  display: flex;
+  gap: var(--s-2);
+}
+
+/* =========================================================================
+   Job post
+   ========================================================================= */
+
+.post-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s-5);
+  flex-wrap: wrap;
+}
+
+.post-facts {
+  color: var(--muted);
+  font-size: var(--t-sm);
+  margin-top: var(--s-2);
+}
+
+.post-facts strong {
+  color: var(--ink);
+}
+
+.post-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+}
+
+/* A refused status move is a rule, not a fault, so it gets the amber ground and
+ * dark ink rather than the alert red. --pop-dark on --pop-tint is 6.21. */
+.refusal,
+.degraded {
+  background: var(--pop-tint);
+  color: var(--pop-dark);
+  border-radius: var(--r-md);
+  padding: var(--s-3) var(--s-4);
+  font-size: var(--t-sm);
+  max-width: var(--measure);
+}
+
+.post-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
+  gap: var(--s-5);
+  align-items: start;
+}
+
+.post-main,
+.post-rail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-5);
+  min-width: 0;
+}
+
+.skill-group {
+  width: 100%;
+}
+
+.skill-group-head {
+  font-family: var(--font-body);
+  font-size: var(--t-xs);
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: var(--track-tight);
+  margin-bottom: var(--s-2);
+}
+
+.quiet-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  font-size: var(--t-sm);
+}
+
+.reqs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  width: 100%;
+}
+
+.reqs li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--s-1) var(--s-2);
+  align-items: start;
+}
+
+/* Quoted verbatim from the ad. The 3px coloured left border the artboards used
+ * here is gone deliberately — the brand's device is a marker stroke, not a tab —
+ * so the quote is carried by the mark and the type instead. */
+.reqs blockquote,
+.quotes blockquote {
+  font-size: var(--t-base);
+  line-height: var(--lh-snug);
+  color: var(--ink);
+}
+
+.req-meta {
+  grid-column: 1;
+  font-size: var(--t-xs);
+}
+
+.reqs .pill-remove {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+}
+
+.req-add {
+  display: flex;
+  gap: var(--s-2);
+  width: 100%;
+  padding-top: var(--s-3);
+  border-top: 1px solid var(--rule);
+}
+
+.req-add input {
+  flex: 1;
+  min-width: 0;
+  padding: var(--s-2) var(--s-3);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-sm);
+  font-size: var(--t-sm);
+}
+
+.check-headline {
+  font-size: var(--t-md);
+  line-height: var(--lh-snug);
+}
+
+/* The one held moment on this screen. Display face, display size, and the
+ * number a parser counted — which is what the mono is reserved for. */
+.check-figure {
+  font-family: var(--font-mono);
+  font-size: var(--t-2xl);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: var(--track-display);
+  color: var(--pri-dark);
+}
+
+.check-open {
+  font-size: var(--t-sm);
+  color: var(--pop-dark);
+  background: var(--pop-tint);
+  border-radius: var(--r-sm);
+  padding: var(--s-2) var(--s-3);
+}
+
+/* =========================================================================
+   ATS check
+   ========================================================================= */
+
+.pick-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.pick {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--s-4);
+  padding: var(--s-3) var(--s-4);
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-1);
+  text-decoration: none;
+  color: var(--ink);
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.pick:hover {
+  border-color: var(--rule-strong);
+  box-shadow: var(--shadow-2);
+}
+
+.pick-role {
+  font-weight: 600;
+}
+
+.lede-wide {
+  font-size: var(--t-md);
+  color: var(--muted);
+  max-width: var(--measure);
+}
+
+/* ---- The stage strip ---------------------------------------------------- */
+
+.stages {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--s-3);
+  padding: var(--s-4);
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-1);
+}
+
+.stage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  min-width: 0;
+}
+
+.stage-label {
+  font-size: var(--t-xs);
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.stage-value {
+  font-size: var(--t-lg);
+  font-weight: 600;
+  line-height: var(--lh-tight);
+  color: var(--ink);
+}
+
+.stage[data-complete] .stage-value {
+  /* --sec is 4.36 on white, under AA for body text but fine here: this is
+     22px semibold, which is large text at 3:1. The -dark is still safer, and
+     it is what the ramp rule says to reach for. */
+  color: var(--sec-dark);
+}
+
+.stage[data-unassessed] .stage-value {
+  color: var(--pop-dark);
+  font-size: var(--t-md);
+}
+
+/* The same number again, not a decoration standing in for it. */
+.stage-rule {
+  display: block;
+  height: 3px;
+  border-radius: var(--r-pill);
+  background: var(--rule);
+  overflow: hidden;
+  margin-top: var(--s-1);
+}
+
+/* scaleX rather than width: the fill animates on the compositor instead of
+ * relaying out the strip every frame. --fill is a 0–1 ratio for the same
+ * reason — a percentage cannot be handed to scaleX. */
+.stage-rule::after {
+  content: '';
+  display: block;
+  height: 100%;
+  width: 100%;
+  transform: scaleX(var(--fill, 0));
+  transform-origin: left;
+  border-radius: inherit;
+  background: var(--sec);
+  transition: transform var(--dur-slow) var(--ease-out);
+}
+
+.stage-sub {
+  font-size: var(--t-xs);
+}
+
+/* ---- The board ---------------------------------------------------------- */
+
+.board {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-5);
+  align-items: start;
+}
+
+.board-foot {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-5);
+  align-items: start;
+}
+
+.gap-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  width: 100%;
+}
+
+/* A gap is a task, not an error — no alert red anywhere on this list, and the
+ * copy matches. */
+.gap {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+  padding: var(--s-2) var(--s-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  background: var(--ground);
+}
+
+.gap[data-dragging] {
+  opacity: 0.35;
+}
+
+/* The near miss: the word is already in the résumé's text, the skill list just
+ * does not say so. Dashed green, as the artboard drew it. */
+.gap[data-near-miss] {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--sec) 55%, transparent);
+  background: var(--sec-tint);
+}
+
+.gap-grip {
+  display: inline-flex;
+  color: var(--rule-strong);
+  cursor: grab;
+  touch-action: none;
+}
+
+.gap-grip:active {
+  cursor: grabbing;
+}
+
+.gap-name {
+  font-weight: 600;
+  font-size: var(--t-sm);
+}
+
+.gap-kind {
+  font-size: var(--t-xs);
+}
+
+.gap-hint {
+  font-size: var(--t-xs);
+  font-weight: 600;
+  color: var(--sec-dark);
+  white-space: nowrap;
+}
+
+.gap-add {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  padding: 2px var(--s-2);
+  border-radius: var(--r-pill);
+  border: 1px solid var(--rule-strong);
+  background: var(--card);
+  font-size: var(--t-xs);
+  font-weight: 600;
+}
+
+.gap-add:hover {
+  border-color: var(--pri);
+  color: var(--pri-dark);
+}
+
+/* ---- The drop zone ------------------------------------------------------ */
+
+/* Amber cannot carry this state alone: --pop is 1.45 on the ground, under the
+ * 3.0 non-text threshold. So the zone changes its outline AND its label as well
+ * as its ground, and every cue works with colour removed. */
+.board-cv {
+  transition:
+    outline-color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
+  outline: 2px dashed transparent;
+  outline-offset: 3px;
+}
+
+.board-cv[data-armed] {
+  outline-color: var(--rule-strong);
+}
+
+.board-cv[data-over] {
+  outline: 2px solid var(--pop-dark);
+  background: var(--pop-tint);
+}
+
+.cv-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-3);
+  width: 100%;
+}
+
+.cv-head h3 {
+  font-family: var(--font-body);
+  font-size: var(--t-xs);
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: var(--track-tight);
+}
+
+.cv-count {
+  font-family: var(--font-mono);
+  font-size: var(--t-xl);
+  font-weight: 600;
+  line-height: 1;
+  margin-left: auto;
+}
+
+.drop-hint {
+  font-size: var(--t-sm);
+  font-weight: 600;
+  color: var(--pop-dark);
+  min-height: 1.4em;
+}
+
+.pill-dragging {
+  background: var(--pop);
+  border-color: var(--pop-dark);
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: var(--shadow-3);
+  cursor: grabbing;
+}
+
+.quotes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  width: 100%;
+}
+
+.notes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  font-size: var(--t-sm);
+  color: var(--muted);
+  width: 100%;
+}
+
+.notes li {
+  padding-left: var(--s-3);
+  border-left: 1px solid var(--rule-strong);
+}
+
+/* =========================================================================
+   Insights
+   ========================================================================= */
+
+/* Three panels, three shapes. Three bar charts down a page read as one chart
+   repeated and stop being looked at, so only the demand list is bars: the
+   funnel is one proportional strip, and the company rollup is a ranked table. */
+.insights {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s-4);
+  align-items: start;
+}
+
+.insight {
+  gap: var(--s-4);
+}
+
+.insight-funnel {
+  grid-column: 1 / -1;
+}
+.insight-demand {
+  grid-column: span 2;
+}
+
+.insight-head {
+  width: 100%;
+}
+
+.insight-head h2 {
+  font-family: var(--font-display);
+  font-variation-settings: 'wdth' var(--display-wdth);
+  font-size: var(--t-lg);
+  line-height: var(--lh-snug);
+  letter-spacing: var(--track-display);
+}
+
+.insight-head p {
+  margin-top: var(--s-1);
+  max-width: var(--measure);
+  font-size: var(--t-sm);
+}
+
+.insight-foot {
+  width: 100%;
+  padding-top: var(--s-3);
+  border-top: 1px solid var(--rule);
+  font-size: var(--t-xs);
+}
+
+/* The one held moment on this screen. Display face at display size, with the
+   marker swipe behind the figure — amber as a ground, never as ink. */
+.insight-figure {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-3);
+}
+
+.insight-figure .marked {
+  font-family: var(--font-display);
+  font-variation-settings: 'wdth' var(--display-wdth);
+  font-size: var(--t-2xl);
+  line-height: 1;
+  letter-spacing: var(--track-display);
+}
+
+.insight-figure-label {
+  font-size: var(--t-md);
+  color: var(--muted);
+}
+
+/* ---- The status strip ---------------------------------------------------- */
+
+/* One bar, not five. Segment widths come from lib/chart.ts, which rounds so
+   they sum to exactly 100 — naive rounding leaves a 1% gap at the end that gets
+   debugged as a layout bug. */
+.bar-stack {
+  display: flex;
+  width: 100%;
+  height: 14px;
+  border-radius: var(--r-pill);
+  overflow: hidden;
+  background: var(--ground);
+  border: 1px solid var(--rule);
+}
+
+.bar-seg + .bar-seg {
+  border-left: 1px solid var(--card);
+}
+
+/* The fills follow StatusChip's mapping so a status is the same colour wherever
+   it appears. They are fills, not text, so the base hues are used rather than
+   the -dark ink shades — and no state depends on them alone: the legend under
+   the bar names every segment and prints its count. */
+.bar-seg[data-status='Applied'],
+.legend-swatch[data-status='Applied'] {
+  background: var(--pri);
+}
+.bar-seg[data-status='Interviewing'],
+.legend-swatch[data-status='Interviewing'] {
+  background: var(--pop);
+}
+.bar-seg[data-status='Offer'],
+.legend-swatch[data-status='Offer'] {
+  background: var(--sec);
+}
+.bar-seg[data-status='Rejected'],
+.legend-swatch[data-status='Rejected'] {
+  background: var(--rule-strong);
+}
+.bar-seg[data-status='Withdrawn'],
+.legend-swatch[data-status='Withdrawn'] {
+  background: color-mix(in srgb, var(--rule-strong) 45%, var(--ground));
+}
+
+.legend {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--s-2) var(--s-4);
+  width: 100%;
+}
+
+.legend-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  font-size: var(--t-sm);
+  padding-top: var(--s-2);
+  border-top: 1px solid var(--rule);
+}
+
+/* A status with nothing in it stays on the list — its absence is information —
+   but it recedes. */
+.legend-row[data-empty] {
+  color: var(--muted);
+}
+
+.legend-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex: none;
+  align-self: center;
+}
+
+.legend-name {
+  flex: 1;
+  min-width: 0;
+}
+
+.legend-count {
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+
+.legend-pct {
+  font-size: var(--t-xs);
+  min-width: 3.2ch;
+  text-align: right;
+}
+
+/* ---- Demand -------------------------------------------------------------- */
+
+.demand {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.demand-row {
+  display: grid;
+  grid-template-columns: minmax(8ch, 22ch) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-2) 0;
+}
+
+.demand-row + .demand-row {
+  border-top: 1px solid var(--rule);
+}
+
+.demand-name {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  font-size: var(--t-sm);
+  font-weight: 500;
+  min-width: 0;
+}
+
+.demand-cat {
+  font-size: var(--t-xs);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.demand-track {
+  height: 10px;
+  border-radius: var(--r-pill);
+  background: var(--ground);
+  border: 1px solid var(--rule);
+  overflow: hidden;
+}
+
+/* Set once, never transitioned. An animated width lays out on every frame on
+   the main thread — the finding the design detector has already caught twice
+   on this project. */
+.demand-fill {
+  display: block;
+  height: 100%;
+  background: var(--pri);
+  border-radius: var(--r-pill);
+}
+
+/* The most-asked-for skill is the row worth finding, so it gets the marker
+   colour as a ground. It is not the only cue: it is also first, and its number
+   is the largest. */
+.demand-fill[data-top] {
+  background: var(--pop);
+  border-right: 2px solid var(--pop-dark);
+}
+
+.demand-count {
+  font-family: var(--font-mono);
+  font-size: var(--t-sm);
+  font-weight: 600;
+  min-width: 3ch;
+  text-align: right;
+}
+
+/* ---- Rank table ---------------------------------------------------------- */
+
+.rank {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--t-sm);
+}
+
+.rank th {
+  text-align: left;
+  font-size: var(--t-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding-bottom: var(--s-2);
+  border-bottom: 1px solid var(--rule-strong);
+}
+
+.rank td {
+  padding: var(--s-2) 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.rank tr:last-child td {
+  border-bottom: none;
+}
+
+.rank-i {
+  width: 2.5ch;
+  padding-right: var(--s-2);
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+  color: var(--muted);
+}
+
+.rank-num {
+  text-align: right;
+  padding-left: var(--s-3);
+}
+
+.rank td.rank-num {
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+
+/* =========================================================================
+   Pipeline (the board)
+   ========================================================================= */
+
+/* Five equal columns, and they stay five: the statuses are a closed set, so
+   there is no "add a column" affordance to design around. The board scrolls
+   horizontally only below the breakpoint, where five columns stop fitting. */
+.pipeline {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--s-3);
+  align-items: start;
+}
+
+.col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  min-height: 140px;
+  padding: var(--s-3);
+  border-radius: var(--r-lg);
+  background: color-mix(in srgb, var(--card) 55%, transparent);
+  border: 1px solid var(--rule);
+}
+
+/* Armed and over are two states, not one: the board says where a card MAY land
+   before the cursor arrives. Amber cannot carry either on its own — --pop is
+   1.45 on the ground, under the 3.0 non-text threshold — so both change the
+   outline, and both put a word on the column as well. */
+.col[data-armed] {
+  border-color: var(--rule-strong);
+  border-style: dashed;
+  background: var(--card);
+}
+
+.col[data-over] {
+  border-color: var(--pop-dark);
+  border-style: solid;
+  background: var(--pop-tint);
+  box-shadow: var(--shadow-2);
+}
+
+.col-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-2);
+  padding-bottom: var(--s-2);
+  border-bottom: 1px solid var(--rule);
+}
+
+.col-head h2 {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  font-size: var(--t-sm);
+  font-weight: 600;
+  letter-spacing: var(--track-tight);
+}
+
+/* Same status → same colour as the chip and the Insights legend. */
+.col-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex: none;
+  align-self: center;
+}
+.col-dot[data-status='Applied'] {
+  background: var(--pri);
+}
+.col-dot[data-status='Interviewing'] {
+  background: var(--pop);
+}
+.col-dot[data-status='Offer'] {
+  background: var(--sec);
+}
+.col-dot[data-status='Rejected'] {
+  background: var(--rule-strong);
+}
+.col-dot[data-status='Withdrawn'] {
+  background: color-mix(in srgb, var(--rule-strong) 45%, var(--ground));
+}
+
+.col-count {
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+  color: var(--muted);
+}
+
+/* The non-colour half of the drop cue. */
+.col-hint {
+  font-size: var(--t-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--pop-dark);
+  text-align: center;
+  padding: var(--s-2) 0;
+  border: 1px dashed var(--pop-dark);
+  border-radius: var(--r-sm);
+}
+
+.col-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.col-empty {
+  font-size: var(--t-xs);
+  padding: var(--s-2) 0;
+}
+
+/* ---- Cards --------------------------------------------------------------- */
+
+.card-wrap {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--s-1) var(--s-2);
+  padding: var(--s-3);
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-1);
+}
+
+/* The original stays put and fades while the overlay copy follows the cursor,
+   so the column does not reflow underneath the drag. */
+.card-wrap[data-dragging] {
+  opacity: 0.35;
+}
+
+.card-grip {
+  display: flex;
+  align-items: center;
+  color: var(--muted);
+  cursor: grab;
+  touch-action: none;
+  align-self: start;
+  padding-top: 2px;
+}
+
+.card-grip:active {
+  cursor: grabbing;
+}
+
+.card-face {
+  min-width: 0;
+}
+
+.card-role {
+  font-size: var(--t-sm);
+  font-weight: 600;
+  line-height: var(--lh-snug);
+  letter-spacing: var(--track-tight);
+}
+
+.card-company {
+  font-size: var(--t-xs);
+  color: var(--muted);
+  margin-top: 1px;
+}
+
+.card-meta {
+  font-size: var(--t-xs);
+  color: var(--muted);
+  margin-top: var(--s-1);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The keyboard path, and the phone path. Sits under the card body in the second
+   column so it lines up with the text rather than with the grip. */
+.card-move {
+  grid-column: 2;
+}
+
+.card-move select {
+  width: 100%;
+  font-size: var(--t-xs);
+  color: var(--muted);
+  padding: 2px var(--s-1);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-sm);
+  background: var(--ground);
+}
+
+.card-move select:hover {
+  border-color: var(--rule-strong);
+  color: var(--ink);
+}
+
+/* The thing under the cursor is the card's own face, not a lookalike — picked
+   up off the board and given real depth. */
+.card-face[data-floating] {
+  padding: var(--s-3);
+  background: var(--card);
+  border: 1px solid var(--pop-dark);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-3);
+  cursor: grabbing;
+  max-width: 260px;
+}
+
+/* =========================================================================
+   Résumés
+   ========================================================================= */
+
+.shelf-layout {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: var(--s-5);
+  align-items: start;
+}
+
+.shelf ul {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  position: sticky;
+  top: var(--s-5);
+}
+
+.shelf-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--s-3);
+  border-radius: var(--r-md);
+  border: 1px solid transparent;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.shelf-item:hover {
+  background: var(--card);
+  border-color: var(--rule);
+}
+
+/* The selected version gets the marker, not a coloured left border — the
+   device is a highlighter stroke, and the border pattern was removed from this
+   design deliberately. */
+.shelf-item[aria-current] {
+  background: var(--card);
+  border-color: var(--rule-strong);
+  box-shadow: var(--shadow-1);
+}
+
+.shelf-item[aria-current] .shelf-label {
+  position: relative;
+  isolation: isolate;
+}
+
+.shelf-item[aria-current] .shelf-label::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 0.1em -0.24em 0.04em -0.2em;
+  background: var(--pop);
+  border-radius: 0.55em 0.35em 0.5em 0.3em / 0.5em 0.6em 0.35em 0.45em;
+  transform: rotate(-0.4deg);
+}
+
+.shelf-label {
+  font-weight: 600;
+  font-size: var(--t-sm);
+  letter-spacing: var(--track-tight);
+}
+
+.shelf-meta {
+  font-size: var(--t-xs);
+}
+
+.resume {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  min-width: 0;
+}
+
+.resume-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s-4);
+  flex-wrap: wrap;
+}
+
+.resume-head h2 {
+  font-family: var(--font-display);
+  font-variation-settings: 'wdth' var(--display-wdth);
+  font-size: var(--t-xl);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--track-display);
+}
+
+.resume-who {
+  font-size: var(--t-md);
+  margin-top: var(--s-1);
+}
+
+.resume-head .quiet {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+  flex-wrap: wrap;
+  margin-top: var(--s-1);
+  font-size: var(--t-sm);
+}
+
+/* ---- Parsed facts -------------------------------------------------------- */
+
+.facts {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--s-2) var(--s-4);
+  width: 100%;
+  font-size: var(--t-sm);
+}
+
+.facts dt {
+  color: var(--muted);
+  font-size: var(--t-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  align-self: baseline;
+}
+
+.facts dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* ---- History ------------------------------------------------------------- */
+
+.history {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  width: 100%;
+}
+
+.history > li + li {
+  padding-top: var(--s-4);
+  border-top: 1px solid var(--rule);
+}
+
+.history-head {
+  font-size: var(--t-base);
+  line-height: var(--lh-snug);
+}
+
+.history-when {
+  font-size: var(--t-xs);
+  font-family: var(--font-mono);
+  margin-top: 2px;
+}
+
+.history-points {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  margin-top: var(--s-2);
+  font-size: var(--t-sm);
+  color: var(--muted);
+  max-width: var(--measure);
+}
+
+.history-points li {
+  padding-left: var(--s-3);
+  border-left: 1px solid var(--rule-strong);
+}
+
+/* ---- The extracted text -------------------------------------------------- */
+
+/* Closed by default: it is long, unstructured and the most personal thing on
+   the screen — but it is the only way to answer "why did the check say that",
+   so it is one click away rather than one screen away. */
+.source-text summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-3);
+  width: 100%;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: var(--t-sm);
+}
+
+.source-text summary::marker {
+  color: var(--muted);
+}
+
+.source-text .quiet {
+  font-size: var(--t-sm);
+  max-width: var(--measure);
+}
+
+.source-body {
+  width: 100%;
+  max-height: 26rem;
+  overflow: auto;
+  padding: var(--s-3);
+  background: var(--ground);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-sm);
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+  line-height: var(--lh-body);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* =========================================================================
+   Import & confirm
+   ========================================================================= */
+
+.uploader {
+  width: 100%;
+}
+
+.upload-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--s-3) var(--s-4);
+  width: 100%;
+  align-items: start;
+}
+
+/* Two choices that change what the rest of the form asks for, so both stay
+   visible rather than folded into a select. */
+.segmented {
+  display: flex;
+  gap: var(--s-1);
+  padding: 3px;
+  background: var(--ground);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-md);
+}
+
+.segment {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-sm);
+  font-size: var(--t-sm);
+  cursor: pointer;
+}
+
+/* The radio stays in the accessibility tree and keeps a real radio group's
+   arrow-key behaviour; it is only visually replaced. */
+.segment input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.segment:has(input:checked) {
+  background: var(--card);
+  box-shadow: var(--shadow-1);
+  font-weight: 600;
+}
+
+.segment:has(input:focus-visible) {
+  outline: 2px solid var(--pri);
+  outline-offset: 1px;
+}
+
+/* ---- The queue ----------------------------------------------------------- */
+
+.queue {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  width: 100%;
+}
+
+.queue-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    'kind name when go'
+    'kind meta meta go'
+    'kind warn warn go';
+  align-items: center;
+  gap: 2px var(--s-3);
+  padding: var(--s-3) var(--s-4);
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  color: var(--ink);
+  text-decoration: none;
+  box-shadow: var(--shadow-1);
+}
+
+.queue-item:hover {
+  border-color: var(--rule-strong);
+  box-shadow: var(--shadow-2);
+}
+
+.queue-kind {
+  grid-area: kind;
+  align-self: center;
+  padding: 2px var(--s-2);
+  border-radius: var(--r-pill);
+  font-size: var(--t-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.queue-kind[data-kind='Resume'] {
+  background: var(--sec-tint);
+  color: var(--sec-dark);
+}
+
+.queue-kind[data-kind='JobPosting'] {
+  background: var(--pri-tint);
+  color: var(--pri-dark);
+}
+
+.queue-name {
+  grid-area: name;
+  font-weight: 600;
+  font-size: var(--t-sm);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.queue-meta {
+  grid-area: meta;
+  font-size: var(--t-xs);
+}
+
+/* A degraded parse still produced a draft worth reviewing, so this is the amber
+   ground with dark ink — never the alert. */
+.queue-warn {
+  grid-area: warn;
+  margin-top: var(--s-1);
+  padding: 2px var(--s-2);
+  border-radius: var(--r-sm);
+  background: var(--pop-tint);
+  color: var(--pop-dark);
+  font-size: var(--t-xs);
+  justify-self: start;
+}
+
+.queue-when {
+  grid-area: when;
+  font-size: var(--t-xs);
+  white-space: nowrap;
+}
+
+.queue-go {
+  grid-area: go;
+  color: var(--muted);
+  align-self: center;
+}
+
+/* ---- The review ---------------------------------------------------------- */
+
+/* The draft and the document it came from, side by side. This is the whole
+   shape of the screen: "does this match" is not answerable from memory, which
+   is why GetImport.cs returns the full text and calls it the exception that
+   proves the over-fetch rule. */
+.review {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: var(--s-4);
+  align-items: start;
+  margin-top: var(--s-4);
+}
+
+.review-draft {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  min-width: 0;
+}
+
+.review-text {
+  position: sticky;
+  top: var(--s-4);
+  min-width: 0;
+}
+
+.review-text .source-body {
+  max-height: 62vh;
+}
+
+.review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+  margin-top: var(--s-4);
+  padding-top: var(--s-4);
+  border-top: 1px solid var(--rule);
+}
+
+.discard-confirm {
+  display: inline-flex;
+  gap: var(--s-2);
+}
+
+/* ---- Draft entries ------------------------------------------------------- */
+
+.draft-entry {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  width: 100%;
+  padding: var(--s-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  background: var(--ground);
+  align-items: flex-start;
+}
+
+.draft-skills,
+.draft-reqs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  width: 100%;
+}
+
+.draft-skills li {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+}
+
+.draft-skills li > input {
+  flex: 1;
+  min-width: 0;
+  padding: var(--s-2) var(--s-3);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-sm);
+  background: var(--card);
+  font-size: var(--t-sm);
+}
+
+.draft-reqs li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  padding-bottom: var(--s-3);
+  border-bottom: 1px solid var(--rule);
+}
+
+.draft-reqs textarea {
+  width: 100%;
+  padding: var(--s-2) var(--s-3);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-sm);
+  background: var(--card);
+  font-size: var(--t-sm);
+  line-height: var(--lh-body);
+  resize: vertical;
+}
+
+.draft-req-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3);
+}
+
+/* =========================================================================
+   Today
+   ========================================================================= */
+
+/* The held moment. One number, and deliberately not the total: a total is
+   something to look at, a backlog is something to act on. */
+.today-figure {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--s-5);
+}
+
+.today-figure .marked {
+  font-family: var(--font-display);
+  font-variation-settings: 'wdth' var(--display-wdth);
+  font-size: var(--t-2xl);
+  line-height: 1;
+  letter-spacing: var(--track-display);
+}
+
+.today-figure-label {
+  font-size: var(--t-md);
+  color: var(--muted);
+}
+
+/* ---- The status strip ---------------------------------------------------- */
+
+/* Five counts that are also five ways in. Insights charts the same numbers;
+   here they are navigation, which is why they are cells and not a bar. */
+.strip {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--s-2);
+  margin-bottom: var(--s-5);
+}
+
+.strip-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--s-3) var(--s-4);
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  color: var(--ink);
+  text-decoration: none;
+  box-shadow: var(--shadow-1);
+}
+
+.strip-cell:hover {
+  border-color: var(--rule-strong);
+  box-shadow: var(--shadow-2);
+}
+
+/* A status with nothing in it still gets a cell — its emptiness is information
+   — but it stops competing for attention. */
+.strip-cell[data-empty] {
+  box-shadow: none;
+  background: color-mix(in srgb, var(--card) 55%, transparent);
+}
+
+.strip-cell[data-empty] .strip-count {
+  color: var(--muted);
+}
+
+.strip-count {
+  font-family: var(--font-display);
+  font-variation-settings: 'wdth' var(--display-wdth);
+  font-size: var(--t-lg);
+  line-height: 1;
+  letter-spacing: var(--track-display);
+}
+
+.strip-label {
+  font-size: var(--t-xs);
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+
+/* ---- The blocks ---------------------------------------------------------- */
+
+.today-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-4);
+  align-items: start;
+}
+
+/* A short list of things to open. Denser than a card, looser than a table row:
+   these are destinations, not data to compare. */
+.brief {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.brief-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-2) var(--s-2) var(--s-2) 0;
+  border-radius: var(--r-sm);
+  color: var(--ink);
+  text-decoration: none;
+  min-width: 0;
+}
+
+.brief > li + li {
+  border-top: 1px solid var(--rule);
+}
+
+.brief-row:hover {
+  background: var(--ground);
+  padding-left: var(--s-2);
+}
+
+.brief-name {
+  font-size: var(--t-sm);
+  font-weight: 600;
+  letter-spacing: var(--track-tight);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
+.brief-row .quiet {
+  font-size: var(--t-xs);
+  white-space: nowrap;
+}
+
+.brief-when {
+  font-variant-numeric: tabular-nums;
+}
+
+/* =========================================================================
+   Responsive
+   ========================================================================= */
+
+@media (max-width: 1100px) {
+  .post-body,
+  .board,
+  .board-foot {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .insights {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* The document stops being a sidebar and becomes a panel under the draft. It
+     keeps its own scroll, so comparing is still two scrolls rather than one
+     enormous page. */
+  .review {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .review-text {
+    position: static;
+  }
+  .today-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Five columns stop fitting before the board stops being useful, so it
+     scrolls sideways rather than reflowing into five stacked lists — a kanban
+     read vertically is just the Applications table with worse density. */
+  .pipeline {
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(210px, 1fr);
+    grid-template-columns: none;
+    overflow-x: auto;
+    padding-bottom: var(--s-2);
+  }
+  .insight-demand {
+    grid-column: auto;
+  }
+  .stages {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .field-search-input {
+    width: 100%;
+  }
+  .add-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* The shelf becomes a scrollable strip above the résumé rather than a rail
+     beside it — a 240px column and a document do not both fit. */
+  .shelf-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .shelf ul {
+    position: static;
+    flex-direction: row;
+    overflow-x: auto;
+    padding-bottom: var(--s-2);
+  }
+  .shelf-item {
+    white-space: nowrap;
+  }
+
+  /* Five status cells stop fitting long before the numbers stop being useful,
+     so they wrap into a grid rather than shrinking to unreadable. */
+  .strip {
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  }
+  .stages {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .stage {
+    flex-direction: row;
+    align-items: baseline;
+    gap: var(--s-3);
+  }
+  .stage-label {
+    flex: 1;
+  }
+  .stage-rule {
+    display: none;
+  }
+
+  /* The table becomes a stack of records. Each row keeps its shape, but the
+     columns that were scannable side by side are now labelled by position:
+     company and role first, then the meta on one line. */
+  .table,
+  .table thead {
+    display: block;
+  }
+  .table thead {
+    display: none;
+  }
+  .table tbody,
+  .table-row {
+    display: block;
+  }
+  .table td {
+    display: inline-block;
+    padding: 0 var(--s-3) 0 0;
+    border: none;
+  }
+  .table-row {
+    padding: var(--s-3) var(--s-4);
+    border-bottom: 1px solid var(--rule);
+  }
+  .cell-company,
+  .cell-role {
+    display: block;
+    padding-right: 0;
+  }
+  .col-skills {
+    display: none;
+  }
+  .gap {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  /* The skill name gets its own line rather than being squeezed to nothing;
+     the bar keeps the width, because comparing lengths is the whole job. */
+  .demand-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .demand-track {
+    grid-column: 1;
+  }
+  .gap-kind {
+    grid-column: 2;
+  }
+}

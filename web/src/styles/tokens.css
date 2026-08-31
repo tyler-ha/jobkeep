@@ -1,0 +1,168 @@
+/* JobKeep design tokens — "Marked Up"
+ *
+ * Lifted from the approved canvas artboards (%TEMP%\jobkeep-canvas-v2\), not
+ * re-derived. Two earlier palettes were rejected for looking like a dev tool
+ * rather than something that sits in a tab next to Seek and LinkedIn all day.
+ *
+ * The brief names three hues. The artboards actually use a dark shade and a
+ * pale tint of each — 145 raw hex occurrences across the eight screens, none
+ * of them named. Naming them here is the whole point of this file: without it
+ * every component re-derives its own dark blue and they drift apart.
+ *
+ * THE RULE THAT MAKES WCAG 2.2 AA AUTOMATIC:
+ *   On a tinted surface, the label is always the -dark, never the base.
+ * Measured 2026-08-29. Dark-on-tint passes AA text everywhere (blue 8.29,
+ * green 6.20, amber 6.21). Base-on-tint does not: --sec on --sec-tint is
+ * 3.76 and FAILS. Follow the rule and contrast stops being a per-component
+ * question.
+ */
+
+:root {
+  /* ---- Brand ramp ------------------------------------------------------ */
+
+  /* Blue — recruiter blue. Passes AA text on every ground; the only hue that
+   * may carry small text as its base. White-on-blue is 5.92, so a filled blue
+   * button with a white label is safe. */
+  --pri: #1a5cd6;
+  --pri-dark: #0f3e96; /* 9.77 on white — text, hover, and pressed states */
+  --pri-tint: #e4edfc; /* surface only; label it with --pri-dark */
+
+  /* Green — hiring green. NOTE: the base is 4.36 on white and 4.00 on the
+   * ground, so it misses AA body text by a hair. Use it for fills, large or
+   * bold type, and UI boundaries. For anything set small, use --sec-dark. */
+  --sec: #0e8a5f;
+  --sec-dark: #0a6446; /* 7.18 on white — this is the green that carries text */
+  --sec-tint: #dff3e9;
+
+  /* Amber — marker amber. The identity colour, and the most constrained one.
+   * At 1.58 on white it can never carry text, and it falls below the 3.0
+   * non-text threshold, so it can never be the sole carrier of a state or a
+   * boundary either — the hot drop zone needs a second, non-colour cue.
+   * What it IS good at: being a ground. Ink on amber is 11.25, its strongest
+   * pairing, which is exactly the highlighter idea. */
+  --pop: #ffc53d;
+  --pop-dark: #7a5200; /* 6.92 on white — amber text is available, just never the base */
+  --pop-tint: #fff2cf;
+
+  /* ---- Neutrals -------------------------------------------------------- */
+
+  /* The warm ground was explicitly praised in review. It is what separates
+   * this from the two rejected cool-grey attempts; do not cool it down. */
+  --ground: #f7f5f1;
+  --card: #ffffff;
+  --ink: #16181d; /* 17.76 on white */
+  --muted: #5e6470; /* 5.94 on white — passes AA, safe for secondary copy */
+  --rule: #e4e0d8; /* 1.32 — decorative hairline ONLY. Never an input's sole border. */
+
+  /* The border a control is allowed to rely on. WCAG puts non-text UI
+   * boundaries at 3.0, and this is the lightest warm neutral that clears it
+   * against BOTH grounds — 3.33 on white, 3.05 on --ground. Anything lighter
+   * looks calmer and fails; --rule itself is 1.32 and is decoration only.
+   * Measured, because the first value chosen here was picked by eye and came
+   * in at 1.87. */
+  --rule-strong: #958c7b;
+
+  /* Reserved for genuine failures. Passes on white (4.55) but FAILS on the
+   * warm ground (4.18), so red text never sits directly on --ground; put it
+   * on --card, or fill it and use white.
+   *
+   * A MISSING SKILL NEVER USES THIS. Missing is a task, not an error, and
+   * that tone rule runs through the copy as well as the colour. */
+  --alert: #d93a3a;
+
+  /* ---- Type ------------------------------------------------------------ */
+
+  /* Archivo carries the display voice at wdth 118 — slightly extended, which
+   * is what gives headings their newsprint/job-board feel rather than a
+   * generic geometric sans. Onest is the body face. IBM Plex Mono is reserved
+   * for values a parser counted: match percentages, skill counts, dates,
+   * anything the user might check against the ad. It is not decoration. */
+  --font-display: 'Archivo', 'Archivo Fallback', system-ui, sans-serif;
+  --font-body: 'Onest', 'Onest Fallback', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', monospace;
+
+  --display-wdth: 118;
+
+  /* Scale — 1.2 minor third, rounded to whole px at the small end where
+   * fractions blur on a 1x display. */
+  --t-xs: 0.75rem; /* 12px — mono labels, counts */
+  --t-sm: 0.8125rem; /* 13px — dense table rows, card meta */
+  --t-base: 0.9375rem; /* 15px — body */
+  --t-md: 1.0625rem; /* 17px */
+  --t-lg: 1.375rem; /* 22px — card and section headings */
+  --t-xl: 1.75rem; /* 28px — screen titles */
+  --t-2xl: 2.375rem; /* 38px — the one held moment per screen */
+
+  --lh-tight: 1.15;
+  --lh-snug: 1.35;
+  --lh-body: 1.55;
+
+  /* Tracking floor is -0.04em; display sizes get the negative end, body
+   * stays at zero. Never track body text loosely to fill a line. */
+  --track-display: -0.022em;
+  --track-tight: -0.01em;
+
+  /* ---- Space ----------------------------------------------------------- */
+
+  /* 4px base. Tight groups, generous separation — and more space above a
+   * heading than below it, which is what --space-heading-top is for. */
+  --s-1: 0.25rem;
+  --s-2: 0.5rem;
+  --s-3: 0.75rem;
+  --s-4: 1rem;
+  --s-5: 1.5rem;
+  --s-6: 2rem;
+  --s-7: 3rem;
+  --s-8: 4rem;
+
+  --measure: 68ch; /* body measure, inside the 65–75ch band */
+
+  /* ---- Radius ---------------------------------------------------------- */
+
+  --r-sm: 5px;
+  --r-md: 9px;
+  --r-lg: 14px;
+  --r-pill: 999px;
+
+  /* ---- Depth ----------------------------------------------------------- */
+
+  /* Every shadow carries a real offset and a soft blur; a zero-offset halo is
+   * decoration, not depth. Tinted warm rather than pure black so cards sit on
+   * the warm ground instead of punching a grey hole in it. */
+  --shadow-1: 0 1px 2px rgba(58, 48, 32, 0.06), 0 1px 1px rgba(58, 48, 32, 0.04);
+  --shadow-2: 0 2px 4px rgba(58, 48, 32, 0.07), 0 4px 10px rgba(58, 48, 32, 0.06);
+  --shadow-3: 0 6px 12px rgba(58, 48, 32, 0.09), 0 12px 28px rgba(58, 48, 32, 0.08);
+
+  /* ---- Motion ---------------------------------------------------------- */
+
+  /* Exponential ease-out from an already-visible default. Nothing fades in
+   * from nothing on load; this is a tool, and a tool that animates itself
+   * into existence every navigation gets tiring by the second day. */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast: 120ms;
+  --dur: 200ms;
+  --dur-slow: 380ms;
+
+  /* ---- Layout ---------------------------------------------------------- */
+
+  --nav-w: 216px;
+  --shell-max: 1440px; /* the artboards were drawn at 1440×900 */
+}
+
+/* The artboards were drawn light, and the use scene is a browser tab open
+ * beside Seek and LinkedIn in daylight — both of which are light. So this is
+ * a committed light design, not a light default awaiting a dark twin. The
+ * declaration below stops the browser painting form controls and scrollbars
+ * from a dark system theme underneath a light page. */
+:root {
+  color-scheme: light;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: 0ms;
+    --dur: 0ms;
+    --dur-slow: 0ms;
+  }
+}

@@ -307,6 +307,15 @@ that would have prevented it.
 
 ## Commands
 
+**`.\run.cmd` starts the whole local stack** — Docker, Postgres, the API, the
+front end — waiting for each layer to answer before starting the next, so a
+failure names the layer that failed. `-NoFrontend` for backend only, `-Stop` to
+tear a stack down (it also kills the stray `Jobkeep.exe` that makes the next
+build fail with MSB3027). Logs land in `logs/`. The script is
+`scripts/run.ps1`; read its header before changing ports or the container name.
+
+By hand:
+
 ```bash
 # Start local Postgres first — the app auto-migrates against it on startup
 docker run -d -p 5432:5432 -e POSTGRES_PASSWORD=dev -e POSTGRES_DB=jobkeep postgres:16-alpine
