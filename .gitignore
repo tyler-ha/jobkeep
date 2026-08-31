@@ -25,3 +25,6 @@ appsettings.*.local.json
 # Python (scripts/)
 __pycache__/
 *.py[cod]
+
+# Local stack logs (scripts/run.ps1)
+logs/

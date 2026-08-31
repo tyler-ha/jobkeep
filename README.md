@@ -52,9 +52,22 @@ it; every use case is now a slice under `Modules/`.
 
 ## Quick start (Phase 2.3, current state)
 
-Storage is **PostgreSQL via EF Core**. In Development the app talks to a local
-Postgres container and auto-applies EF migrations on startup, so start the
-container first:
+**The whole stack, one command** — Postgres, the API and the front end:
+
+```powershell
+.\run.cmd                 # -NoFrontend for backend only, -NoBrowser, -Stop to tear down
+```
+
+It brings each layer up only once the one below it answers, so a failure is
+reported against the thing that failed rather than as a fetch error in the
+browser. Ctrl+C stops what it started; the Postgres container is deliberately
+left running, because it holds your data and costs nothing idle. If a launcher
+is ever killed from outside, `.\run.cmd -Stop` cleans up after it — including
+the stray `Jobkeep.exe` that otherwise makes the next build fail with MSB3027.
+
+By hand, if you'd rather. Storage is **PostgreSQL via EF Core**; in Development
+the app talks to a local Postgres container and auto-applies EF migrations on
+startup, so start the container first:
 
 ```bash
 docker run -d -p 5432:5432 -e POSTGRES_PASSWORD=dev -e POSTGRES_DB=jobkeep postgres:16-alpine
@@ -62,6 +75,9 @@ docker run -d -p 5432:5432 -e POSTGRES_PASSWORD=dev -e POSTGRES_DB=jobkeep postg
 cd src
 dotnet restore
 dotnet run
+
+cd web            # the front end (Phase 6)
+npm run dev
 ```
 
 Runs on `http://localhost:5080`. Data survives app restarts (it lives in
