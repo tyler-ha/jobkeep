@@ -75,11 +75,19 @@ The front end lives in **`web/`** at the repo root — deliberately not under
 web/src/routes/<Screen>.tsx   — one file per screen; it owns its own data fetching
 web/src/components/           — a component only moves here once a SECOND screen needs it
 web/src/lib/api.ts            — the fetch core: base URL, ApiError, shared domain types
+web/src/lib/format.ts         — dates, salaries, enum names. DateOnly never touches new Date().
 web/src/styles/tokens.css     — the design tokens. The palette lives here and nowhere else.
 web/src/styles/base.css       — reset, element defaults, browser surfaces
 web/src/styles/shell.css      — the app frame and the shared primitives
+web/src/styles/screens.css    — the per-screen blocks (added 6.3, when shell.css would have passed 800 lines)
+web/src/lib/chart.ts          — chart arithmetic (added 6.3). Pure, and tested, because a bad scale still looks like a chart
+web/src/test/                 — the Vitest setup and the API fixtures the screen tests render against
 web/src/App.tsx               — routes and navigation only
 ```
+
+Tests sit **beside what they test** — `lib/format.test.ts`, `routes/screens.test.tsx` —
+rather than in a mirrored tree. `vitest.config`'s `include` is `src/**/*.test.{ts,tsx}`,
+so a new one needs no registration.
 
 A new screen is a new file in `routes/`, plus one `<Route>` and (if it is a
 destination rather than a detail view) one entry in the `NAV` array in
@@ -100,10 +108,18 @@ file plus two lines in its module.
   what keeps the UI at WCAG 2.2 AA without auditing each component: every
   dark-on-tint pair clears AA text, and `--sec` on `--sec-tint` does not.
 
+A fourth rule, learned in 6.3 rather than planned: **arithmetic that a chart or a
+date depends on goes in `lib/` with a test, never inline in a screen.** Both
+things that broke in this step were of that kind — a salary range that printed
+its unit twice, and a percentage set that summed to 99. Neither looks wrong on
+screen; both are one assertion to pin.
+
 Anything the API returns gets a type in `lib/api.ts` mirroring the backend
 record, with the source file named in a comment. The shapes are easy to guess
 wrong — the list item is `company`, not `companyName`, and `dateApplied` is a
-`DateOnly` string, not a timestamp.
+`DateOnly` string, not a timestamp. Since 6.3 the fixtures in `src/test/fixtures.ts`
+are hand-written against the same C# records, so a guess that is wrong fails a
+test instead of an opened screen.
 
 ## Which backlog items visibly reshape the front end
 
@@ -120,6 +136,42 @@ which is not the same ordering the backlog uses:
 | **Soft delete / archive** | Touches **every list**: an archive filter, an empty state that distinguishes "none" from "none active", and an undo affordance. Cheap on the backend, wide on the front. |
 | **Authentication / multi-user** | Touches all of it, plus a login, plus every fetch growing a credential. Also forces the CORS policy added in 6.1 to be revisited — `AllowAnyOrigin` and credentials are mutually exclusive, and `Program.cs` says so at the point it matters. |
 | **Data export (CSV/JSON)** | Nearly free on both sides — a read endpoint and a button. The cheapest real feature on the list once a UI exists. |
+
+## Three backend gaps the front end found (6.3, 2026-08-31)
+
+Neither is a bug. Both are places where the approved design asks for something
+the frozen API cannot answer in one request, found by building the screen rather
+than by reading the contract.
+
+- **The application list carries no ATS summary.** The artboard's "CV match"
+  column (`0/9`, `5/7`, `not checked`) needs it per row, and neither REST nor
+  GraphQL can supply it without a request per row. The fix is to project
+  `ats_results` into `ApplicationListItem` — a *read* across a module boundary,
+  legal under decision 17, so it is a change to one projection rather than an
+  architectural one. Until then the column is dropped, not faked.
+- **`ApplicationQuery.Status` takes one status.** So there is no "Closed" tab
+  covering Rejected and Withdrawn together; the union of two requests cannot be
+  paged honestly. A `Status[]` would fix it, and `IsClosed` would be the sugar
+  over it.
+
+- **There is no "give me the whole set" read.** `ListApplications` caps
+  `pageSize` at 100 and *rejects* above it, which is right for a list and awkward
+  for a board: the Pipeline holds every card at once. It fetches the pages in a
+  loop up to a ceiling of five and prints an honest footer past that, which works
+  and is not the shape you would design. Whatever fixes this — a cursor, a
+  board-shaped read — should wait until something other than one screen wants it.
+
+Building the second half of the screens **reinforced the first gap rather than
+adding a new one**: Today would like to say "these three have never been checked
+against a CV", and cannot, for exactly the reason the CV-match column cannot
+exist. Two callers now want `ats_results` on the list, which is the evidence that
+projection is worth doing.
+
+One finding needed no backend change and is worth carrying: **the counts on a
+filtered list come from `GET /stats/funnel`, not from the list itself.** A list
+filtered to one status can only count that status. That pattern repeated exactly
+as predicted — Today's status strip is the same aggregate again, used as
+navigation rather than as a chart.
 
 ## What does not change
 
