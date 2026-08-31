@@ -121,14 +121,33 @@ function Test-PortOpen {
     }
 }
 
+# Two ways of asking, because one of them has been seen to come back empty for a
+# port that was demonstrably held -- and a teardown that silently finds nothing
+# leaves an orphan holding :5080, which is the exact failure this script exists
+# to prevent. netstat is the fallback, not the primary: it is slower and its
+# output is text, but it does not depend on the CIM layer being healthy.
 function Get-PortOwner {
     param([int]$Port)
+
+    $owners = @()
     try {
-        Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction Stop |
-            Select-Object -ExpandProperty OwningProcess -Unique
+        $owners = @(Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction Stop |
+            Select-Object -ExpandProperty OwningProcess -Unique)
     } catch {
-        @()
+        Write-Verbose "Get-NetTCPConnection failed for :$Port -- $($_.Exception.Message)"
     }
+    if ($owners.Count -gt 0) { return $owners }
+
+    try {
+        $pattern = "^\s+TCP\s+\S+:$Port\s+\S+\s+LISTENING\s+(\d+)\s*$"
+        $owners = @(& netstat.exe -ano |
+            Select-String -Pattern $pattern |
+            ForEach-Object { [int]$_.Matches[0].Groups[1].Value } |
+            Select-Object -Unique)
+    } catch {
+        Write-Verbose "netstat fallback failed for :$Port -- $($_.Exception.Message)"
+    }
+    return $owners
 }
 
 # taskkill /T kills the whole tree, which is the point: `dotnet run` launches
@@ -137,8 +156,48 @@ function Get-PortOwner {
 function Stop-Tree {
     param([int]$ProcessId, [string]$Label)
     if (-not (Get-Process -Id $ProcessId -ErrorAction SilentlyContinue)) { return }
-    & taskkill.exe /PID $ProcessId /T /F 2>&1 | Out-Null
-    Write-Note "stopped $Label (pid $ProcessId)"
+    $result = & taskkill.exe /PID $ProcessId /T /F 2>&1
+    if ($LASTEXITCODE -eq 0) {
+        Write-Note "stopped $Label (pid $ProcessId)"
+    } else {
+        Write-Warn2 "could not kill $Label (pid $ProcessId): $result"
+    }
+}
+
+# Kill whatever is listening on a port, and keep going until the port is
+# actually free. Killing a wrapper is not the same as freeing the port -- the
+# first version of this script killed the cmd.exe that launched Vite and left
+# node listening -- so the port, not the process handle, is the thing to assert
+# on.
+function Stop-Port {
+    param([int]$Port, [string]$Label)
+    for ($attempt = 0; $attempt -lt 10; $attempt++) {
+        $owners = @(Get-PortOwner -Port $Port)
+        if ($owners.Count -eq 0) { return $true }
+        foreach ($owner in $owners) {
+            Stop-Tree -ProcessId ([int]$owner) -Label "$Label on :$Port"
+        }
+        Start-Sleep -Milliseconds 300
+    }
+    Write-Warn2 "port :$Port is still held after 10 attempts -- kill it by hand"
+    return $false
+}
+
+# Both servers are started through a wrapper -- `dotnet run` for the API,
+# cmd.exe for npm -- and in both cases the wrapper is not the process that ends
+# up holding the port. Record both: the launcher so a tree kill catches the
+# shell, and the listener so teardown has the pid that actually matters.
+function Get-LaunchedPids {
+    param([System.Diagnostics.Process]$Launcher, [int]$Port, [string]$Name)
+    $pids = [ordered]@{}
+    if ($Launcher -and -not $Launcher.HasExited) { $pids["$Name-launcher"] = $Launcher.Id }
+    $i = 0
+    foreach ($owner in Get-PortOwner -Port $Port) {
+        $suffix = if ($i -eq 0) { '' } else { "-$i" }
+        $pids["$Name-listener$suffix"] = [int]$owner
+        $i++
+    }
+    return $pids
 }
 
 function Wait-For {
@@ -187,12 +246,10 @@ function Stop-Stack {
     }
 
     # Whatever is actually holding the ports, whoever started it. This is the
-    # part that works after a crashed launcher.
-    foreach ($p in @(@{Port=$ApiPort; Name='api'}, @{Port=$WebPort; Name='front end'})) {
-        foreach ($owner in Get-PortOwner -Port $p.Port) {
-            Stop-Tree -ProcessId ([int]$owner) -Label "$($p.Name) on :$($p.Port)"
-        }
-    }
+    # part that works after a crashed launcher, and the part that is authoritative
+    # -- the pid file above is a convenience, not the source of truth.
+    Stop-Port -Port $ApiPort -Label 'api'       | Out-Null
+    Stop-Port -Port $WebPort -Label 'front end' | Out-Null
 
     # The specific orphan that breaks the next build.
     Get-Process -Name Jobkeep -ErrorAction SilentlyContinue | ForEach-Object {
@@ -288,9 +345,7 @@ function Start-Api {
         $stale | ForEach-Object { Stop-Tree -ProcessId $_.Id -Label 'stale Jobkeep.exe' }
         Start-Sleep -Milliseconds 500
     }
-    foreach ($owner in Get-PortOwner -Port $ApiPort) {
-        Stop-Tree -ProcessId ([int]$owner) -Label "whatever held :$ApiPort"
-    }
+    Stop-Port -Port $ApiPort -Label 'whatever held' | Out-Null
 
     $out = Join-Path $LogDir 'api.log'
     $err = Join-Path $LogDir 'api.err.log'
@@ -305,8 +360,12 @@ function Start-Api {
     # /applications, not /swagger: it exercises the database round trip, so a
     # 200 here means migrations applied and the connection string is right.
     # Swagger would answer before any of that was true.
+    #
+    # Deliberately no `$proc.HasExited` short-circuit. `dotnet run` hands off to
+    # Jobkeep.exe and can exit while the app it started serves happily -- taking
+    # that as "the API died" is a false negative, and it is what the first
+    # version of this script did.
     $ready = Wait-For -What "api ($ApiUrl)" -Seconds $TimeoutSeconds -Until {
-        if ($proc.HasExited) { return $false }
         try {
             $r = Invoke-WebRequest -Uri "$ApiUrl/applications" -TimeoutSec 4 -SkipHttpErrorCheck
             return ($r.StatusCode -eq 200)
@@ -321,7 +380,7 @@ function Start-Api {
     }
 
     if (-not $ready) { return $null }
-    return $proc
+    return (Get-LaunchedPids -Launcher $proc -Port $ApiPort -Name 'api')
 }
 
 # ---------------------------------------------------------------------------
@@ -338,9 +397,7 @@ function Start-Frontend {
         } finally { Pop-Location }
     }
 
-    foreach ($owner in Get-PortOwner -Port $WebPort) {
-        Stop-Tree -ProcessId ([int]$owner) -Label "whatever held :$WebPort"
-    }
+    Stop-Port -Port $WebPort -Label 'whatever held' | Out-Null
 
     $out = Join-Path $LogDir 'web.log'
     $err = Join-Path $LogDir 'web.err.log'
@@ -358,7 +415,6 @@ function Start-Frontend {
     # a silent fallback to 5174 would break every CORS preflight and read like
     # a React bug.
     $ready = Wait-For -What "front end ($WebUrl)" -Seconds 90 -Until {
-        if ($proc.HasExited) { return $false }
         Test-PortOpen -Port $WebPort
     } -OnFail {
         if (Test-Path $out) { Get-Content $out -Tail 15 | ForEach-Object { Write-Host "      $_" -ForegroundColor DarkGray } }
@@ -368,7 +424,7 @@ function Start-Frontend {
     }
 
     if (-not $ready) { return $null }
-    return $proc
+    return (Get-LaunchedPids -Launcher $proc -Port $WebPort -Name 'web')
 }
 
 # ---------------------------------------------------------------------------
@@ -411,7 +467,7 @@ try {
     Write-Step "API (:$ApiPort)"
     $api = Start-Api
     if (-not $api) { exit 1 }
-    $launched['api'] = $api.Id
+    foreach ($e in $api.GetEnumerator()) { $launched[$e.Key] = $e.Value }
     Write-Ok "$ApiUrl  (swagger: $ApiUrl/swagger, graphql: $ApiUrl/graphql)"
 
     # --- 4. Front end ------------------------------------------------------
@@ -421,7 +477,7 @@ try {
         # just prints the same lines twice.
         $web = Start-Frontend
         if (-not $web) { exit 1 }
-        $launched['web'] = $web.Id
+        foreach ($e in $web.GetEnumerator()) { $launched[$e.Key] = $e.Value }
         Write-Ok $WebUrl
     }
 
@@ -444,19 +500,32 @@ try {
 
     # Hold the console. Also notices if either side dies on its own, so a
     # crashed API doesn't sit there looking like it's still up.
+    #
+    # Liveness is "the port still answers", NOT "the process I started is still
+    # alive". `dotnet run` exits once Jobkeep.exe has the port, so watching the
+    # launcher handle reports a false death and tears down a stack that was
+    # serving 200s. Two consecutive misses before believing it, so a momentary
+    # refusal doesn't kill a working stack.
+    $misses = @{ api = 0; web = 0 }
     while ($true) {
-        Start-Sleep -Seconds 2
-        if ($api.HasExited) {
-            Write-Fail 'the API exited -- last lines:'
+        Start-Sleep -Seconds 3
+
+        $misses.api = if (Test-PortOpen -Port $ApiPort) { 0 } else { $misses.api + 1 }
+        if ($misses.api -ge 2) {
+            Write-Fail 'the API stopped answering -- last lines:'
             Get-Content (Join-Path $LogDir 'api.log') -Tail 20 |
                 ForEach-Object { Write-Host "      $_" -ForegroundColor DarkGray }
             break
         }
-        if ($web -and $web.HasExited) {
-            Write-Fail 'the front end exited -- last lines:'
-            Get-Content (Join-Path $LogDir 'web.log') -Tail 20 |
-                ForEach-Object { Write-Host "      $_" -ForegroundColor DarkGray }
-            break
+
+        if (-not $NoFrontend) {
+            $misses.web = if (Test-PortOpen -Port $WebPort) { 0 } else { $misses.web + 1 }
+            if ($misses.web -ge 2) {
+                Write-Fail 'the front end stopped answering -- last lines:'
+                Get-Content (Join-Path $LogDir 'web.log') -Tail 20 |
+                    ForEach-Object { Write-Host "      $_" -ForegroundColor DarkGray }
+                break
+            }
         }
     }
 } finally {
