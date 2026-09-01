@@ -37,6 +37,7 @@ phase doc is a historical record, not a description of the current tree.
 | 5 | [ATS compatibility check](phases/phase-5-ats-check.md) | **Done** — skill gap is a SQL join, not a model call; degrades when the model is down |
 | 6 | [Front end](phases/phase-6-frontend.md) | **In progress** — 6.1–6.3 done (eight screens); the visual pass on the other seven screens and 6.4 (README) remain |
 | 6.5 | [The upload experience](phases/phase-6.5-upload-experience.md) | **In progress** — the rename, the drop zone, the progress bar and the spacing are done; group 4 (paste text, the only backend half) is not started |
+| 6.6 | [The ad goes somewhere](phases/phase-6.6-the-ad-goes-somewhere.md) | **Done** (2026-09-01) — the add form collected the ad into `Notes`, which nothing reads; the job post told you to paste the ad in and offered nowhere to do it |
 | 7 | [Data integrity & the dedup key](phases/phase-7-data-integrity.md) | **Done** (2026-09-01) — one migration; ERD redraw still outstanding. Formerly "Phase 2.7" |
 | 8 | [Soft delete / archive](phases/phase-8-soft-delete.md) | **Planned.** Rides Phase 7's index migration; highest front-end blast radius on the roadmap |
 | 9 | [The three reads the front end could not get](phases/phase-9-api-gaps.md) | **Planned.** Found by building the screens in 6.3 |

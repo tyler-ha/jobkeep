@@ -205,6 +205,17 @@ The STAR angle survives either way, and is arguably better as a reversal:
 convention, then dropped it when I picked a slice-based structure they'd have
 worked against — and I can explain the tradeoff in both directions."*
 
+### Added by the first real use of the add form (2026-09-01)
+
+Phase 6.6 fixed the three defects behind *"it doesn't read the job ad and fill the
+skill correctly"* — see
+[`phases/phase-6.6-the-ad-goes-somewhere.md`](phases/phase-6.6-the-ad-goes-somewhere.md).
+One thing it deliberately did not fix.
+
+| Candidate | What it is | Cost / size | Likely home | Notes |
+|---|---|---|---|---|
+| **Attach an upload to an existing application** | Confirming a job-ad import always creates a *new* application, so uploading the ad and logging the application by hand produces two rows for one job | Medium — a target application on the confirm step, a duplicate check, and a decision about what "the same job" means | **Phase 8 (P1)**, with soft delete | This is what actually happened in the report: the user did both, and got two Airwallex rows, one with skills and one without. `CommitImport.cs:306` calls `CreateApplicationHandler` unconditionally — deliberately, so the import reuses the Applications use case rather than writing its tables (rule 2). Making it optional means `CommitImport` needs a target and a "does this already exist" answer, and `ContentHash` dedups *documents*, not jobs. Belongs with Phase 8 because that is where a duplicate row first gets a cheap answer — archive one instead of deleting it. |
+
 ## Explicitly NOT backlog (already owned or out of character)
 
 - ~~**Kanban board / drag-and-drop**~~ — **DONE, Phase 6.3.** `Pipeline.tsx`, dnd-kit,

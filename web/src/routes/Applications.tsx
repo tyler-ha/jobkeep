@@ -433,6 +433,7 @@ function AddForm({
   const [title, setTitle] = useState('');
   const [location, setLocation] = useState('');
   const [sourceUrl, setSourceUrl] = useState('');
+  const [description, setDescription] = useState('');
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
@@ -450,6 +451,7 @@ function AddForm({
         title: title.trim(),
         location: location.trim() || null,
         sourceUrl: sourceUrl.trim() || null,
+        description: description.trim() || null,
         notes: notes.trim() || null,
       });
       onCreated(created);
@@ -465,7 +467,10 @@ function AddForm({
       <h2>Add an application</h2>
       <p className="quiet">
         Company and role are all that is required. The company is matched by name — an
-        existing one is reused rather than duplicated.
+        existing one is reused rather than duplicated. Paste the ad in as well and the
+        analyser can read it; or{' '}
+        <Link to="/upload">upload the ad as a file</Link> and let the parser fill this in
+        for you.
       </p>
 
       <div className="add-grid">
@@ -489,9 +494,38 @@ function AddForm({
           <span>Link to the ad</span>
           <input type="url" value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} />
         </label>
+        {/* The ad, and it is deliberately the largest control on the form.
+            Phase 6.3 shipped this form with Notes and no description, which put
+            the only textarea labelled for prose on job_applications.Notes — a
+            field nothing reads. Someone pasting an advertisement found the box
+            that looked right and got no skills, because the analyser reads
+            job_postings.Description. Two fields, two owners, one of them
+            invisible. See docs/phases/phase-6.6-the-ad-goes-somewhere.md. */}
         <label className="field field-wide">
-          <span>Notes</span>
-          <textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
+          <span>The ad</span>
+          <textarea
+            rows={8}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Paste the advertisement here — the whole thing, boilerplate and all."
+          />
+          <span className="quiet field-hint">
+            This is what the analyser reads to pull out skills and requirements. Leave it
+            empty and &ldquo;Analyse the ad&rdquo; has nothing to work from. You can add it
+            later from the job&rsquo;s own page.
+          </span>
+        </label>
+        <label className="field field-wide">
+          <span>Your notes</span>
+          <textarea
+            rows={2}
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Who referred you, what to ask, why you want it."
+          />
+          <span className="quiet field-hint">
+            Yours, not the employer&rsquo;s. Nothing reads these — they are for you.
+          </span>
         </label>
       </div>
 

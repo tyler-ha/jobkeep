@@ -347,6 +347,17 @@
   min-width: 0;
 }
 
+/* The ad panel's head carries two actions now — the outbound link and the
+   edit toggle — where it used to carry one. Baseline alignment comes from
+   .panel-head; this only stops the pair from being pushed apart by its
+   justify-content: space-between. */
+.ad-head-actions {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-3);
+  flex-shrink: 0;
+}
+
 .skill-group {
   width: 100%;
 }

@@ -506,6 +506,13 @@ about that date — verify it before relying on it.
   synchronous model block, the server-side filename label default, the drop zone
   the screen never had, the `stubFetch` throw, the `Description` cap that 500s,
   and the design pass's eight defects.
+- `docs/phases/phase-6.6-the-ad-goes-somewhere.md` — **read this before touching
+  the add form, the Job post screen or anything that asks where the ad text
+  lives.** The one fact worth having in advance: **`job_postings.Description` is
+  the ad and `job_applications.Notes` is your commentary, and only `Description`
+  is read by anything.** The analyser, the ATS check and the extractor all read
+  `Description`; nothing reads `Notes`. Phase 6.3 wired the add form's only
+  textarea to `Notes`, which is why a pasted advertisement produced no skills.
 - `docs/security-and-data-audit.md` — schema/config exposure, F1-F18, and the
   phased remediation plan. **Refresh on a cadence, not per phase:** once before
   the AWS deploy ships (Phase 10), and once before auth lands (Phase 11). Those are the points where a

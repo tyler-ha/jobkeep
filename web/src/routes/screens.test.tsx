@@ -171,6 +171,65 @@ describe('every screen renders', () => {
     expect((submit as HTMLButtonElement).disabled).toBe(true);
   });
 
+  /* The three below are Phase 6.6. They exist because the app shipped a screen
+   * that told the reader to "paste the ad in" and gave them nowhere to do it,
+   * while the only textarea on the add form was wired to a field nothing reads.
+   * None of that is visible to a renders-without-throwing test, which is why
+   * these assert the wiring rather than the markup. */
+  it('the add form offers the ad, and sends it as the description', async () => {
+    const user = userEvent.setup();
+    at('/applications');
+    await user.click(await screen.findByRole('button', { name: /Add application/ }));
+
+    await user.type(screen.getByRole('textbox', { name: 'Company' }), 'Airwallex');
+    await user.type(screen.getByRole('textbox', { name: 'Role' }), 'Backend Engineer');
+    await user.type(screen.getByRole('textbox', { name: /^The ad/ }), 'Kubernetes and Spring Boot.');
+    /* Notes must NOT collect this. It is a different field on a different
+       table, and the analyser has never read it. */
+    await user.type(screen.getByRole('textbox', { name: /^Your notes/ }), 'referred by a friend');
+    await user.click(screen.getByRole('button', { name: 'Save application' }));
+
+    const post = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.find(
+      ([, init]) => init?.method === 'POST',
+    );
+    expect(post).toBeTruthy();
+    const body = JSON.parse(post![1].body as string);
+    expect(body.description).toBe('Kubernetes and Spring Boot.');
+    expect(body.notes).toBe('referred by a friend');
+  });
+
+  it('the job post can be given an ad, and PATCHes it as the description', async () => {
+    const user = userEvent.setup();
+    at(`/applications/${APP_ID}`);
+    await user.click(await screen.findByRole('button', { name: /Edit the ad/ }));
+
+    const box = screen.getByRole('textbox', { name: 'The advertisement text' });
+    /* Prefilled from what is stored, so editing is editing and not retyping. */
+    expect((box as HTMLTextAreaElement).value).toContain('backend engineer');
+
+    await user.clear(box);
+    await user.type(box, 'Go, Kubernetes, Grafana.');
+    await user.click(screen.getByRole('button', { name: 'Save the ad' }));
+
+    const patch = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.find(
+      ([, init]) => init?.method === 'PATCH',
+    );
+    expect(patch).toBeTruthy();
+    expect(JSON.parse(patch![1].body as string).description).toBe('Go, Kubernetes, Grafana.');
+  });
+
+  it('an analyser refusal is explained in place, not as a dead screen', async () => {
+    const user = userEvent.setup();
+    at(`/applications/${APP_ID}`);
+    await user.click(await screen.findByRole('button', { name: /Analyse the ad/ }));
+
+    expect(await screen.findByText(/nothing for it to read|no description to analyze/i)).toBeTruthy();
+    /* The screen survives. Before this, a 400 went to setError and the whole
+       detail view was replaced by a failure card — the heading below is what
+       proves the difference. */
+    expect(screen.getByRole('heading', { name: 'The ad' })).toBeTruthy();
+  });
+
   it('an unknown address says so rather than rendering nothing', async () => {
     at('/nonsense');
     expect(await screen.findByRole('heading', { name: 'No screen at this address' })).toBeTruthy();
