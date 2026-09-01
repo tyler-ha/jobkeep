@@ -44,6 +44,7 @@ phase doc is a historical record, not a description of the current tree.
 | 10 | [Deploy to AWS Lambda (Function URL)](phases/phase-10-aws-deploy.md) | **Parked** — plan done, $0/month. Formerly "Phase 3" |
 | 11 | [Authentication & owner scoping](phases/phase-11-auth.md) | **Planned.** Gated on the deploy and on confirming decision 9 |
 | 12 | [Feature expansion after the front end](phases/phase-12-feature-expansion.md) | **Placeholder** — not a feature list; what changes about *building* one once there are two halves. Formerly "Phase 7" |
+| 13 | [Clean Architecture and controllers](phases/phase-13-clean-architecture.md) | **Proposed — an estimate, not a commitment** (2026-09-01). Four projects, MediatR, controllers. 4–5 sessions. Reverses decisions 5 and 7; starts only after Phase 6.5 group 4 |
 
 **Numbers are build order for unbuilt work, and history for built work.**
 Phases 1–6 keep the numbers they shipped under. The remaining work was
