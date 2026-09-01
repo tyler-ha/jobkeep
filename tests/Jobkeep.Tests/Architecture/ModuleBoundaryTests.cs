@@ -41,24 +41,23 @@ public class ModuleBoundaryTests
     [
         "Jobkeep.Modules.Applications",
         "Jobkeep.Modules.Ats",
-        "Jobkeep.Modules.Documents",
     ];
 
     // The exceptions, named one by one rather than allowed as a category.
     //
-    // Documents -> Applications is architecture.md decision 15: CommitImport calls
-    // CreateApplicationHandler and AddRequirementToPostingHandler directly, so that
-    // Applications' own rules run on a committed draft instead of being re-implemented
-    // in Documents. That decision accepted the compile-time coupling openly, and Phase
-    // 13.2 replaces it with a contract call.
+    // It is EMPTY, and that is the state Phase 13 is trying to reach and hold. It held
+    // exactly one entry — Documents -> Applications, architecture.md decision 15, where
+    // CommitImport called CreateApplicationHandler and AddRequirementToPostingHandler
+    // directly so that Applications' own rules ran on a committed draft instead of
+    // being re-implemented in Documents. 13.2c replaced that with
+    // IApplicationContract.CommitPostingAsync and the entry went with it.
     //
-    // When 13.2 lands, delete this entry and the ProjectReference together. If it is
-    // ever tempting to ADD an entry here, that is the boundary telling you the use case
-    // is in the wrong module.
-    private static readonly HashSet<(string From, string To)> AllowedEdges =
-    [
-        ("Jobkeep.Modules.Documents", "Jobkeep.Modules.Applications"),
-    ];
+    // The list is kept rather than deleted because the test below reads better with a
+    // named exception mechanism than with a special case, and because an empty
+    // allowlist is a stronger statement than no allowlist. If it is ever tempting to
+    // ADD an entry, that is the boundary telling you the use case is in the wrong
+    // module.
+    private static readonly HashSet<(string From, string To)> AllowedEdges = [];
 
     [Fact]
     public void No_module_references_another_module()
@@ -178,27 +177,15 @@ public class ModuleBoundaryTests
             + "ModulesStillOnAppDbContext:\n  " + string.Join("\n  ", converted));
     }
 
-    [Fact]
-    public void The_recorded_exception_is_actually_visible_to_this_test()
-    {
-        // A canary, and it earns its place twice.
-        //
-        // First: the C# compiler emits an assembly reference only when a type from it
-        // is actually used. So a ProjectReference that nothing consumes yet is INVISIBLE
-        // here — this test suite proves a module does not *use* another module, which is
-        // the thing that matters, but it is not the same claim as "has no reference".
-        // Knowing which claim is being made is the point of writing it down.
-        //
-        // Second: it fails the moment 13.2 replaces the CommitImport handler calls with
-        // a contract, which is the reminder to delete the allowlist entry and the
-        // ProjectReference rather than leaving a stale exception standing.
-        var documentsReferences = ReferencedJobkeepAssemblies("Jobkeep.Modules.Documents");
-
-        Assert.True(documentsReferences.Contains("Jobkeep.Modules.Applications"),
-            "Documents no longer uses Applications. If 13.2 has landed, remove the entry "
-            + "from AllowedEdges, drop the ProjectReference from "
-            + "Jobkeep.Modules.Documents.csproj, and delete this test.");
-    }
+    // DELETED IN 13.2c: The_recorded_exception_is_actually_visible_to_this_test.
+    //
+    // It asserted that Documents DID reference Applications, and it was written to fail
+    // at exactly the moment that stopped being true — which it did, on schedule. Its
+    // second job is worth keeping even though the test is gone: the C# compiler emits an
+    // assembly reference only when a type from it is actually used, so a ProjectReference
+    // nothing consumes is INVISIBLE to these tests. What this file proves is that a
+    // module does not *use* another module. That is the thing that matters, and it is
+    // not the same claim as "has no reference in its csproj".
 
     private static IEnumerable<string> ReferencedJobkeepAssemblies(string assemblyName)
         // Load by name rather than off a type: naming a type would mean this test file

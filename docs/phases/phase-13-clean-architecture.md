@@ -1,7 +1,8 @@
 # Phase 13 — module-owned Clean Architecture, on the road to services
 
-**Status: In progress. Steps 13.1 and 13.2a–b done 2026-09-01** (branch
-`phase-13/module-boundaries`, suite 239 → 244 → 246 green). 13.2c–e and 13.3–13.6 remain.
+**Status: In progress. Steps 13.1 and 13.2a–c done 2026-09-01** (branch
+`phase-13/module-boundaries`, suite 239 → 244 → 246 → 249 green). 13.2d–e and
+13.3–13.6 remain.
 
 **This doc was rewritten on 2026-09-01.** The version before it (written the same
 day, commit `bf968a0`) planned a **layer-first** migration: one `Domain`, one
@@ -176,13 +177,13 @@ it is fully reversible and every test still passes.
 
 **Split into five sub-steps**, each ending green and runnable, because the whole of
 it is several sessions' work at the context budget this project runs to. **13.2a and
-13.2b landed 2026-09-01; 13.2c–e remain.**
+13.2b and 13.2c landed 2026-09-01; 13.2d–e remain.**
 
 | | Module | State |
 |---|---|---|
 | **13.2a** | the seam: six `I<X>DbContext`, DI, `Jobkeep.Modules.Skills` | **Done** |
 | **13.2b** | Ai, Analytics | **Done** |
-| 13.2c | Documents | Not started |
+| **13.2c** | Documents | **Done** |
 | 13.2d | Applications | Not started |
 | 13.2e | Ats | Not started |
 
@@ -265,6 +266,97 @@ deviation note records, one step later and with a migration attached.
   precisely what stops working when the boundary becomes a network. The third option it
   never considered is the one that shipped.
 
+#### What landed in 13.2c
+
+The largest behavioural change in 13.2, and the only sub-step that touches the
+front end.
+
+- **Documents no longer references Applications.** The `ProjectReference` that
+  architecture.md decision 15 accepted openly as temporary is gone, and with it the
+  `AllowedEdges` entry and the `The_recorded_exception_is_actually_visible_to_this_test`
+  canary written to fail at exactly this moment. It did, on schedule. `AllowedEdges`
+  is now empty and kept empty: an empty allowlist is a stronger statement than no
+  allowlist.
+- **`ISkillCatalog` grew to its final three verbs** — `GetAsync`, `FindByNameAsync`,
+  `FindOrCreateAsync` — which are the three its own comment named before either of
+  the last two had a caller. `NaturalKey.Of` is now called in exactly one file in
+  `src/`. Phase 7 shipped the natural key as "every writer must remember"; this makes
+  it "no writer can forget", which is the difference between a convention and a design.
+- **`IApplicationContract.CommitPostingAsync` is ONE method, not three.** The obvious
+  translation of two direct handler calls was one contract method per handler, which
+  is the shape that killed `IJobApplicationRepository`. The shape that survives a
+  service split is one method per *thing the caller wants to have happened* — and it
+  is also the only shape whose failure the caller can reason about, because one call
+  leaves one half-state instead of three.
+- **`Jobkeep.Contracts` got its own copy of `RequirementKind`.** It may reference no
+  Jobkeep assembly, so it cannot name the entity enum. The mapping is an explicit
+  switch at each end rather than a cast, so adding a value to one without the other
+  fails to compile.
+
+##### `CommitImport` stopped being a transaction, and what replaced it
+
+The transaction spanned Documents' writes and calls into Applications' handlers, and
+worked only because both sides happened to share a connection. It is replaced by a
+three-step protocol plus one new `ImportStatus`:
+
+1. **Claim** — mark the import committed before calling out, so a second request
+   during the call is refused by the existing double-click guard. `CommittedEntityId`
+   is still null, which is what "started, outcome unknown" looks like in this table.
+2. **Call** — one contract call.
+3. **Record** — write the application id back. From here the import is a receipt.
+
+`CommittedEntityId` is the idempotency guard, and it is a field the table already
+had. A retry that finds it set knows the rows exist and only closes the import out;
+a retry that finds it null knows nothing was logged and starts over.
+
+Two things this needed that the plan did not anticipate:
+
+- **The contract reports a partial commit rather than throwing.**
+  `PostingCommitResult.Incomplete` carries the ids *with* the error, because the one
+  thing the caller needs after a partial write is the thing an exception cannot
+  carry: what got created. Without it, a crash between creating the application and
+  the skills would leave `CommittedEntityId` null and a retry would duplicate the job
+  — reintroducing the exact failure the transaction existed to prevent. A refusal
+  (validation) is distinguished from an incomplete commit by `ApplicationId ==
+  Guid.Empty`, and it *rewinds* the claim to `AwaitingReview` because a refusal is a
+  clean no-op.
+- **`ImportStatus.CommitFailed`, which is the front-end touch.** No migration — the
+  column is `varchar(20)` with no CHECK — but the TypeScript union is closed, so
+  `web/src/lib/api.ts` and the Upload screen were widened: a fourth queue tab, a
+  banner telling the user to confirm again, and `editable` extended so the draft is
+  not locked in the one state whose whole meaning is "try again". Every URL is
+  unchanged; this is a new value on an existing field, not a new shape.
+
+**The accepted cost, stated because it is a real regression from the transaction:**
+the window between the contract call returning and the id being saved is not covered.
+`CancellationToken.None` closes the dominant cause (a cancelled request); what remains
+is one UPDATE on an already-loaded row and is unavoidable without a distributed
+transaction.
+
+##### Two smaller behaviour changes, both deliberate
+
+- **`RemoveSkillFromResume` became case-insensitive**, and it is a fix. The old
+  comment argued for exact matching on the grounds that a loose match could delete a
+  row the caller did not name — true while `C#` and `c#` could both exist, and untrue
+  since Phase 7's unique index on `lower("Name")`. Routing through the catalog fixed
+  it as a side effect; a test now pins it as a decision.
+- **`GetResume` sorts skills in memory**, because the names are not in the
+  database's hands any more. Tens of rows, already materialised. A skill id with no
+  row is dropped rather than rendered blank — impossible today with the FK, a gap to
+  report at 13.3 when it is gone.
+
+##### The one thing to carry into 13.2d and 13.2e
+
+**`ISkillCatalog.FindOrCreateAsync` SAVES, so call it before adding anything of your
+own to the change tracker.** All six interfaces still resolve the same scoped
+`AppDbContext`, so a save in the catalog flushes the caller's pending changes too.
+`CommitImport` resolves skills *before* it builds the resume for exactly this reason:
+the other order commits a half-built résumé in its own transaction, and a failure
+just after leaves one the user cannot re-import, because the label uniqueness check
+refuses the retry. The accepted cost that remains is an **orphan taxonomy row** — a
+skill created, its link not — which is harmless because every count in Analytics is
+over link rows, and find-or-create reuses the orphan next time.
+
 #### What remains, and what each sub-step has to answer
 
 The cross-module reads still to convert, counted:
@@ -275,8 +367,7 @@ The cross-module reads still to convert, counted:
 - **Applications (13.2d)** — `Resumes` ×2 (Documents), `Skills` ×4, plus the
   traversals in `ApplicationDetail`, `ListApplications` and `RemoveSkillFromPosting`.
   The `ILike` skill filter becomes `ISkillCatalog` resolving the pattern to ids.
-- **Documents (13.2c)** — `Skills` ×4, the `GetResume` and `RemoveSkillFromResume`
-  traversals, and the `CommitImport` work below.
+- ~~**Documents (13.2c)**~~ — done, see above.
 
 Then:
 
@@ -300,9 +391,8 @@ Then:
   25-line comment above the `BeginTransactionAsync` call before deleting it: it names
   the duplicate-application failure the transaction was protecting against, and the
   replacement has to answer it.
-- Dropping the Documents-to-Applications project reference at 13.2c also means deleting
-  the `AllowedEdges` entry and the `The_recorded_exception_is_actually_visible_to_this_test`
-  canary, which is written to fail at exactly that moment.
+- ~~Dropping the Documents-to-Applications project reference at 13.2c~~ — done. The
+  `AllowedEdges` entry and the canary went with it, as designed.
 
 ### 13.3 — the physical split
 

@@ -91,6 +91,19 @@ public class ImportTests(PostgresFixture fixture) : IntegrationTestBase(fixture)
         }
         """;
 
+    // A posting the model structured with no company name. Phase 13.2c: the
+    // refusal comes back through IApplicationContract as a Refused result, which
+    // is how CommitImport knows nothing was created and the claim can be rewound.
+    private const string BlankCompanyReply = """
+        {
+          "company": "",
+          "title": "Senior Backend Engineer",
+          "location": null,
+          "skills": [],
+          "requirements": []
+        }
+        """;
+
     // Named FixtureBytes, not Fixture: IntegrationTestBase already exposes a
     // Fixture property (the Postgres container), and shadowing it here would
     // hide the thing every other test in the suite uses by that name.
@@ -437,6 +450,93 @@ public class ImportTests(PostgresFixture fixture) : IntegrationTestBase(fixture)
             Assert.Equal(2, application.Posting.Requirements.Count);
             Assert.Contains(application.Posting.Requirements,
                 r => r.Kind == RequirementKind.Qualification && r.IsMustHave);
+        });
+    }
+
+    /// <summary>
+    /// Phase 13.2c. Confirming a job ad stopped being one database transaction —
+    /// the application is created by another module, through
+    /// <c>IApplicationContract</c>, and at 13.3 that is a different service with no
+    /// transaction to join. What replaced the transaction is a three-step protocol,
+    /// and this is the step that carries the risk.
+    ///
+    /// <para>
+    /// The failure the transaction protected against was never a lost write. It was
+    /// a DUPLICATE one: the application committed, something after it failed, the
+    /// import still read <c>AwaitingReview</c>, and confirming again logged the same
+    /// job twice. The replacement is <c>CommittedEntityId</c>, written the moment
+    /// the application exists — so a re-run finds it and only closes the import out.
+    /// </para>
+    ///
+    /// <para>
+    /// Seeded rather than provoked. Making the real commit fail half-way needs a
+    /// fault injected into another module's SaveChanges, which would test the
+    /// injection more than the protocol; the state a crash leaves behind is a row,
+    /// and a row can simply be written. What is asserted is the thing that matters:
+    /// re-confirming that row creates no second application.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Confirm_AfterAHalfFinishedCommit_ClosesTheImportOut_AndDoesNotLogTheJobTwice()
+    {
+        var client = AppWithModel(PostingReply);
+        using var created = await PostImportAsync(client, "resume.txt", DocumentKind.JobPosting);
+        var id = created.RootElement.GetProperty("id").GetGuid();
+
+        // A first confirm that got as far as creating the application and no further.
+        (await client.PostAsync($"/imports/{id}/confirm", null, Ct)).EnsureSuccessStatusCode();
+        var applicationId = await WithDbAsync(async db =>
+        {
+            var application = await db.JobApplications.SingleAsync(Ct);
+            var import = await db.DocumentImports.SingleAsync(d => d.Id == id, Ct);
+            import.Status = ImportStatus.CommitFailed;
+            import.CommittedAtUtc = null;
+            await db.SaveChangesAsync(Ct);
+            return application.Id;
+        });
+
+        // The user presses confirm again, which is what CommitFailed tells them to do.
+        var second = await client.PostAsync($"/imports/{id}/confirm", null, Ct);
+
+        Assert.Equal(HttpStatusCode.OK, second.StatusCode);
+        await WithDbAsync(async db =>
+        {
+            // The whole point. One application, not two.
+            Assert.Equal(1, await db.JobApplications.CountAsync(Ct));
+            Assert.Equal(1, await db.JobPostings.CountAsync(Ct));
+
+            var import = await db.DocumentImports.SingleAsync(d => d.Id == id, Ct);
+            Assert.Equal(ImportStatus.Committed, import.Status);
+            Assert.Equal(applicationId, import.CommittedEntityId);
+            Assert.NotNull(import.CommittedAtUtc);
+        });
+    }
+
+    /// <summary>
+    /// The other half of the protocol: a refusal is a clean no-op, so the claim the
+    /// commit put on the import is REWOUND rather than left as CommitFailed. The
+    /// user's draft is still editable, which is the state they need to be in.
+    /// </summary>
+    [Fact]
+    public async Task Confirm_WhenApplicationsRefusesTheDraft_LeavesTheImportEditable()
+    {
+        // A posting draft with no company. CreateApplicationHandler refuses it, and
+        // this file deliberately does not duplicate that check.
+        var client = AppWithModel(BlankCompanyReply);
+        using var created = await PostImportAsync(client, "resume.txt", DocumentKind.JobPosting);
+        var id = created.RootElement.GetProperty("id").GetGuid();
+
+        var response = await client.PostAsync($"/imports/{id}/confirm", null, Ct);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await WithDbAsync(async db =>
+        {
+            Assert.Equal(0, await db.JobApplications.CountAsync(Ct));
+
+            var import = await db.DocumentImports.SingleAsync(d => d.Id == id, Ct);
+            Assert.Equal(ImportStatus.AwaitingReview, import.Status);
+            Assert.Null(import.CommittedAtUtc);
+            Assert.Null(import.CommittedEntityId);
         });
     }
 

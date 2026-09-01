@@ -76,6 +76,7 @@ const VIEWS: { status: ImportStatus; label: string }[] = [
   { status: 'AwaitingReview', label: 'Waiting on you' },
   { status: 'Committed', label: 'Confirmed' },
   { status: 'Discarded', label: 'Discarded' },
+  { status: 'CommitFailed', label: 'Needs another go' },
 ];
 
 function Queue() {
@@ -148,14 +149,18 @@ function QueueList({ view }: { view: ImportStatus }) {
               ? 'Nothing waiting'
               : view === 'Committed'
                 ? 'Nothing confirmed yet'
-                : 'Nothing discarded'}
+                : view === 'Discarded'
+                  ? 'Nothing discarded'
+                  : 'Nothing stuck'}
           </h2>
           <p>
             {view === 'AwaitingReview'
               ? 'Upload a document above and it lands here for review.'
               : view === 'Committed'
                 ? 'Confirmed imports are receipts — the interesting view of one is the row it created.'
-                : 'A discarded import keeps its extracted text, so a bad parse stays diagnosable.'}
+                : view === 'Discarded'
+                  ? 'A discarded import keeps its extracted text, so a bad parse stays diagnosable.'
+                  : 'This is where a confirm that stopped half-way would show up. Empty is the good outcome.'}
           </p>
         </div>
       )}
@@ -497,7 +502,10 @@ function Review({ id }: { id: string }) {
       </p>
     );
 
-  const editable = imported.status === 'AwaitingReview';
+  /* CommitFailed is editable too — it means the confirm did not finish, and the
+   * user's next move is to fix something and press the button again. Locking the
+   * draft would leave them a screen with nothing to do on it. */
+  const editable = imported.status === 'AwaitingReview' || imported.status === 'CommitFailed';
 
   async function save() {
     if (!draft) return;
@@ -604,6 +612,15 @@ function Review({ id }: { id: string }) {
               Open what it created
             </Link>
           )}
+        </p>
+      )}
+
+      {imported.status === 'CommitFailed' && (
+        <p className="refusal" role="status">
+          <strong>That confirm did not finish.</strong> Confirming a job ad creates the
+          application in a separate step, and this one stopped part-way through. Press
+          confirm again — the server knows what already exists, so it will finish the job
+          rather than logging it twice.
         </p>
       )}
 

@@ -28,13 +28,13 @@ namespace Jobkeep.Modules.Documents;
 // rather than something the review screen does on load — see below.
 public class RestructureImportHandler
 {
-    private readonly AppDbContext _db;
+    private readonly IDocumentsDbContext _db;
     private readonly IDocumentStructurer _structurer;
     private readonly ModelOptions _model;
     private readonly DocumentOptions _options;
 
     public RestructureImportHandler(
-        AppDbContext db, IDocumentStructurer structurer, ModelOptions model, DocumentOptions options)
+        IDocumentsDbContext db, IDocumentStructurer structurer, ModelOptions model, DocumentOptions options)
     {
         _db = db;
         _structurer = structurer;

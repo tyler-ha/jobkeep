@@ -31,7 +31,29 @@ public enum ImportStatus
     // Thrown away without committing. Kept rather than deleted so a bad parse
     // stays diagnosable: the extracted text is still there to look at, which is
     // how you tell "the PDF extracted badly" from "the model structured it badly".
-    Discarded
+    Discarded,
+
+    // Phase 13.2c. A commit was started and did not finish, and the import is
+    // waiting to be re-run.
+    //
+    // It exists because the posting path stopped being one database transaction.
+    // Committing a job ad now claims this row, calls the Applications module
+    // through a contract, and writes the resulting id back; the call in the
+    // middle is not something a transaction on this side can roll back once
+    // Applications is its own service. So the states a commit can leave behind
+    // grew by one: not "AwaitingReview, as though nothing happened", but "this
+    // was attempted, here is what we know".
+    //
+    // What distinguishes it from AwaitingReview is what is safe to do next. An
+    // AwaitingReview import has definitely created nothing. A CommitFailed one
+    // may have — CommittedEntityId is the answer: null means nothing was logged
+    // and re-running is a clean retry, non-null means the rows exist and
+    // re-running only finishes the bookkeeping. CommitImport reads exactly that.
+    //
+    // Deliberately NOT terminal. A commit that failed because Postgres blinked is
+    // the case this whole state exists for, and it is fixed by pressing the
+    // button again.
+    CommitFailed
 }
 
 // The format extraction actually found, after sniffing the bytes — not what the

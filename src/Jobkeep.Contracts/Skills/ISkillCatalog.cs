@@ -10,6 +10,13 @@ namespace Jobkeep.Modules.Skills;
 // with it, and the boundary would exist on paper only.
 public record SkillInfo(Guid Id, string Name, string? Category);
 
+// A skill a caller wants to exist. Category is advisory: it is used only when
+// the row is created, never to update one that is already there. Two modules
+// disagreeing about whether "SQL" is a Language or a Database must not take
+// turns overwriting each other, and the first writer to name it is as good a
+// tiebreak as any -- the alternative is a merge rule nobody asked for.
+public record SkillRequest(string Name, string? Category = null);
+
 // The shared skill taxonomy, as a service rather than a table.
 //
 // ---------------------------------------------------------------------------
@@ -34,6 +41,10 @@ public record SkillInfo(Guid Id, string Name, string? Category);
 // is the first. "Which skills does posting X ask for that resume Y lacks" is the
 // second, and belongs to whoever owns that question.
 //
+// 13.2c added the second and third verbs and stopped there. All three were
+// named above before either had a caller, which is the difference between a
+// closed list and a list that has not grown yet.
+//
 // ---------------------------------------------------------------------------
 // The natural key is this module's business, and callers must not do it
 // ---------------------------------------------------------------------------
@@ -42,6 +53,11 @@ public record SkillInfo(Guid Id, string Name, string? Category);
 // or a lookup misses a row the index then refuses to insert. Four modules each
 // remembering to call NaturalKey.Of is four places to forget. It is applied in
 // here, once.
+//
+// The visible consequence at 13.2c: no caller of this interface passes a
+// normalized key, and none of them should start. `NaturalKey` is in SharedKernel
+// and will stay reachable; the rule is that reaching for it near a skill name is
+// the bug.
 public interface ISkillCatalog
 {
     // Resolves ids to names, for a caller that holds skill ids and needs to
@@ -54,4 +70,57 @@ public interface ISkillCatalog
     // rows, so the per-id version would be a query per row.
     Task<IReadOnlyDictionary<Guid, SkillInfo>> GetAsync(
         IReadOnlyCollection<Guid> ids, CancellationToken ct = default);
+
+    // Resolves ONE name to the row it names, or null when no row does.
+    //
+    // Not batched, unlike GetAsync, and the asymmetry is the callers' shape
+    // rather than an oversight: reads arrive as a page of ids, while a name
+    // arrives from a human typing one into a box. There is no caller holding a
+    // hundred names it did not itself create.
+    //
+    // The match is on the natural key, so "C#" finds the row stored as "c#".
+    // That is a deliberate CHANGE from what the callers did before 13.2c, where
+    // each compared `Skill.Name` directly and a wrong-cased name simply missed.
+    // Phase 7's unique index means at most one row per natural key exists, so a
+    // case-insensitive lookup can no longer match a row the caller did not name
+    // — which was the objection the old comments recorded, and it stopped being
+    // true when the index landed.
+    Task<SkillInfo?> FindByNameAsync(string name, CancellationToken ct = default);
+
+    // Find-or-create, batched, for a caller turning a list of names into links.
+    //
+    // Returns a dictionary keyed by the name AS PASSED IN, so the caller can map
+    // its own list back to rows without knowing what normalization happened in
+    // here. Two spellings of one skill therefore give two keys pointing at ONE
+    // SkillInfo — call `.Values.DistinctBy(s => s.Id)` if what you want is the
+    // set. That is the shape callers actually need, because they are building
+    // link rows and the link table's key is the skill id.
+    //
+    // Blank names are skipped rather than refused: the callers are cleaning up
+    // model output, and a model that emits an empty string in a list of skills
+    // has not made an error the user can act on.
+    //
+    // ---------------------------------------------------------------------
+    // 13.2c semantic change, stated because it is invisible at the call site
+    // ---------------------------------------------------------------------
+    // This SAVES. Before 13.2c every caller added the new `skills` rows to its
+    // own change tracker and committed them in the same SaveChanges as the link
+    // rows, so a new skill and the thing that referenced it were atomic. Through
+    // a contract they cannot be, because at 13.3 this is a different service and
+    // there is no shared transaction to join.
+    //
+    // The accepted cost is an ORPHAN TAXONOMY ROW: create the skill, fail to
+    // create the link, and `skills` keeps a row nothing points at. It is
+    // harmless in this schema — every count in Analytics is over link rows, and
+    // find-or-create will reuse the orphan next time the name comes up — but it
+    // is a real state the old code could not reach, so it is written down here
+    // rather than discovered later.
+    //
+    // What callers must do about it: call this BEFORE adding their own rows to
+    // the change tracker. All six interfaces resolve the same scoped
+    // AppDbContext until 13.3, so a SaveChanges in here flushes whatever the
+    // caller has pending too — and a caller that half-built an aggregate first
+    // would get it committed early, in a different transaction from the rest.
+    Task<IReadOnlyDictionary<string, SkillInfo>> FindOrCreateAsync(
+        IReadOnlyCollection<SkillRequest> skills, CancellationToken ct = default);
 }

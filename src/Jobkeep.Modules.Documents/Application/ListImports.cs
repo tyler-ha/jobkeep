@@ -31,10 +31,10 @@ public record ImportSummary(
 
 public class ListImportsHandler
 {
-    private readonly AppDbContext _db;
+    private readonly IDocumentsDbContext _db;
     private readonly DocumentOptions _options;
 
-    public ListImportsHandler(AppDbContext db, DocumentOptions options)
+    public ListImportsHandler(IDocumentsDbContext db, DocumentOptions options)
     {
         _db = db;
         _options = options;

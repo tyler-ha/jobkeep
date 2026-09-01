@@ -589,30 +589,51 @@ about that date — verify it before relying on it.
 
 ## When asked to move to the next phase
 
-**Currently up next: Phase 13.2c — Documents.** Read
+**Currently up next: Phase 13.2d — Applications.** Read
 `docs/phases/phase-13-clean-architecture.md`; it is the live plan, and it was
 rewritten on 2026-09-01 when the user confirmed **microservices is the destination**.
 The short version: `src/` is now ten projects, one per module, and 13.2 puts every
 cross-module read behind a contract *while the tables stay put*, so 13.3 can split
 the schema without also being the step that changes behaviour.
 
-**13.2 is split into five sub-steps and two of them have landed** (2026-09-01, suite
-244 → 246). Three things from them change how the remaining three are written:
+**13.2 is split into five sub-steps and three of them have landed** (2026-09-01, suite
+244 → 246 → 249). Five things from them change how the remaining two are written:
 
 - **A module takes its own `I<X>DbContext`, never `AppDbContext`.** Six interfaces
   live in `src/Jobkeep.Infrastructure.Data/Contexts/`, each exposing only one
   module's `DbSet`s; the shared context implements all six and is named only in
   `Program.cs`. `ModuleBoundaryTests.No_module_takes_the_shared_context` enforces it,
-  with an allowlist naming the three modules still to convert — **delete your
-  module's entry as you convert it**, or its canary fails.
-- **`Jobkeep.Modules.Skills` exists now**, promoted a step early because
-  `ISkillCatalog` needed an owner. Every find-or-create against `skills` goes through
-  that contract, which owns `NaturalKey.Of` so four modules cannot each forget it.
+  with an allowlist now naming only **Applications and Ats** — **delete your module's
+  entry as you convert it**, or its canary fails.
+- **`Jobkeep.Modules.Skills` owns `skills`**, and `ISkillCatalog` is finished at three
+  verbs: `GetAsync` (ids → names, batched), `FindByNameAsync` (one name → row, on the
+  natural key), `FindOrCreateAsync` (batched, keyed by the name you passed in). Since
+  13.2c, `NaturalKey.Of` is called in exactly ONE file in `src/`. Do not reach for it
+  near a skill name; that is the bug.
+- **`FindOrCreateAsync` SAVES — call it before adding anything of your own to the
+  change tracker.** All six interfaces still resolve the same scoped `AppDbContext`,
+  so a save in the catalog flushes your pending changes too, in a different
+  transaction from the rest of your unit of work. `CommitImport.CommitResumeAsync`
+  gets the order right and says why at length. The accepted cost is an orphan skill
+  row when a link fails; it is harmless and is written down, not to be re-discovered.
 - **Cross-module *navigation traversals* count as crossings** — `ps.Skill.Name`,
   `a.Resume.Label`. The phase doc's original count missed them; they are in scope,
   and the correction is recorded there.
+- **A contract that writes must report a PARTIAL write, not throw.** 13.2c's
+  `IApplicationContract.CommitPostingAsync` returns the ids alongside the error
+  (`PostingCommitResult.Incomplete`) because the one thing a caller needs after a
+  half-finished write is what an exception cannot carry: what got created. Documents
+  stores that id as its idempotency guard, which is what makes `ImportStatus.CommitFailed`
+  re-runnable instead of a duplicate waiting to happen. Expect the same question in
+  13.2e, where Ats writes.
 
 **Phase 6.5 group 4 (paste text) is parked**, by decision, until the 13.3 boundary.
+
+**13.2c is the one sub-step that touched the front end**, and only as a widened type:
+`ImportStatus` gained `CommitFailed` in `web/src/lib/api.ts`, plus a fourth queue tab
+and a banner on the Upload screen. No URL moved. It needed no migration — the column
+is `varchar(20)` with no CHECK constraint — but a closed TypeScript union is a wire
+contract, so leaving it would have been a lie in a type.
 
 **Phase 6.5** (`docs/phases/phase-6.5-upload-experience.md`) is the Upload screen,
 opened 2026-09-01 by the first real feedback the front end has had. Groups 1-3 and

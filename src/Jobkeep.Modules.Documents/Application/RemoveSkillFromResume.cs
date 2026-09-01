@@ -1,4 +1,5 @@
 using Jobkeep.Data;
+using Jobkeep.Modules.Skills;
 using Jobkeep.Shared;
 using Microsoft.EntityFrameworkCore;
 
@@ -28,9 +29,14 @@ namespace Jobkeep.Modules.Documents;
 // to prevent. Documents owns `resume_skills`; Applications owns `posting_skills`.
 public class RemoveSkillFromResumeHandler
 {
-    private readonly AppDbContext _db;
+    private readonly IDocumentsDbContext _db;
+    private readonly ISkillCatalog _skills;
 
-    public RemoveSkillFromResumeHandler(AppDbContext db) => _db = db;
+    public RemoveSkillFromResumeHandler(IDocumentsDbContext db, ISkillCatalog skills)
+    {
+        _db = db;
+        _skills = skills;
+    }
 
     public async Task<SliceResult<bool>> HandleAsync(
         Guid resumeId, string skillName, CancellationToken ct = default)
@@ -47,16 +53,26 @@ public class RemoveSkillFromResumeHandler
         if (!exists)
             return SliceResult<bool>.NotFound($"Resume {resumeId} not found.");
 
-        // Matched on the pair, not on the skill alone: the join row is what is
-        // being deleted, and it is identified by (résumé, skill).
+        // Phase 13.2c — the name is resolved to an id first, then the join row is
+        // matched on the pair. It used to be one query with `rs.Skill.Name == name`
+        // in it, which is a join onto another module's table that no DbSet
+        // reference made visible; this is the same lookup with the boundary in it.
         //
-        // The name comparison is case-SENSITIVE, matching every other writer of
-        // the shared `skills` table. That is the known dedup gap in CLAUDE.md, not
-        // an oversight here — a case-insensitive match on the way *out* while the
-        // way *in* stays case-sensitive would let this delete a row the caller did
-        // not name.
+        // A name nobody has ever used is a 404 without touching resume_skills at
+        // all, which is strictly less work than the join was.
+        //
+        // The comparison also became case-INSENSITIVE, and that is a fix rather
+        // than drift. The old comment here argued for case-sensitivity on the
+        // grounds that a loose match on the way out could delete a row the caller
+        // did not name — true while "C#" and "c#" could be two rows, and untrue
+        // since Phase 7 put a unique index on lower("Name"). At most one row per
+        // natural key exists, so there is nothing else the loose match could hit.
+        var skill = await _skills.FindByNameAsync(name, ct);
+        if (skill is null)
+            return SliceResult<bool>.NotFound($"Skill '{name}' is not on resume {resumeId}.");
+
         var link = await _db.ResumeSkills
-            .FirstOrDefaultAsync(rs => rs.ResumeId == resumeId && rs.Skill.Name == name, ct);
+            .FirstOrDefaultAsync(rs => rs.ResumeId == resumeId && rs.SkillId == skill.Id, ct);
         if (link is null)
             return SliceResult<bool>.NotFound($"Skill '{name}' is not on resume {resumeId}.");
 

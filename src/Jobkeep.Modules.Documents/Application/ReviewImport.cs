@@ -21,9 +21,9 @@ namespace Jobkeep.Modules.Documents;
 // path syntax for "the third experience entry's second bullet".
 public class ReviewImportHandler
 {
-    private readonly AppDbContext _db;
+    private readonly IDocumentsDbContext _db;
 
-    public ReviewImportHandler(AppDbContext db) => _db = db;
+    public ReviewImportHandler(IDocumentsDbContext db) => _db = db;
 
     public async Task<SliceResult<ImportResponse>> HandleAsync(
         Guid id, ImportDraft draft, CancellationToken ct = default)

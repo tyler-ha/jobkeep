@@ -13,9 +13,9 @@ namespace Jobkeep.Modules.Documents;
 // document in front of them.
 public class GetImportHandler
 {
-    private readonly AppDbContext _db;
+    private readonly IDocumentsDbContext _db;
 
-    public GetImportHandler(AppDbContext db) => _db = db;
+    public GetImportHandler(IDocumentsDbContext db) => _db = db;
 
     public async Task<SliceResult<ImportResponse>> HandleAsync(Guid id, CancellationToken ct = default)
     {

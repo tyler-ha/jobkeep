@@ -1,6 +1,7 @@
 using Jobkeep.Data;
 using Jobkeep.Models;
 using Jobkeep.Modules.Applications;
+using Jobkeep.Modules.Skills;
 using Jobkeep.Shared;
 using Microsoft.EntityFrameworkCore;
 
@@ -12,28 +13,38 @@ namespace Jobkeep.Modules.Documents;
 // The two halves commit through different machinery, on purpose
 // ---------------------------------------------------------------------------
 // A resume commits by writing this module's own tables. A job posting commits by
-// calling the Applications module's existing use cases. That asymmetry is the
-// interesting design decision in this file, and it follows from who owns what:
+// asking the Applications module to do it. That asymmetry is the interesting
+// design decision in this file, and it follows from who owns what:
 //
 //   * `resumes` and its children are Documents-owned. Nobody else writes them.
 //   * `job_applications`, `job_postings` and `job_requirements` are
 //     Applications-owned, and creating one has RULES — company and title are
 //     required, the company name is resolved against a unique index rather than
-//     inserted blind. Those rules live in CreateApplicationHandler.
+//     inserted blind. Those rules live in Applications' own use cases.
 //
-// So the posting half calls that handler rather than reimplementing it. This is
-// **not** the rule-2 crossing that IPostingContract exists to mediate: reaching
-// into another module's *tables* is what rule 2 forbids, and invoking its
-// published *use case* is the opposite of that — it is the boundary working. The
-// validation runs, the company dedup runs, and there is exactly one implementation
-// of "what it means to create an application", which is the property architecture.md
-// A4 was written to protect.
+// So the posting half hands the whole confirmed draft over rather than
+// reimplementing any of it. The validation runs, the company dedup runs, and
+// there is exactly one implementation of "what it means to create an
+// application", which is the property architecture.md A4 was written to protect.
 //
-// The one place this file does touch Applications-owned tables is the skills,
-// and it goes through IPostingContract.AddExtractedSkillsAsync — the contract
-// Phase 4 built for precisely this, used as-is. Its two-method cap is not
-// stretched: a second consumer needing exactly the methods that already exist is
-// evidence the boundary was drawn in the right place, not pressure to move it.
+// ---------------------------------------------------------------------------
+// PHASE 13.2c — what changed, and why the file got harder
+// ---------------------------------------------------------------------------
+// Until 13.2c this file did that by calling CreateApplicationHandler and
+// AddRequirementToPostingHandler DIRECTLY, across a project reference that
+// architecture.md decision 15 accepted openly as temporary. Both are gone. What
+// crosses the boundary now is one call to IApplicationContract.CommitPostingAsync
+// and one call to ISkillCatalog, and Jobkeep.Modules.Documents.csproj no longer
+// references Jobkeep.Modules.Applications at all.
+//
+// The honest cost is that this file lost its transaction, and the paragraphs
+// below in CommitPostingAsync are the replacement. It is worth being precise
+// about why the transaction had to go rather than being kept "until it breaks":
+// a database transaction can only span writes on one connection, and at 13.3 the
+// other half of this operation is a different schema behind a different service.
+// Keeping the transaction now would mean writing the failure handling later, in
+// the step that is also moving tables — which is the exact mistake 13.1's own
+// deviation note records.
 
 public record CommitResponse(
     Guid ImportId,
@@ -47,21 +58,18 @@ public record CommitResponse(
 
 public class CommitImportHandler
 {
-    private readonly AppDbContext _db;
-    private readonly CreateApplicationHandler _createApplication;
-    private readonly AddRequirementToPostingHandler _addRequirement;
-    private readonly IPostingContract _postings;
+    private readonly IDocumentsDbContext _db;
+    private readonly ISkillCatalog _skills;
+    private readonly IApplicationContract _applications;
 
     public CommitImportHandler(
-        AppDbContext db,
-        CreateApplicationHandler createApplication,
-        AddRequirementToPostingHandler addRequirement,
-        IPostingContract postings)
+        IDocumentsDbContext db,
+        ISkillCatalog skills,
+        IApplicationContract applications)
     {
         _db = db;
-        _createApplication = createApplication;
-        _addRequirement = addRequirement;
-        _postings = postings;
+        _skills = skills;
+        _applications = applications;
     }
 
     public async Task<SliceResult<CommitResponse>> HandleAsync(Guid id, CancellationToken ct = default)
@@ -73,7 +81,12 @@ public class CommitImportHandler
         // Committing twice would create a second resume from the same draft. The
         // status check is what makes the confirm button safe to double-click,
         // which is not a hypothetical on a request that takes seconds.
-        if (import.Status != ImportStatus.AwaitingReview)
+        //
+        // CommitFailed is admitted alongside AwaitingReview because it is the
+        // state that MEANS "try again" — see ImportStatus, and see the recovery
+        // path in CommitPostingAsync, which reads CommittedEntityId to decide
+        // whether a retry starts over or only finishes.
+        if (import.Status is not (ImportStatus.AwaitingReview or ImportStatus.CommitFailed))
             return SliceResult<CommitResponse>.Invalid(
                 $"This import is already {import.Status.ToString().ToLowerInvariant()}.");
 
@@ -109,16 +122,31 @@ public class CommitImportHandler
 
         // Checked before the insert rather than caught after, so the user gets a
         // sentence instead of a unique-index violation. Same pattern as
-        // CompanyLookup, and the same known limitation: the comparison is
-        // case-sensitive, so "Backend" and "backend" are two resumes. That is the
-        // dedup gap already recorded against skills and companies; it is left
-        // consistent here rather than fixed on one table (CLAUDE.md, Phase 7).
+        // CompanyLookup.
         // Phase 7 — the conflict check must ask the same question the unique
         // index does, or the user is told the label is free and then gets a 500.
         var labelKey = NaturalKey.Of(label);
         if (await _db.Resumes.AnyAsync(r => r.LabelNormalized == labelKey, ct))
             return SliceResult<CommitResponse>.Invalid(
                 $"A resume labelled \"{label}\" already exists. Pick a different label.");
+
+        // ------------------------------------------------------------------
+        // Skills FIRST, before anything is added to the change tracker
+        // ------------------------------------------------------------------
+        // 13.2c: find-or-create moved behind ISkillCatalog, which does its own
+        // SaveChanges (its interface says so at length, and explains why it has
+        // to once Skills is a service). Every I<X>DbContext still resolves the
+        // same scoped AppDbContext until 13.3, so that SaveChanges flushes
+        // whatever THIS method has pending too.
+        //
+        // Resolving skills before building the resume is what keeps that
+        // harmless. Do it the other way round and the catalog's save would
+        // commit a half-built resume — no skills, no import status change — in
+        // its own transaction, and a failure just after would leave a resume the
+        // user cannot re-import (the label check above would refuse the retry).
+        // Ordering is the whole fix; there is no cleverer one available without
+        // a distributed transaction.
+        var resolved = await ResolveSkillsAsync(draft.Skills, ct);
 
         var resume = new Resume
         {
@@ -167,23 +195,29 @@ public class CommitImportHandler
             });
         }
 
-        _db.Resumes.Add(resume);
+        // Provenance follows where the content came from, not who approved it.
+        // A draft the model wrote and the user confirmed unchanged is still
+        // AiExtracted; a draft the user edited cleared ModelUsed (ReviewImport)
+        // and is Parsed. Confirming is not authorship.
+        var source = import.ModelUsed is not null ? SkillSource.AiExtracted : SkillSource.Parsed;
 
-        // Skills last, and through the shared table. Whether the row is created
-        // or reused is the entire reason `skills` is shared: once your resume's
-        // "C#" is the same row as a posting's "C#", "what do the jobs I want ask
-        // for that my resume never mentions" is a join. That query is Phase 5.
-        var linked = await LinkSkillsAsync(resume, draft.Skills, import.ModelUsed is not null, ct);
+        foreach (var skill in resolved)
+            resume.ResumeSkills.Add(new ResumeSkill { SkillId = skill.Id, Source = source });
+
+        _db.Resumes.Add(resume);
 
         import.Status = ImportStatus.Committed;
         import.CommittedAtUtc = DateTime.UtcNow;
         import.UpdatedAtUtc = import.CommittedAtUtc.Value;
         import.CommittedEntityId = resume.Id;
 
-        // One SaveChanges for the resume, its children, the new skill rows, the
-        // links and the import's status change. They are one user action, so they
-        // are one transaction: a commit that half-applied would leave a resume
-        // with no skills and an import that still says it needs reviewing.
+        // One SaveChanges for the resume, its children, the links and the
+        // import's status change. They are one user action, so they are one
+        // transaction: a commit that half-applied would leave a resume with no
+        // skills and an import that still says it needs reviewing.
+        //
+        // The `skills` rows themselves are no longer inside it — see
+        // ResolveSkillsAsync. That is the one atomicity 13.2c gave up.
         await _db.SaveChangesAsync(ct);
 
         return SliceResult<CommitResponse>.Ok(new CommitResponse(
@@ -191,7 +225,7 @@ public class CommitImportHandler
             import.Kind,
             resume.Id,
             $"Saved resume \"{resume.Label}\".",
-            linked,
+            resolved.Count,
             resume.Experiences.Count,
             resume.Educations.Count,
             0));
@@ -211,61 +245,43 @@ public class CommitImportHandler
     private static string? Clip(string? value, int max) =>
         value is null || value.Length <= max ? value : value[..max].TrimEnd();
 
-    // Find-or-create against the shared `skills` table.
+    // Turn a draft's skill names into the shared rows they name.
     //
-    // Written here rather than borrowed from Applications because `skills` is not
-    // an Applications table — it is the shared vocabulary both sides of the app
-    // are deliberately built on, in the same way AppDbContext is shared. What
-    // stays module-owned is the LINK table: Applications owns `posting_skills`,
-    // Documents owns `resume_skills`, and neither writes the other's.
-    private async Task<int> LinkSkillsAsync(
-        Resume resume, List<string> names, bool fromModel, CancellationToken ct)
+    // ---------------------------------------------------------------------
+    // What 13.2c took out of here, and what it left
+    // ---------------------------------------------------------------------
+    // This used to be forty lines of find-or-create against `skills`, written
+    // here because "skills is the shared vocabulary table that belongs to no
+    // module". That claim was true and is exactly why it had to move: a table
+    // four modules write is a table with four chances to get its natural key
+    // wrong, and Phase 7 made getting it wrong a 500 on an ordinary name.
+    // `Jobkeep.Modules.Skills` owns it now, and this method is what is left —
+    // clipping, which is a Documents rule about model output, and nothing else.
+    //
+    // Dedup is no longer done here either. The catalog collapses spellings onto
+    // one row and returns a dictionary that may map two keys to one SkillInfo,
+    // so DistinctBy on the id is what turns its answer back into a set of links.
+    // The visible consequence is unchanged: an import naming "C#" and "c#"
+    // creates one link, and the first spelling in the document is the one stored.
+    private async Task<IReadOnlyList<SkillInfo>> ResolveSkillsAsync(
+        List<string> names, CancellationToken ct)
     {
-        // Dedup first. A model asked for a skill list will return "C#" twice, and
-        // the composite PK on resume_skills turns that into a duplicate-key
-        // exception on SaveChanges rather than a no-op.
-        var deduped = names
+        // Clipped to the column width for the same reason every other field here
+        // is: the name came from a model, and a name longer than the column is a
+        // 500 the user cannot act on.
+        var requested = names
             .Where(n => !string.IsNullOrWhiteSpace(n))
-            .Select(n => Clip(n.Trim(), 100)!)
-            // Phase 7 — dedup WITHIN the batch on the natural key too. Ordinal
-            // let one import carry both "C#" and "c#" through to two inserts;
-            // that was a silent duplicate before the unique index existed and
-            // would be a failed INSERT after it. First spelling in the document
-            // wins, which keeps the row the user can see in their CV.
-            .DistinctBy(NaturalKey.Of, StringComparer.Ordinal)
+            .Select(n => new SkillRequest(Clip(n.Trim(), 100)!))
             .ToList();
 
-        if (deduped.Count == 0) return 0;
+        if (requested.Count == 0) return [];
 
-        // One query for the whole batch, then decide in memory — the same shape
-        // PostingContract uses, and for the same reason: a per-skill round trip
-        // would be one query and one insert per skill.
-        var keys = deduped.Select(NaturalKey.Of).ToList();
-        var existing = await _db.Skills
-            .Where(s => keys.Contains(s.NameNormalized))
-            .ToDictionaryAsync(s => s.NameNormalized, ct);
+        var resolved = await _skills.FindOrCreateAsync(requested, ct);
 
-        // Provenance follows where the content came from, not who approved it.
-        // A draft the model wrote and the user confirmed unchanged is still
-        // AiExtracted; a draft the user edited cleared ModelUsed (ReviewImport)
-        // and is Parsed. Confirming is not authorship.
-        var source = fromModel ? SkillSource.AiExtracted : SkillSource.Parsed;
-
-        foreach (var name in deduped)
-        {
-            if (!existing.TryGetValue(NaturalKey.Of(name), out var skill))
-            {
-                // Added explicitly: Skill.Id is client-generated, so EF reads the
-                // set key as "already exists" and skips the INSERT unless told.
-                skill = new Skill { Name = name };
-                _db.Skills.Add(skill);
-                existing[NaturalKey.Of(name)] = skill;
-            }
-
-            resume.ResumeSkills.Add(new ResumeSkill { SkillId = skill.Id, Source = source });
-        }
-
-        return deduped.Count;
+        // DistinctBy the id, not the name: resume_skills has a composite primary
+        // key on (ResumeId, SkillId), so two spellings resolving to one row would
+        // be a duplicate-key exception on SaveChanges rather than a no-op.
+        return resolved.Values.DistinctBy(s => s.Id).ToList();
     }
 
     private async Task<SliceResult<CommitResponse>> CommitPostingAsync(
@@ -275,112 +291,204 @@ public class CommitImportHandler
             return SliceResult<CommitResponse>.Invalid(
                 "This import has no posting draft to commit. Re-parse it or fill the draft in first.");
 
-        // Company and title are not validated here. CreateApplicationHandler
-        // enforces them, and duplicating the check would be the start of the two
-        // implementations of one rule that architecture.md A4 is about — the
-        // error text below would drift from the REST endpoint's within a phase.
+        // Company and title are not validated here. Applications enforces them,
+        // and duplicating the check would be the start of the two implementations
+        // of one rule that architecture.md A4 is about — the error text below
+        // would drift from the REST endpoint's within a phase.
 
         // ------------------------------------------------------------------
-        // One transaction, because this path saves several times
+        // PHASE 13.2c — this used to be one transaction, and now it is a protocol
         // ------------------------------------------------------------------
         // The resume path above is atomic for free: it builds an object graph and
-        // calls SaveChanges once. This one cannot be, and the reason is the design
-        // decision at the top of this file — reusing Applications' use cases means
-        // reusing their SaveChanges. The application commits, then the skills, then
-        // each requirement, then the import's own status change, last.
+        // calls SaveChanges once. This one never could be, because it saves on
+        // both sides of a module boundary — and until 13.2c it papered over that
+        // with `_db.Database.BeginTransactionAsync`, which worked only because
+        // both sides happened to share a connection.
         //
-        // Untransacted, the failure mode is not a lost write. It is a DUPLICATE
-        // one. If anything after the application insert throws — a cancelled
-        // request, a transient error, a requirement the Applications slice refuses
-        // at the database rather than in validation — the application and its
-        // company are already committed while the import still reads
-        // AwaitingReview. The double-click guard in HandleAsync then does not fire,
-        // and confirming again logs a SECOND application for the same document.
-        // That is the worst outcome available to a feature whose entire premise is
-        // that nothing exists until a human confirms it.
+        // The failure that transaction was protecting against is worth restating,
+        // because the replacement has to answer the same one. It is NOT a lost
+        // write. It is a DUPLICATE one: if anything after the application insert
+        // failed, the application and its company were already committed while
+        // this import still read AwaitingReview — so the double-click guard in
+        // HandleAsync did not fire, and confirming again logged a SECOND
+        // application for the same document. That is the worst outcome available
+        // to a feature whose entire premise is that nothing exists until a human
+        // confirms it.
         //
-        // Disposing without committing rolls back, so every early return below is
-        // safe without an explicit rollback call.
-        await using var transaction = await _db.Database.BeginTransactionAsync(ct);
+        // The replacement is a three-step protocol, and each step exists to
+        // answer one question a crash leaves open:
+        //
+        //   1. CLAIM. Mark the import committed before calling out, so a second
+        //      request arriving during the call is refused by the same guard.
+        //      CommittedEntityId is still null, which is what "we started and do
+        //      not yet know the outcome" looks like in this table.
+        //   2. CALL. One contract call, deliberately — application, skills and
+        //      requirements together (IApplicationContract says why). One call
+        //      leaves one half-state to reason about; three would leave three.
+        //   3. RECORD. Write the id back. From here the import is a receipt.
+        //
+        // And the recovery, which is what makes CommitFailed re-runnable rather
+        // than merely honest: a retry that finds CommittedEntityId already set
+        // knows the rows exist and only finishes step 3. A retry that finds it
+        // null knows nothing was logged and starts over. That is the idempotency
+        // guard, and it is a field the table already had.
+        //
+        // The accepted cost, stated plainly because it is a real regression from
+        // the transaction: the window between the contract call returning and the
+        // id being saved is not covered. A crash exactly there leaves an
+        // application logged and an import that will duplicate it on retry. It is
+        // one UPDATE on an already-loaded row immediately after a successful call
+        // on the same connection, and the dominant cause of failure there —
+        // a cancelled request — is closed below by not passing the token. What
+        // remains is narrow, unavoidable without a distributed transaction, and
+        // strictly smaller than the window Phases 4.5 through 13.2b shipped with
+        // on the resume-then-skills path.
 
-        var created = await _createApplication.HandleAsync(
-            new CreateApplicationRequest(
-                // Clipped to the columns' widths for the same reason the resume
-                // fields are. Only the LENGTHS are handled here; whether a company
-                // or title is required at all stays CreateApplicationHandler's
-                // rule, which is why this passes the values on rather than
-                // pre-checking them.
-                Clip(draft.Company, 200)!,
-                Clip(draft.Title, 300)!,
-                // Not clipped: job_postings.Location has no HasMaxLength, so it is
-                // `text`. Clipping a column that would have held the value is the
-                // same silent data loss this method exists to avoid, pointing the
-                // other way.
-                draft.Location,
-                // The full extracted text as the description, so the Phase 4
-                // analyzer re-reads the original advertisement rather than a
-                // paraphrase of it.
-                draft.Description ?? import.ExtractedText,
-                draft.SourceUrl,
-                Notes: null,
-                ResumeId: null),
-            ct);
+        // The recovery branch, checked before the claim so a resumed commit costs
+        // one write rather than two. A previous attempt created the application
+        // and did not finish, so this run must not create a second one.
+        if (import.CommittedEntityId is { } already)
+            return await FinishAsync(import, already, draft, ct);
 
-        if (created.Status != ResultStatus.Ok)
-            return SliceResult<CommitResponse>.Invalid(created.Error!);
-
-        var application = created.Value!;
-
-        // Through the contract, because posting_skills is Applications-owned and
-        // this is a write. Marked AiExtracted for the same reason Phase 4 marks
-        // its own: a human who later types a skill by hand outranks it, and
-        // AddExtractedSkillsAsync already refuses to restamp an existing row.
-        var linked = await _postings.AddExtractedSkillsAsync(
-            application.Posting.Id,
-            draft.Skills.Select(s => new ExtractedSkill(Clip(s.Name, 100)!, s.Required)).ToList(),
-            ct);
-
-        // Requirements go one at a time through the Applications slice, which is
-        // the honest cost of reusing its use case instead of writing the table.
-        // At the volume a job ad produces — a dozen bullets — a round trip each
-        // is unnoticeable, and the alternative is a third method on a contract
-        // that is explicitly capped at two.
-        var requirements = 0;
-        var rejected = 0;
-        foreach (var requirement in draft.Requirements)
-        {
-            var result = await _addRequirement.HandleAsync(
-                application.Id,
-                new AddRequirementToPostingRequest(requirement.Text, requirement.Kind, requirement.IsMustHave),
-                ct);
-            if (result.Status == ResultStatus.Ok) requirements++;
-            else rejected++;
-        }
-
+        // Step 1 — CLAIM.
         import.Status = ImportStatus.Committed;
         import.CommittedAtUtc = DateTime.UtcNow;
         import.UpdatedAtUtc = import.CommittedAtUtc.Value;
-        import.CommittedEntityId = application.Id;
         await _db.SaveChangesAsync(ct);
 
-        await transaction.CommitAsync(ct);
+        PostingCommitResult result;
+        try
+        {
+            // Step 2 — CALL.
+            result = await _applications.CommitPostingAsync(
+                new PostingCommitRequest(
+                    // Clipped to the columns' widths for the same reason the resume
+                    // fields are. Only the LENGTHS are handled here; whether a company
+                    // or title is required at all stays Applications' rule, which is
+                    // why this passes the values on rather than pre-checking them.
+                    Clip(draft.Company, 200)!,
+                    Clip(draft.Title, 300)!,
+                    // Not clipped: job_postings.Location has no HasMaxLength, so it is
+                    // `text`. Clipping a column that would have held the value is the
+                    // same silent data loss this method exists to avoid, pointing the
+                    // other way.
+                    draft.Location,
+                    // The full extracted text as the description, so the Phase 4
+                    // analyzer re-reads the original advertisement rather than a
+                    // paraphrase of it.
+                    draft.Description ?? import.ExtractedText,
+                    draft.SourceUrl,
+                    draft.Skills.Select(s => new ExtractedSkill(Clip(s.Name, 100)!, s.Required)).ToList(),
+                    draft.Requirements
+                        .Select(r => new PostingRequirement(r.Text, ToContract(r.Kind), r.IsMustHave))
+                        .ToList()),
+                ct);
+        }
+        catch
+        {
+            // Unknown outcome. The import is marked so the user can retry and so
+            // the state is not silently indistinguishable from a finished commit.
+            //
+            // CancellationToken.None on purpose: the commonest way to arrive here
+            // is a cancelled request, and passing the cancelled token would refuse
+            // to write the very row that records what happened.
+            import.Status = ImportStatus.CommitFailed;
+            import.CommittedAtUtc = null;
+            import.UpdatedAtUtc = DateTime.UtcNow;
+            await _db.SaveChangesAsync(CancellationToken.None);
+            throw;
+        }
 
-        // Requirements the Applications slice refused are counted and said out
+        if (result.Error is not null && result.ApplicationId == Guid.Empty)
+        {
+            // REFUSED. A clean no-op on the other side of the boundary — the
+            // contract guarantees nothing was created — so the claim is rewound
+            // rather than left as CommitFailed. The user edits the draft and
+            // confirms again, which is what AwaitingReview means.
+            import.Status = ImportStatus.AwaitingReview;
+            import.CommittedAtUtc = null;
+            import.UpdatedAtUtc = DateTime.UtcNow;
+            await _db.SaveChangesAsync(ct);
+            return SliceResult<CommitResponse>.Invalid(result.Error);
+        }
+
+        if (result.Error is not null)
+        {
+            // INCOMPLETE. The application exists and the rest of it did not
+            // finish. Record the id FIRST — that is the whole reason the contract
+            // hands it back on a failure — and only then mark the import as
+            // needing another run. Written in that order because the id is what
+            // makes the retry safe, and CommitFailed without it is an invitation
+            // to duplicate.
+            import.CommittedEntityId = result.ApplicationId;
+            import.Status = ImportStatus.CommitFailed;
+            import.CommittedAtUtc = null;
+            import.UpdatedAtUtc = DateTime.UtcNow;
+            await _db.SaveChangesAsync(CancellationToken.None);
+
+            return SliceResult<CommitResponse>.Invalid(
+                "The application was logged, but the rest of the import did not finish. "
+                + $"Confirm it again to complete it. ({result.Error})");
+        }
+
+        // Step 3 — RECORD. See the window note above for why the token is dropped.
+        import.CommittedEntityId = result.ApplicationId;
+        await _db.SaveChangesAsync(CancellationToken.None);
+
+        // Requirements the Applications module refused are counted and said out
         // loud. They used to be dropped silently, which left the user reading a
         // 200 OK whose RequirementsCreated was quietly smaller than the list they
         // had just confirmed on screen, with nothing naming what went missing.
-        var note = rejected == 0
+        var note = result.RequirementsRejected == 0
             ? ""
-            : $" {rejected} requirement{(rejected == 1 ? " was" : "s were")} rejected and not saved.";
+            : $" {result.RequirementsRejected} requirement{(result.RequirementsRejected == 1 ? " was" : "s were")} rejected and not saved.";
 
         return SliceResult<CommitResponse>.Ok(new CommitResponse(
             import.Id,
             import.Kind,
-            application.Id,
+            result.ApplicationId,
             $"Logged an application for {draft.Title} at {draft.Company}.{note}",
-            linked,
+            result.SkillsLinked,
             0,
             0,
-            requirements));
+            result.RequirementsCreated));
     }
+
+    // The tail of a commit that already created its application on an earlier
+    // attempt. There is nothing left to write on the Applications side, so this
+    // only closes the import out.
+    //
+    // The counts come back as zero rather than being re-derived, and that is
+    // deliberate: they describe what THIS call did, and this call created
+    // nothing. Asking Applications how many skills the posting ended up with
+    // would be a new contract method answering a question Documents has about
+    // someone else's feature, which is the test ISkillCatalog spells out and the
+    // reason IPostingContract carries a cap.
+    private async Task<SliceResult<CommitResponse>> FinishAsync(
+        DocumentImport import, Guid applicationId, PostingDraft draft, CancellationToken ct)
+    {
+        import.Status = ImportStatus.Committed;
+        import.CommittedAtUtc = DateTime.UtcNow;
+        import.UpdatedAtUtc = import.CommittedAtUtc.Value;
+        await _db.SaveChangesAsync(ct);
+
+        return SliceResult<CommitResponse>.Ok(new CommitResponse(
+            import.Id,
+            import.Kind,
+            applicationId,
+            $"The application for {draft.Title} at {draft.Company} was already logged by an earlier attempt, "
+            + "and this import is now closed out.",
+            0, 0, 0, 0));
+    }
+
+    // Draft enum to contract enum. Two switches exist for one mapping — this one
+    // and ToEntity in ApplicationContract — because Jobkeep.Contracts may not
+    // reference the assembly the entity enum lives in. See PostingRequirementKind.
+    private static PostingRequirementKind ToContract(RequirementKind kind) => kind switch
+    {
+        RequirementKind.Qualification => PostingRequirementKind.Qualification,
+        RequirementKind.Responsibility => PostingRequirementKind.Responsibility,
+        RequirementKind.Benefit => PostingRequirementKind.Benefit,
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unmapped requirement kind."),
+    };
 }

@@ -47,10 +47,10 @@ public record ResumeSummary(
 
 public class ListResumesHandler
 {
-    private readonly AppDbContext _db;
+    private readonly IDocumentsDbContext _db;
     private readonly DocumentOptions _options;
 
-    public ListResumesHandler(AppDbContext db, DocumentOptions options)
+    public ListResumesHandler(IDocumentsDbContext db, DocumentOptions options)
     {
         _db = db;
         _options = options;

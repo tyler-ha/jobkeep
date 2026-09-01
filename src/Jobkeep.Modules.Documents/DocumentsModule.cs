@@ -60,10 +60,20 @@ public class DocumentOptions
 // What this module owns
 // ---------------------------------------------------------------------------
 // `document_imports`, `resumes`, `resume_skills`, `resume_experiences` and
-// `resume_educations`. It writes `skills` — the shared vocabulary table that
-// belongs to no module — and reaches Applications-owned tables only through
-// IPostingContract and through Applications' own use-case handlers. See
-// CommitImport.cs for why those two are different things.
+// `resume_educations`. That is the whole list, and since Phase 13.2c it is also
+// the whole list of tables this module's code can NAME: every handler takes
+// IDocumentsDbContext, which exposes those five DbSets and nothing else.
+//
+// It reaches two other modules, both through Jobkeep.Contracts and neither
+// through a project reference:
+//
+//   * ISkillCatalog for the shared `skills` taxonomy, which Documents used to
+//     write directly on the grounds that the table belonged to no module. A
+//     table nobody owns is a table nobody can extract, so Skills owns it now.
+//   * IApplicationContract to turn a confirmed job-ad draft into a logged
+//     application. That used to be a direct call into Applications' handlers
+//     across a project reference (architecture.md decision 15); the rules still
+//     run in Applications, and only the caller changed.
 //
 // It calls a language model and does not live in the Ai module, which is the
 // point Shared/ModelClient.cs makes at length: Ai owns a table, not a technology.

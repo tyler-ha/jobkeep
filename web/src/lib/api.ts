@@ -358,10 +358,18 @@ export interface ResumeDetail {
 
 export type DocumentKind = 'Resume' | 'JobPosting';
 
-/** ImportStatus. `AwaitingReview` is the only state in which the draft can be
- *  edited; `Committed` is terminal — a committed import is a receipt. Discarded
- *  rows are kept rather than deleted so a bad parse stays diagnosable. */
-export type ImportStatus = 'AwaitingReview' | 'Committed' | 'Discarded';
+/** ImportStatus. `Committed` is terminal — a committed import is a receipt.
+ *  Discarded rows are kept rather than deleted so a bad parse stays diagnosable.
+ *
+ *  `CommitFailed` arrived with backend Phase 13.2c, when confirming a job ad
+ *  stopped being one database transaction: the application is created by another
+ *  module, so a commit can now stop half-way. It means "this was attempted and
+ *  did not finish, confirm it again" — the server knows whether a retry starts
+ *  over or only closes the import out, so the screen does not have to.
+ *
+ *  It is EDITABLE, like AwaitingReview, and for the same reason: the user's next
+ *  move is to fix something and press the button again. */
+export type ImportStatus = 'AwaitingReview' | 'Committed' | 'Discarded' | 'CommitFailed';
 
 /** ListImports.cs. Deliberately WITHOUT the extracted text or the draft — a
  *  résumé is personal information and a list endpoint is the wrong place to

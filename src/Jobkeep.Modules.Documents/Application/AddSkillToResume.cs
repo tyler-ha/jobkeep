@@ -1,5 +1,6 @@
 using Jobkeep.Data;
 using Jobkeep.Models;
+using Jobkeep.Modules.Skills;
 using Jobkeep.Shared;
 using Microsoft.EntityFrameworkCore;
 
@@ -30,13 +31,17 @@ namespace Jobkeep.Modules.Documents;
 // ---------------------------------------------------------------------------
 // The boundary
 // ---------------------------------------------------------------------------
-// This is a Documents slice because Documents owns `resume_skills` — the same
-// split CommitImport.cs states: `skills` is the shared vocabulary table that
-// belongs to no module, while each LINK table is module-owned. Applications owns
-// `posting_skills`, Documents owns `resume_skills`, and neither writes the
-// other's. That is why this is a near-copy of AddSkillToPosting rather than a
+// This is a Documents slice because Documents owns `resume_skills`: each LINK
+// table is module-owned, Applications owns `posting_skills`, and neither writes
+// the other's. That is why this is a near-copy of AddSkillToPosting rather than a
 // shared helper the two call: sharing it would put one module's write path
 // inside the other's file, which is the thing rule 2 exists to prevent.
+//
+// Phase 13.2c corrected the other half of that sentence. `skills` used to be
+// described here and in CommitImport as "the shared vocabulary table that belongs
+// to no module", which was an accurate description of a table nobody owned and
+// four modules wrote. A table nobody owns is a table nobody can extract, so it
+// now belongs to Jobkeep.Modules.Skills and is reached through ISkillCatalog.
 
 public record AddSkillToResumeRequest(string SkillName, string? Category);
 
@@ -48,9 +53,14 @@ public record ResumeSkillResponse(string SkillName, string? Category, SkillSourc
 
 public class AddSkillToResumeHandler
 {
-    private readonly AppDbContext _db;
+    private readonly IDocumentsDbContext _db;
+    private readonly ISkillCatalog _skills;
 
-    public AddSkillToResumeHandler(AppDbContext db) => _db = db;
+    public AddSkillToResumeHandler(IDocumentsDbContext db, ISkillCatalog skills)
+    {
+        _db = db;
+        _skills = skills;
+    }
 
     public async Task<SliceResult<ResumeSkillResponse>> HandleAsync(
         Guid resumeId, AddSkillToResumeRequest request, CancellationToken ct = default)
@@ -89,23 +99,19 @@ public class AddSkillToResumeHandler
         // links to, which is what makes the ATS check's gap a join rather than a
         // string comparison across two tables.
         //
-        // The match is case-SENSITIVE, and that is the known dedup gap recorded in
-        // CLAUDE.md, not an oversight in this slice. `C#` and `c#` become two rows
-        // here exactly as they do in AddSkillToPosting and in the import path.
-        // Fixing it means a case-insensitive natural key on `skills` — a
-        // migration, and its own phase — and fixing it in one of the three writers
-        // would leave them disagreeing about what a duplicate is.
-        // Phase 7 — the case-insensitive natural key, same as the posting path.
-        var key = NaturalKey.Of(skillName);
-        var skill = await _db.Skills.FirstOrDefaultAsync(s => s.NameNormalized == key, ct);
-        if (skill is null)
-        {
-            // Add explicitly: Skill.Id is client-generated in the property
-            // initializer, so EF would otherwise read the set key as "already
-            // exists", skip the INSERT and break the resume_skills FK.
-            skill = new Skill { Name = skillName, Category = category };
-            _db.Skills.Add(skill);
-        }
+        // Phase 13.2c — through ISkillCatalog rather than against `skills`
+        // directly, because `skills` is not a Documents table. The natural key
+        // that Phase 7 introduced now lives in one place instead of being a rule
+        // four writers each had to remember, and this slice no longer knows it
+        // exists. Nothing about the behaviour moved: "C#" still finds the row
+        // stored as "c#", and still creates one when there is none.
+        //
+        // The catalog SAVES, and it is called before the link row is built for
+        // that reason — see the long note in CommitImport.CommitResumeAsync. The
+        // orphan it can leave behind (a skill row whose link failed) is the
+        // accepted cost recorded on ISkillCatalog.FindOrCreateAsync.
+        var resolved = await _skills.FindOrCreateAsync([new SkillRequest(skillName, category)], ct);
+        var skill = resolved[skillName];
 
         var link = await _db.ResumeSkills
             .FirstOrDefaultAsync(rs => rs.ResumeId == resumeId && rs.SkillId == skill.Id, ct);

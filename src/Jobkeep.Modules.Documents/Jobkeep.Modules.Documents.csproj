@@ -43,14 +43,15 @@
     <ProjectReference Include="../Jobkeep.Contracts/Jobkeep.Contracts.csproj" />
     <ProjectReference Include="../Jobkeep.Infrastructure.Data/Jobkeep.Infrastructure.Data.csproj" />
 
-    <!-- THE ONE EXCEPTION TO THE REFERENCE RULE, and it is temporary.
-         CommitImport.cs calls CreateApplicationHandler and
-         AddRequirementToPostingHandler directly so that Applications' own rules
-         run on a committed draft rather than being re-implemented here
-         (architecture.md decision 15, which accepted this compile-time coupling
-         openly). Phase 13.2 turns it into a contract call and this line goes.
-         Until then the architecture test allows exactly this edge and no other. -->
-    <ProjectReference Include="../Jobkeep.Modules.Applications/Jobkeep.Modules.Applications.csproj" />
+    <!-- There is NO reference to Jobkeep.Modules.Applications, and its absence is
+         the deliverable of Phase 13.2c. CommitImport.cs used to call
+         CreateApplicationHandler and AddRequirementToPostingHandler directly so
+         that Applications' own rules ran on a committed draft rather than being
+         re-implemented here; architecture.md decision 15 accepted that
+         compile-time coupling openly, on the condition that it was temporary.
+         The rules still run, through IApplicationContract.CommitPostingAsync.
+         Do not add the reference back: the boundary test names no exceptions any
+         more, so there is no allowlist entry left to hide behind. -->
   </ItemGroup>
 
 </Project>

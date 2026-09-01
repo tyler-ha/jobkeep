@@ -93,8 +93,9 @@ builder.Services.AddModelClient(builder.Configuration);
 
 // Phase 4.5. Owns `document_imports` and the four resume tables. Turns an
 // uploaded PDF/DOCX/text file into a draft, and — only once a human confirms it —
-// into real rows. Reaches Applications through IPostingContract and through that
-// module's own use-case handlers, never its tables directly.
+// into real rows. Since 13.2c it names no other module: Applications is reached
+// through IApplicationContract and the shared taxonomy through ISkillCatalog,
+// both in Jobkeep.Contracts, and its csproj carries no module reference at all.
 builder.Services.AddDocumentsModule(builder.Configuration);
 
 // Phase 5. Owns `ats_results` and reads five tables it does not own — posting

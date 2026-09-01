@@ -21,9 +21,9 @@ namespace Jobkeep.Modules.Documents;
 // that decision belongs, because a discarded resume is still a resume.
 public class DiscardImportHandler
 {
-    private readonly AppDbContext _db;
+    private readonly IDocumentsDbContext _db;
 
-    public DiscardImportHandler(AppDbContext db) => _db = db;
+    public DiscardImportHandler(IDocumentsDbContext db) => _db = db;
 
     public async Task<SliceResult<bool>> HandleAsync(Guid id, CancellationToken ct = default)
     {
