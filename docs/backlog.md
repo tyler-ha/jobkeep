@@ -153,6 +153,18 @@ format has been superseded since 2007. Refusing `.doc` with a message telling th
 user to re-save is the defensible call, and is what ships.
 
 
+### Added by the Phase 6.5 upload design (2026-09-01)
+
+Surfaced while designing the upload experience. Both were **absent from every
+document** before this — the first was asked for by the user and refused with
+reasons, the second is a live inconsistency the front end walked into.
+
+| Candidate | What it is | Cost / size | Likely home | Notes |
+|---|---|---|---|---|
+| **Scrape a job ad from its URL** | Paste a Seek / LinkedIn / Indeed link and have the app fetch the ad itself | High, and the cost is structural rather than in code | **NOT SCHEDULED — refused, see notes** | **Asked for by the user in Phase 6.5 and declined with reasons, not deferred for time.** All three boards serve an ad as a JS shell behind bot protection, so it needs either a headless browser (Playwright, ~300 MB, needs a container image — which **breaks the Phase 10 Lambda-behind-a-Function-URL deploy**) or a paid scraping API ($30-150/month — which **breaks priority 1 outright**). All three sites' terms prohibit automated collection, and that matters more than usual here because this repo is a portfolio: it is the one feature where "I built it" is a liability unless the ToS position can be defended out loud. `hiQ v. LinkedIn` is narrower than its reputation — the CFAA claim failed, but LinkedIn won on breach of contract. Scrapers also break silently on a redesign. **What ships instead:** paste the ad's text (Phase 6.5 group 4), with `job_postings.SourceUrl` (varchar 2000, already exists) and the upload form's "Link to the ad" input keeping the link as provenance. Reopen only if a board ships a public ads API. |
+| **A description input on the app forms** | Somewhere to type or paste a job description onto an application that already exists | Low — one `textarea`, the wire already accepts it | **Phase 12 (P3)** | A live inconsistency, not a missing feature: `JobPost.tsx:226` renders *"No description was saved with this one. Paste the ad in and the analyser has something to read"* — and **no screen anywhere exposes a description input**, though `CreateApplicationRequest.description` and the `PATCH` both accept one. So the app invites an action it does not offer. The user was shown this in Phase 6.5 and chose **not** to close it there, because the paste-an-ad path (group 4) covers the common case of a job that has not been created yet; this row is the remaining case, an application added by hand and enriched later. Cheap whenever it is picked up. |
+
+
 ## Convention / industry-standard adoptions (committed intent, unscheduled)
 
 Unlike the feature candidates above, these are **not** "maybe" — they're

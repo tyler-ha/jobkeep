@@ -470,14 +470,42 @@ A3 (the repository), A4 (surface-specific validation) and A7 (EF entities reacha
 through the GraphQL schema). A1 is *partly* fixed — read decision 11 before
 "finishing" it, because the obvious fix reopens A7.
 
+## Before you explore
+
+Two logs exist so that work already paid for is not paid for twice. **Read them
+before spawning a subagent or picking a tool**, not after:
+
+- `docs/agent-log.md` — every subagent exploration run on this repo, with its
+  findings compacted. **Check it before spawning an agent.** If an entry covers
+  your ground, read it and verify only the specific facts your change depends on
+  — a `grep` for one symbol costs a thousandth of an agent. Spawn only for ground
+  no entry covers, and **add a row when it returns.** The standing rule is
+  unchanged: do not spawn subagents unless the user asks.
+- `docs/tool-usage.md` — which tool is right for which job here, and the traps
+  that have already cost a turn (heredocs through Bash, non-persistent `cd`,
+  escaped backslashes in the markdown, CRLF+BOM in EF's SQL, `pg_dump` over
+  `migrations script`). **Check it before a bulk edit or a schema derivation.**
+
+Both carry dates. A finding that names a file, a line or a constant is a claim
+about that date — verify it before relying on it.
+
 ## Where things are
 
 - `docs/README.md` — the index: what each doc is for, and which wins.
+- `docs/agent-log.md` — subagent runs and their compacted findings. Read before
+  spawning one.
+- `docs/tool-usage.md` — tool selection and the known traps. Read before a bulk
+  edit.
 - `docs/architecture.md` — how the code is shaped, why, and the decision
   record. **Check this before proposing structural changes.**
 - `docs/phases/phase-N-*.md` — the plan and status for each build phase, in
   order. Check the current phase's doc before making changes so new
   work matches the intended scope for that stage.
+- `docs/phases/phase-6.5-upload-experience.md` — **read this before touching the
+  upload flow instead of re-exploring it.** It already records the 180-second
+  synchronous model block, the server-side filename label default, the drop zone
+  the screen never had, the `stubFetch` throw, the `Description` cap that 500s,
+  and the design pass's eight defects.
 - `docs/security-and-data-audit.md` — schema/config exposure, F1-F18, and the
   phased remediation plan. **Refresh on a cadence, not per phase:** once before
   the AWS deploy ships (Phase 10), and once before auth lands (Phase 11). Those are the points where a
@@ -517,12 +545,21 @@ through the GraphQL schema). A1 is *partly* fixed — read decision 11 before
 
 ## When asked to move to the next phase
 
-**Currently up next: finish Phase 6, then Phase 7.**
+**Currently up next: Phase 6.5 group 4 (paste text), then finish Phase 6.**
 
-Phase 6 has two things left: the **visual pass** (the user has seen the app and
-says there are problems, but has not said which — ask directly, screen by screen;
-all eight were built on the same patterns, so a systemic problem is eightfold) and
-**step 6.4**, the README. Steps 6.1-6.3 are done (2026-08-29 to 2026-08-31): CORS
+**Phase 6.5** (`docs/phases/phase-6.5-upload-experience.md`) is the Upload screen,
+opened 2026-09-01 by the first real feedback the front end has had. Groups 1-3 and
+5 are done — the import → upload rename (**UI wording only; the wire keeps
+`/imports`**), the drop zone, the timer-driven progress bar and the spacing.
+**Group 4 is what remains**: paste an ad's text through the same pipeline as a
+parsed file. It is the only group that touches `src/`. The phase doc has the whole
+plan; do not re-derive it, and do not re-argue the URL scraper — it is refused
+with reasons in `docs/backlog.md`.
+
+Phase 6 itself has two things left: the **visual pass on the other seven screens**
+(the user has seen the app and says there are problems, but has not said which —
+ask directly, screen by screen; all eight were built on the same patterns, so a
+systemic problem is eightfold) and **step 6.4**, the README. Steps 6.1-6.3 are done (2026-08-29 to 2026-08-31): CORS
 and the résumé reads, the Vite scaffold and the token system, then all eight
 screens plus a Vitest suite of 35. **The stack and the design are decided** —
 React, Vite, react-router, dnd-kit, lucide-react, no component kit. Don't re-open

@@ -92,6 +92,7 @@ GET                   /applications/{id}/analysis
 POST   GET            /applications/{id}/ats-check        (Phase 5)
 GET                   /stats/skill-demand | /stats/funnel | /stats/companies
 POST   GET            /imports                            (POST is multipart)
+POST                  /imports/text                       (6.5 — JSON, a pasted ad)
 GET    PUT   DELETE   /imports/{id}
 POST                  /imports/{id}/reparse
 POST                  /imports/{id}/confirm

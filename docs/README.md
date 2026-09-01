@@ -11,6 +11,8 @@ disagree, the order below is the precedence order.
 | [`security-and-data-audit.md`](security-and-data-audit.md) | What the schema and config expose, what's missing, and the phased remediation plan (F1–F18). |
 | [`user-journeys.md`](user-journeys.md) | **What the user actually does**, step by step, and where that procedure has holes. The counterpart to `architecture.md`: that one describes the system from the code's side, this one from the user's. |
 | [`backlog.md`](backlog.md) | Considered-but-not-committed features. |
+| [`agent-log.md`](agent-log.md) | **Every subagent exploration run on this repo, with its findings compacted.** Read it *before* spawning an agent — if an entry covers your ground, the answer is already bought. Add a row when a new one returns. |
+| [`tool-usage.md`](tool-usage.md) | Which tool is right for which job here, and the traps that have already cost a turn. Read before a bulk edit or a schema derivation. |
 | [`token-log.md`](token-log.md) | What each phase cost to build, in tokens. Generated from session transcripts by `scripts/token-usage.py`. |
 
 ## Phase plans — a record of intent, then of what happened
@@ -33,7 +35,8 @@ phase doc is a historical record, not a description of the current tree.
 | 4 | [AI job-description analyzer](phases/phase-4-ai-analyzer.md) | **Done** — tests verified during Phase 4.5, all 10 passed unchanged |
 | 4.5 | [Document import: upload, parse, confirm, save](phases/phase-4.5-resume-import.md) | **Done** — PDF/DOCX/text → draft → human confirm → rows |
 | 5 | [ATS compatibility check](phases/phase-5-ats-check.md) | **Done** — skill gap is a SQL join, not a model call; degrades when the model is down |
-| 6 | [Front end](phases/phase-6-frontend.md) | **In progress** — 6.1–6.3 done (eight screens, 35 tests); the visual pass and 6.4 (README) remain |
+| 6 | [Front end](phases/phase-6-frontend.md) | **In progress** — 6.1–6.3 done (eight screens); the visual pass on the other seven screens and 6.4 (README) remain |
+| 6.5 | [The upload experience](phases/phase-6.5-upload-experience.md) | **In progress** — the rename, the drop zone, the progress bar and the spacing are done; group 4 (paste text, the only backend half) is not started |
 | 7 | [Data integrity & the dedup key](phases/phase-7-data-integrity.md) | **Done** (2026-09-01) — one migration; ERD redraw still outstanding. Formerly "Phase 2.7" |
 | 8 | [Soft delete / archive](phases/phase-8-soft-delete.md) | **Planned.** Rides Phase 7's index migration; highest front-end blast radius on the roadmap |
 | 9 | [The three reads the front end could not get](phases/phase-9-api-gaps.md) | **Planned.** Found by building the screens in 6.3 |
