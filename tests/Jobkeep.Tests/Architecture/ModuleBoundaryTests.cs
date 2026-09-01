@@ -119,6 +119,31 @@ public class ModuleBoundaryTests
 
 
     [Fact]
+    public void Jobkeep_Persistence_references_only_SharedKernel()
+    {
+        // Phase 13.3a. Jobkeep.Persistence holds the two model-wide EF rules and
+        // the audit interceptor, so every one of the six contexts arriving in
+        // 13.3b will reference it. That is exactly the position from which a
+        // project turns into the "Common" assembly nobody can split: it is
+        // upstream of everything, so anything added to it is added to every
+        // module at once.
+        //
+        // It cannot be held to the Foundation_projects rule above, because it
+        // legitimately needs IAuditable. So the rule is one level weaker and
+        // still checkable: SharedKernel, and nothing else of ours. In particular
+        // NOT Jobkeep.Infrastructure.Data — a reference there would mean an
+        // entity had been added, which is the thing its csproj says must not
+        // happen.
+        var ours = ReferencedJobkeepAssemblies("Jobkeep.Persistence")
+            .Where(name => name != "Jobkeep.SharedKernel")
+            .ToList();
+
+        Assert.True(ours.Count == 0,
+            "Jobkeep.Persistence may reference SharedKernel and nothing else of ours, "
+            + "but references: " + string.Join(", ", ours));
+    }
+
+    [Fact]
     public void No_module_takes_the_shared_context()
     {
         // The reference rule above is about ASSEMBLIES; this one is about the type

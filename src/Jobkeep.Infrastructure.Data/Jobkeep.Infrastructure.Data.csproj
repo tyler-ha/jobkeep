@@ -38,6 +38,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../Jobkeep.SharedKernel/Jobkeep.SharedKernel.csproj" />
+    <ProjectReference Include="../Jobkeep.Persistence/Jobkeep.Persistence.csproj" />
   </ItemGroup>
 
 </Project>

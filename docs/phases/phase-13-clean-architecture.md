@@ -1,8 +1,9 @@
 # Phase 13 — module-owned Clean Architecture, on the road to services
 
-**Status: In progress. Steps 13.1 and 13.2 (a–e) done 2026-09-01** (branch
-`phase-13/module-boundaries`, suite 239 → 244 → 246 → 249 → 253 → 253 green).
-**13.2 is complete: no module names another module's table.** 13.3–13.6 remain.
+**Status: In progress. Steps 13.1, 13.2 (a–e) and 13.3a done 2026-09-01** (branch
+`phase-13/module-boundaries`, suite 239 → … → 253 → 254 green).
+**13.2 is complete: no module names another module's table.** 13.3b–c and
+13.4–13.6 remain.
 
 **This doc was rewritten on 2026-09-01.** The version before it (written the same
 day, commit `bf968a0`) planned a **layer-first** migration: one `Domain`, one
@@ -520,6 +521,80 @@ in-process modules.
 
 Six contexts, six schemas, six migration histories, five FKs dropped, `Skills`
 promoted to its own module, `Jobkeep.Infrastructure.Data` deleted.
+
+**Split into three sub-steps**, decided with the user on 2026-09-01 after the scope
+corrections below. **13.3a landed the same day.**
+
+| | What | State |
+|---|---|---|
+| **13.3a** | the configuration seam: per-entity configs, `Jobkeep.Persistence` | **Done** |
+| 13.3b | entities into modules, six contexts, six schemas, migration reset | Not started |
+| 13.3c | integrity replacements, `DeleteBehaviourTests`, the diagrams | Not started |
+
+#### Scope correction taken 2026-09-01, before any code moved
+
+**Three things this section did not account for, all measured rather than guessed.**
+
+1. **The suite is NOT free this time, and "What makes this cheap" #1 overstates it.**
+   That claim — no test touches a handler, so a restructure is verified for free — is
+   true of *behaviour*, and it held in 13.1, which moved 60 files with zero test edits.
+   But **122 call sites across 15 test files** reach `AppDbContext` directly to
+   *arrange* rows, touching all 13 `DbSet`s, and several mix modules in one block
+   (`AtsTests.SeedResumeAsync` reads `db.Skills` while writing `db.Resumes`). Deleting
+   `AppDbContext` breaks every one of them.
+2. **`PostgresFixture` is hard-wired to `public`** — `SchemasToInclude = ["public"]`
+   and a single `__EFMigrationsHistory` ignored. After the split there are six schemas
+   and six history tables, so Respawn would truncate **nothing** and every test would
+   leak state into the next. That fails as cross-test flakiness, not as a compile
+   error, which is the expensive kind.
+3. **Two model-wide conventions have nowhere to live.** The Phase 7 F11 defaults loop
+   and the `UseXmin` helper run over the whole model, so all six contexts need them,
+   and `SharedKernel` has zero package references on purpose.
+
+**Decisions taken with the user:** drop the dev database (`compose down -v`, no
+`pg_dump` carry-over); keep the 122 call sites compiling with per-module
+`IEntityTypeConfiguration<T>` plus a **test-only** aggregate context; split into three.
+
+#### What landed in 13.3a
+
+The safe half, done alone so that 13.3b is a file move rather than a rewrite. **No
+migration, no schema change, no existing test edited.**
+
+- **`AppDbContext.OnModelCreating` went from 400 lines to three**, split into 16
+  `IEntityTypeConfiguration<T>` classes in `Configurations/` — 13 entities plus the
+  three published views. Every comment moved verbatim; they are the argument for each
+  mapping decision and that is the part not recoverable from the code.
+- **The split is not tidying, and that is the whole justification.** Each configuration
+  is now a self-contained statement about ONE table, so 13.3b moves it into the owning
+  module by moving a file. Doing it the other way — splitting a 400-line method while
+  also changing the schema — is the mistake 13.1 already paid for once, and its
+  deviation note records it.
+- **`src/Jobkeep.Persistence`**, a new foundation project: the two model-wide
+  conventions plus `AuditSaveChangesInterceptor`, which depends on `IAuditable` and
+  nothing else of ours. It holds **no entities** and must not start to. A new
+  architecture test, `Jobkeep_Persistence_references_only_SharedKernel`, pins that —
+  a weaker rule than `Foundation_projects_depend_on_nothing_of_ours`, because this one
+  legitimately needs `IAuditable`, but it is the rule that stops an upstream-of-
+  everything project becoming the "Common" assembly nobody can split.
+- **`ApplyDatabaseDefaults` must be called LAST** and its comment now says so. It reads
+  the finished model, so an entity configured after it silently misses the defaults.
+  `UseXmin` stayed opt-in per entity rather than becoming a sweep: the three tables
+  that want it are the three a user edits twice, and a link row has no lost update
+  to lose.
+
+**The plan's step 4 was wrong and the fallback it named was taken.** It proposed
+putting each table's target schema into `ToTable` at 13.3a, ahead of the move. That
+cannot work: the tables are in `public`, so EF would immediately generate SQL against
+`documents.resumes` and every test would fail. The schema is a second argument to
+`ToTable` in 13.3b, one line per configuration. `dotnet ef migrations
+has-pending-model-changes` reports **no changes since the last migration**, which is
+the check that 13.3a is schema-identical rather than merely believed to be.
+
+Suite **253 → 254** (the new architecture test), build clean, `has-pending-model-changes`
+clean.
+
+**One trap re-paid:** MSB4025, an XML comment cannot contain `--`. It is in
+`docs/tool-usage.md` from 13.1 and cost a build anyway.
 
 - Each context: `HasDefaultSchema("<module>")` +
   `MigrationsHistoryTable("__EFMigrationsHistory", "<module>")`, same connection

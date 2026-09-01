@@ -589,7 +589,30 @@ about that date — verify it before relying on it.
 
 ## When asked to move to the next phase
 
-**Currently up next: Phase 13.3 — the physical split (one schema per module).** Read
+**Currently up next: Phase 13.3b — entities into modules, six contexts, six schemas.**
+Read `docs/phases/phase-13-clean-architecture.md` §13.3; **13.3a landed 2026-09-01**
+(suite 254) and 13.3 is split into three sub-steps there, with the three scope
+corrections that split it. The two that change how 13.3b is written:
+
+- **122 test call sites reach `AppDbContext` to arrange rows** — the doc's "no test
+  touches a handler, so this is free" claim is true of behaviour only. The agreed fix
+  is a **test-only** aggregate context in `tests/Jobkeep.Tests/Infrastructure/`,
+  applying all six module assemblies' configurations, so the 122 sites do not change.
+- **`PostgresFixture` is hard-wired to `SchemasToInclude = ["public"]`** with one
+  `__EFMigrationsHistory` ignored. Six schemas and six history tables means Respawn
+  truncates nothing and tests leak into each other — silently. Fix it in the same step
+  and assert a reset actually empties a seeded table.
+
+Also from 13.3a: the schema goes in `ToTable`'s **second argument** in each
+`IEntityTypeConfiguration<T>`, not via `HasDefaultSchema` — that is what lets the test
+context apply all six and still be correct. And `ModelConventions.ApplyDatabaseDefaults`
+must be called **last** in every `OnModelCreating`, or entities configured after it
+silently lose their defaults.
+
+The user has agreed to **drop the dev database** at 13.3b (`docker compose down -v`);
+no `pg_dump` carry-over is needed.
+
+Read
 `docs/phases/phase-13-clean-architecture.md`; it is the live plan, and it was
 rewritten on 2026-09-01 when the user confirmed **microservices is the destination**.
 

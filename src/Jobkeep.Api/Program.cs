@@ -12,6 +12,7 @@ using Jobkeep.Modules.Applications;
 using Jobkeep.Modules.Ats;
 using Jobkeep.Modules.Documents;
 using Jobkeep.Modules.Skills;
+using Jobkeep.Persistence;
 using Jobkeep.Shared;
 using Microsoft.EntityFrameworkCore;
 

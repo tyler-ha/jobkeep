@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Project Path="Jobkeep.SharedKernel/Jobkeep.SharedKernel.csproj" />
     <Project Path="Jobkeep.Contracts/Jobkeep.Contracts.csproj" />
+    <Project Path="Jobkeep.Persistence/Jobkeep.Persistence.csproj" />
     <Project Path="Jobkeep.Infrastructure.Data/Jobkeep.Infrastructure.Data.csproj" />
     <Project Path="Jobkeep.Modules.Applications/Jobkeep.Modules.Applications.csproj" />
     <Project Path="Jobkeep.Modules.Analytics/Jobkeep.Modules.Analytics.csproj" />

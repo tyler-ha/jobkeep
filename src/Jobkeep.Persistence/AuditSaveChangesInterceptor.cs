@@ -3,7 +3,12 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 
-namespace Jobkeep.Data;
+namespace Jobkeep.Persistence;
+
+// PHASE 13.3a: moved here from Jobkeep.Infrastructure.Data, which is deleted in
+// 13.3b. It depends on IAuditable and nothing else of ours, so it belongs with
+// the other rules that are true of every context rather than with any one of
+// them.
 
 // Phase 7 — the fix for audit finding F8.
 //
