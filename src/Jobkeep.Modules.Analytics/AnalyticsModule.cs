@@ -1,4 +1,5 @@
 using Jobkeep.Shared;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Jobkeep.Modules.Analytics;
 
@@ -54,38 +55,5 @@ public static class AnalyticsModule
         services.AddScoped<StatusFunnelHandler>();
         services.AddScoped<CompanyRollupHandler>();
         return services;
-    }
-
-    public static IEndpointRouteBuilder MapAnalyticsModule(this IEndpointRouteBuilder app)
-    {
-        var group = app.MapGroup("/stats").WithTags("Analytics");
-
-        // GET /stats/skill-demand?top=
-        //
-        // A bare `int? top` rather than an [AsParameters] query record. The list
-        // slice needs the record because it binds ten filters that both surfaces
-        // and Swagger have to agree on; one optional scalar does not earn an
-        // input type, and in GraphQL it reads better as skillDemand(top: 5) than
-        // as skillDemand(query: { top: 5 }).
-        group.MapGet("/skill-demand", async (
-            int? top,
-            SkillDemandHandler handler,
-            CancellationToken ct) =>
-            (await handler.HandleAsync(top, ct)).ToHttpResult());
-
-        // GET /stats/funnel — no parameters; the funnel is the whole table.
-        group.MapGet("/funnel", async (
-            StatusFunnelHandler handler,
-            CancellationToken ct) =>
-            (await handler.HandleAsync(ct)).ToHttpResult());
-
-        // GET /stats/companies?top=
-        group.MapGet("/companies", async (
-            int? top,
-            CompanyRollupHandler handler,
-            CancellationToken ct) =>
-            (await handler.HandleAsync(top, ct)).ToHttpResult());
-
-        return app;
     }
 }

@@ -2,9 +2,16 @@
 # build. obj/ is the one that actually breaks things: project.assets.json records
 # absolute host paths and the host's RID, so a copied obj/ makes `dotnet publish`
 # fail inside the container with errors that name packages it never asked for.
-bin/
-obj/
-TestResults/
+#
+# The leading **/ is load-bearing since Phase 13.1. A bare `obj/` matches only a
+# top-level obj directory, which was every obj there was while src/ held one
+# project. With nine, the output sits at Jobkeep.Api/obj/, Jobkeep.Modules.Ai/obj/
+# and so on, sailed straight past the old pattern, and `dotnet publish` inside the
+# container died in ResolvePackageAssets reading a Windows project.assets.json --
+# a stack trace that names NuGet and looks nothing like "you copied obj/".
+**/bin/
+**/obj/
+**/TestResults/
 
 # The image does not build itself.
 Dockerfile

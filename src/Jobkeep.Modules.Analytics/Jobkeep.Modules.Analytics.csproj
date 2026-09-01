@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The Analytics module. A plain class library on purpose: the handlers never
+       knew about HTTP — only the route-mapping half of AnalyticsModule.cs did, and
+       Phase 13.1 lifted that into Jobkeep.Api/Endpoints/. Keeping ASP.NET out of
+       here is what makes the layering claim checkable rather than decorative.
+
+       REFERENCE RULE, enforced by tests/Jobkeep.Tests/Architecture/: this project
+       may reference SharedKernel, Contracts and (until 13.3) Infrastructure.Data.
+       It may NOT reference another Jobkeep.Modules.* project. -->
+  <PropertyGroup>
+    <RootNamespace>Jobkeep.Modules.Analytics</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Jobkeep.SharedKernel/Jobkeep.SharedKernel.csproj" />
+    <ProjectReference Include="../Jobkeep.Contracts/Jobkeep.Contracts.csproj" />
+    <ProjectReference Include="../Jobkeep.Infrastructure.Data/Jobkeep.Infrastructure.Data.csproj" />
+  </ItemGroup>
+
+</Project>

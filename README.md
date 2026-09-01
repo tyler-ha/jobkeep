@@ -234,20 +234,30 @@ Jobkeep/
 │   └── diagrams/           # committed schema ERD + architecture SVGs
 ├── scripts/
 │   └── token-usage.py     # totals Claude Code session tokens for docs/token-log.md
-└── src/                   # The actual .NET project
-    ├── Jobkeep.csproj
-    ├── Program.cs                   # wiring only: DI, middleware, Map* calls
-    ├── Modules/                     # vertical slices — one file per use case
-    │   └── Applications/            #   ListApplications, CreateApplication, ...
-    ├── Shared/                      # SliceResult + the two edge translations
-    ├── appsettings.json             # empty Postgres conn (set in deploy)
-    ├── appsettings.Development.json # points at local Postgres
-    ├── Models/                      # relational domain model + enums
-    ├── Data/                        # AppDbContext (EF Core mapping)
-    ├── Migrations/                  # EF migrations
-    ├── GraphQL/                     # HotChocolate Query + Mutation
-    └── Properties/
+└── src/                   # The actual .NET solution — nine projects since Phase 13.1
+    ├── Jobkeep.slnx                    # names all nine + the test project
+    ├── Directory.Build.props           # the TFM, shared by all of them
+    ├── Jobkeep.SharedKernel/           # SliceResult, NaturalKey, IAuditable, ModelOptions
+    ├── Jobkeep.Contracts/              # how one module talks to another: interfaces + DTOs
+    ├── Jobkeep.Infrastructure.Data/    # TEMPORARY — the pre-split entities, DbContext
+    │                                   #   and migrations; deleted in Phase 13.3
+    ├── Jobkeep.Modules.Applications/   # a module = Domain/ + Application/ + Infrastructure/
+    ├── Jobkeep.Modules.Analytics/      #   read-only reporting
+    ├── Jobkeep.Modules.Ai/             #   owns ai_analyses
+    ├── Jobkeep.Modules.Ats/            #   owns ats_results
+    ├── Jobkeep.Modules.Documents/      #   owns document_imports + the résumé tables
+    └── Jobkeep.Api/                    # the only project that knows about HTTP
+        ├── Program.cs                  #   wiring only: DI, middleware, Map* calls
+        ├── Endpoints/                  #   REST routes (controllers replace these at 13.5)
+        ├── GraphQL/                    #   HotChocolate Query + Mutation
+        ├── appsettings.json            #   empty Postgres conn (set in deploy)
+        └── appsettings.Development.json
 ```
+
+**A module never references another module** — it goes through `Jobkeep.Contracts`.
+That rule is what makes extracting one into its own service a directory move rather
+than a redesign, and `tests/Jobkeep.Tests/Architecture/` fails the build if it slips.
+See `docs/phases/phase-13-clean-architecture.md`.
 
 ## STAR log
 

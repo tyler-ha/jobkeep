@@ -180,6 +180,15 @@ Full reasoning, the extraction triggers, and the decision record are in
 
 ### Where new code goes
 
+> **PHASE 13 IS IN PROGRESS AND THIS SECTION IS OUT OF DATE.** Step 13.1 landed
+> 2026-09-01: `src/` is now **nine projects**, one per module plus SharedKernel,
+> Contracts and Api — see `docs/phases/phase-13-clean-architecture.md` for the
+> target shape and the reference rule (*a module never references another module*),
+> which `tests/Jobkeep.Tests/Architecture/ModuleBoundaryTests.cs` enforces. The
+> vertical-slice rules below still describe how a **use case** is written, and that
+> has not changed; only the paths have. This section is rewritten in full at 13.6,
+> deliberately last, so it is rewritten once rather than after every step.
+
 New feature work goes in a **module**, as a **slice per use case**:
 
 ```
@@ -210,6 +219,12 @@ Modules: `Applications` (core), `Analytics` (read-only), `Ai` (Phase 4),
   module's tables") is superseded.
 
 ### Migration state (read this before editing `src/`)
+
+> **Superseded in part by Phase 13.** The Phase 2.1-2.3 migration described below
+> did finish, and its rules about *how a slice is written* still hold. What has
+> changed is where the files live: since 13.1 each module is its own project, and
+> the entities plus `AppDbContext` sit temporarily in `Jobkeep.Infrastructure.Data`,
+> a project whose own csproj explains that it is scheduled for deletion in 13.3.
 
 **The migration is finished.** It ran incrementally across Phases 2.1-2.3 so each
 phase stayed runnable, and as of Phase 2.3 (2026-08-26) `src/` has **one** shape:
@@ -355,11 +370,16 @@ By hand:
 docker run -d -p 5432:5432 -e POSTGRES_PASSWORD=dev -e POSTGRES_DB=jobkeep postgres:16-alpine
 
 cd src
-dotnet build
-dotnet run
+dotnet build Jobkeep.slnx
+dotnet run --project Jobkeep.Api
 ```
 
-App listens on `http://localhost:5080` (`Properties/launchSettings.json`).
+Since Phase 13.1 there are nine projects under `src/`, so a bare `dotnet build` /
+`dotnet run` in that directory fails with **MSB1011** — name the solution or the
+project, as above. `docker compose up --build` is unaffected and remains the
+normal way to start the stack.
+
+App listens on `http://localhost:5080` (`Jobkeep.Api/Properties/launchSettings.json`).
 Swagger UI at `/swagger` and the GraphQL Nitro IDE at `/graphql` — both
 Development-only.
 
@@ -367,7 +387,11 @@ EF migrations (tool pinned to 10.0.11 in `src/dotnet-tools.json`, `rollForward: 
 — bump it in lockstep with `Microsoft.EntityFrameworkCore.Design`):
 ```bash
 dotnet tool restore
-dotnet ef migrations add <Name>
+
+# Since Phase 13.1: the model lives in one project and the connection string and
+# provider are resolved through another, so both have to be named. Without these
+# two flags the command fails in a way that reads like a broken tool install.
+dotnet ef migrations add <Name> --project Jobkeep.Infrastructure.Data --startup-project Jobkeep.Api
 ```
 
 Tests (Phase 2.2) — xUnit v3 + Testcontainers, in `tests/Jobkeep.Tests/`:
@@ -565,7 +589,14 @@ about that date — verify it before relying on it.
 
 ## When asked to move to the next phase
 
-**Currently up next: Phase 6.5 group 4 (paste text), then finish Phase 6.**
+**Currently up next: Phase 13.2 — contracts and per-module context interfaces.**
+Read `docs/phases/phase-13-clean-architecture.md`; it is the live plan, and it was
+rewritten on 2026-09-01 when the user confirmed **microservices is the destination**.
+The short version: `src/` is now nine projects, one per module, and 13.2 puts every
+cross-module read behind a contract *while the tables stay put*, so 13.3 can split
+the schema without also being the step that changes behaviour.
+
+**Phase 6.5 group 4 (paste text) is parked**, by decision, until the 13.3 boundary.
 
 **Phase 6.5** (`docs/phases/phase-6.5-upload-experience.md`) is the Upload screen,
 opened 2026-09-01 by the first real feedback the front end has had. Groups 1-3 and

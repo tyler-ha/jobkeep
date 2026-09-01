@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- What one module is allowed to know about another: interfaces and DTOs, no
+       implementations and no entities. A module references THIS, never another
+       module's project — that single rule is what makes extracting a module a
+       directory move instead of a redesign.
+
+       Also has no package references, on purpose. When a module becomes its own
+       service, this project is what the wire schema is generated from, so
+       anything that could not survive a network hop does not belong in it. -->
+  <PropertyGroup>
+    <RootNamespace>Jobkeep.Contracts</RootNamespace>
+  </PropertyGroup>
+
+</Project>

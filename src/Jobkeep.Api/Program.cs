@@ -1,4 +1,9 @@
 using System.Text.Json.Serialization;
+// Phase 13.1: the Map*Module extensions moved here from each module's own
+// wiring file, so the module projects carry no ASP.NET dependency. The Add*
+// half still lives with its module. Both halves disappear into controllers
+// and a module DI extension in 13.5.
+using Jobkeep.Api.Endpoints;
 using Jobkeep.Data;
 using Jobkeep.GraphQL;
 using Jobkeep.Modules.Ai;

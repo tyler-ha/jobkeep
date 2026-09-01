@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The building blocks every module may depend on, and nothing else may depend
+       on. Deliberately has ZERO package references: SliceResult, NaturalKey and
+       IAuditable are plain C#, and keeping it that way is what stops this project
+       becoming the dumping ground a "Common" assembly usually becomes.
+
+       If something here ever needs a package, that is the signal it belongs in a
+       module or in Jobkeep.Infrastructure.Data, not here. -->
+  <PropertyGroup>
+    <RootNamespace>Jobkeep.Shared</RootNamespace>
+  </PropertyGroup>
+
+</Project>

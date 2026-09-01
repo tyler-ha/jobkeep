@@ -74,6 +74,18 @@ anything POSIX-shaped; PowerShell for Windows process work
 
 ---
 
+- **An XML comment cannot contain `--`.** This repo writes prose comments in its
+  project files, and the house style uses `--` as a dash. Nine csproj files written
+  that way all failed `dotnet restore` with **MSB4025** before a character of C# was
+  compiled. Use an em dash. (2026-09-01, Phase 13.1.)
+- **`.dockerignore` patterns are not recursive unless you write `**/`.** `obj/`
+  matches a *top-level* `obj` only. That was fine while `src/` held one project and
+  silently stopped being fine when Phase 13.1 made nine: the host's Windows `obj/`
+  directories were copied into the Linux build, and `dotnet publish` died inside
+  `ResolvePackageAssets` with a NuGet stack trace that names neither Docker nor
+  `obj`. If a container build fails in package resolution and the host build is
+  green, check this first. (2026-09-01, Phase 13.1.)
+
 ## Deriving the database schema
 
 **Do not read the model classes.** Column types, precision, delete behaviour and

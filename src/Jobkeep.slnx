@@ -1,4 +1,16 @@
 <Solution>
-  <Project Path="Jobkeep.csproj" />
-  <Project Path="../tests/Jobkeep.Tests/Jobkeep.Tests.csproj" />
+  <Folder Name="/src/">
+    <Project Path="Jobkeep.SharedKernel/Jobkeep.SharedKernel.csproj" />
+    <Project Path="Jobkeep.Contracts/Jobkeep.Contracts.csproj" />
+    <Project Path="Jobkeep.Infrastructure.Data/Jobkeep.Infrastructure.Data.csproj" />
+    <Project Path="Jobkeep.Modules.Applications/Jobkeep.Modules.Applications.csproj" />
+    <Project Path="Jobkeep.Modules.Analytics/Jobkeep.Modules.Analytics.csproj" />
+    <Project Path="Jobkeep.Modules.Ai/Jobkeep.Modules.Ai.csproj" />
+    <Project Path="Jobkeep.Modules.Ats/Jobkeep.Modules.Ats.csproj" />
+    <Project Path="Jobkeep.Modules.Documents/Jobkeep.Modules.Documents.csproj" />
+    <Project Path="Jobkeep.Api/Jobkeep.Api.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="../tests/Jobkeep.Tests/Jobkeep.Tests.csproj" />
+  </Folder>
 </Solution>

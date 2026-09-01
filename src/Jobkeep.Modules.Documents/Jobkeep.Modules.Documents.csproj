@@ -1,0 +1,56 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The Documents module. A plain class library on purpose: the handlers never
+       knew about HTTP — only the route-mapping half of DocumentsModule.cs did, and
+       Phase 13.1 lifted that into Jobkeep.Api/Endpoints/. Keeping ASP.NET out of
+       here is what makes the layering claim checkable rather than decorative.
+
+       REFERENCE RULE, enforced by tests/Jobkeep.Tests/Architecture/: this project
+       may reference SharedKernel, Contracts and (until 13.3) Infrastructure.Data.
+       It may NOT reference another Jobkeep.Modules.* project. -->
+  <PropertyGroup>
+    <RootNamespace>Jobkeep.Modules.Documents</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- IChatClient only. The concrete provider (Ollama today, a hosted API later)
+         is registered in Jobkeep.Api — that swap is the whole point of the
+         abstraction, so a module that named a provider would undo it. -->
+    <PackageReference Include="Microsoft.Extensions.AI" Version="10.9.0" />
+    <!-- IConfiguration.Bind lives in the Binder package, not in the abstractions.
+         The old single project got it free from the Web SDK; a class library says
+         so. Pinned to 10.0.11 to match everything else in the graph. -->
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.11" />
+
+
+    <!-- IConfiguration is deliberately NOT pinned here. It arrives transitively at
+         10.0.11 via EF Relational, which Jobkeep.Infrastructure.Data already pins;
+         a second pin is a second thing to bump in lockstep, and this repo has
+         already been bitten twice by EF version drift (see the CS1705 comment in
+         tests/Jobkeep.Tests/Jobkeep.Tests.csproj). One pin, one place. -->
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The two concrete extractors in Infrastructure/. These are the only
+         infrastructure packages any module carries, and they are why Documents
+         has an Infrastructure/ folder while the other modules do not. -->
+    <PackageReference Include="PdfPig" Version="0.1.16" />
+    <PackageReference Include="DocumentFormat.OpenXml" Version="3.5.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Jobkeep.SharedKernel/Jobkeep.SharedKernel.csproj" />
+    <ProjectReference Include="../Jobkeep.Contracts/Jobkeep.Contracts.csproj" />
+    <ProjectReference Include="../Jobkeep.Infrastructure.Data/Jobkeep.Infrastructure.Data.csproj" />
+
+    <!-- THE ONE EXCEPTION TO THE REFERENCE RULE, and it is temporary.
+         CommitImport.cs calls CreateApplicationHandler and
+         AddRequirementToPostingHandler directly so that Applications' own rules
+         run on a committed draft rather than being re-implemented here
+         (architecture.md decision 15, which accepted this compile-time coupling
+         openly). Phase 13.2 turns it into a contract call and this line goes.
+         Until then the architecture test allows exactly this edge and no other. -->
+    <ProjectReference Include="../Jobkeep.Modules.Applications/Jobkeep.Modules.Applications.csproj" />
+  </ItemGroup>
+
+</Project>

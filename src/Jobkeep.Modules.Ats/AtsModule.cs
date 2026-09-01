@@ -1,4 +1,5 @@
 using Jobkeep.Shared;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Jobkeep.Modules.Ats;
 
@@ -55,37 +56,5 @@ public static class AtsModule
         // IChatClient comes from AddModelClient in Program.cs. Ats owns the
         // `ats_results` table, not the technology (decision 16).
         return services;
-    }
-
-    public static IEndpointRouteBuilder MapAtsModule(this IEndpointRouteBuilder app)
-    {
-        // Under /applications, for the reason AiModule.cs gives: a URL follows the
-        // resource the caller is thinking about ("the ATS check for this
-        // application"), while the code follows whichever module owns the table.
-        // Forcing an /ats/... prefix would leak the module layout into the public
-        // API, which is the thing module boundaries exist to be free to change.
-        var group = app.MapGroup("/applications").WithTags("Ats");
-
-        // POST — computes and stores. Not idempotent in the HTTP sense: it writes
-        // an ats_results row, and re-running it against a different resume changes
-        // the answer. `resumeId` is optional; omitted, it uses the resume the
-        // application was sent with.
-        group.MapPost("/{id:guid}/ats-check", async (
-            Guid id,
-            Guid? resumeId,
-            CheckAtsHandler handler,
-            CancellationToken ct) =>
-            (await handler.HandleAsync(id, resumeId, ct)).ToHttpResult());
-
-        // GET — reads back what was stored, running no model. The same split
-        // GetAnalysis.cs makes, and the reason the result is a table rather than
-        // a computed response.
-        group.MapGet("/{id:guid}/ats-check", async (
-            Guid id,
-            GetAtsResultHandler handler,
-            CancellationToken ct) =>
-            (await handler.HandleAsync(id, ct)).ToHttpResult());
-
-        return app;
     }
 }

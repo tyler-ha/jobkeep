@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The Ats module. A plain class library on purpose: the handlers never
+       knew about HTTP — only the route-mapping half of AtsModule.cs did, and
+       Phase 13.1 lifted that into Jobkeep.Api/Endpoints/. Keeping ASP.NET out of
+       here is what makes the layering claim checkable rather than decorative.
+
+       REFERENCE RULE, enforced by tests/Jobkeep.Tests/Architecture/: this project
+       may reference SharedKernel, Contracts and (until 13.3) Infrastructure.Data.
+       It may NOT reference another Jobkeep.Modules.* project. -->
+  <PropertyGroup>
+    <RootNamespace>Jobkeep.Modules.Ats</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- IChatClient only. The concrete provider (Ollama today, a hosted API later)
+         is registered in Jobkeep.Api — that swap is the whole point of the
+         abstraction, so a module that named a provider would undo it. -->
+    <PackageReference Include="Microsoft.Extensions.AI" Version="10.9.0" />
+
+    <!-- IConfiguration is deliberately NOT pinned here. It arrives transitively at
+         10.0.11 via EF Relational, which Jobkeep.Infrastructure.Data already pins;
+         a second pin is a second thing to bump in lockstep, and this repo has
+         already been bitten twice by EF version drift (see the CS1705 comment in
+         tests/Jobkeep.Tests/Jobkeep.Tests.csproj). One pin, one place. -->
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Jobkeep.SharedKernel/Jobkeep.SharedKernel.csproj" />
+    <ProjectReference Include="../Jobkeep.Contracts/Jobkeep.Contracts.csproj" />
+    <ProjectReference Include="../Jobkeep.Infrastructure.Data/Jobkeep.Infrastructure.Data.csproj" />
+  </ItemGroup>
+
+</Project>
