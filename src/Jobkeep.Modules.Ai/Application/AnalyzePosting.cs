@@ -14,7 +14,7 @@ namespace Jobkeep.Modules.Ai;
 //
 // The module owns `ai_analyses` and nothing else. The posting text it reads and
 // the `posting_skills` rows it writes both belong to Applications, and it reaches
-// them through IPostingContract rather than through AppDbContext — see the long
+// them through IPostingContract rather than through its own context — see the long
 // comment in Modules/Applications/PostingContract.cs for why a write across a
 // module boundary could not reuse the Analytics exception.
 
@@ -117,7 +117,7 @@ internal static class AiSchema
 
 public class AnalyzePostingHandler
 {
-    private readonly AppDbContext _db;
+    private readonly IAiDbContext _db;
     private readonly IChatClient _chat;
     private readonly IPostingContract _postings;
     private readonly AiOptions _options;
@@ -129,7 +129,7 @@ public class AnalyzePostingHandler
     // today, a hosted provider later, decided in AiModule.cs by configuration.
     // Nothing below this line knows which one it is talking to.
     public AnalyzePostingHandler(
-        AppDbContext db, IChatClient chat, IPostingContract postings,
+        IAiDbContext db, IChatClient chat, IPostingContract postings,
         AiOptions options, ModelOptions model)
     {
         _db = db;

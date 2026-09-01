@@ -34,6 +34,10 @@ public static class ApplicationsModule
         // contract registered by whichever consumer happens to be wired first is
         // a dependency nothing in Program.cs shows.
         services.AddScoped<IPostingContract, PostingContract>();
+
+        // Phase 13.2 — the second contract, kept separate from the first rather
+        // than merged into an Applications facade. IApplicationContract.cs says why.
+        services.AddScoped<IApplicationContract, ApplicationContract>();
         return services;
     }
 }

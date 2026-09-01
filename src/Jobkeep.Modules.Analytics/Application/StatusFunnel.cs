@@ -20,19 +20,22 @@ public record ApplicationFunnel(List<StatusCount> Stages, int Total);
 
 public class StatusFunnelHandler
 {
-    private readonly AppDbContext _db;
+    private readonly IAnalyticsDbContext _db;
 
-    public StatusFunnelHandler(AppDbContext db) => _db = db;
+    public StatusFunnelHandler(IAnalyticsDbContext db) => _db = db;
 
     public async Task<SliceResult<ApplicationFunnel>> HandleAsync(CancellationToken ct = default)
     {
-        // GROUP BY "Status" — in the database. Status is stored as text
-        // (HasConversion<string>), so this groups on the string column and EF
-        // converts each key back to the enum on the way out.
-        var counts = await _db.JobApplications
+        // PHASE 13.2 — the GROUP BY moved into a view Applications publishes, so
+        // this module no longer names `job_applications`. The aggregate still
+        // runs in Postgres, which is the property that mattered; what changed is
+        // who decides the shape. Views/AnalyticsViews.cs has the argument.
+        //
+        // Status is text in the table, text in the view, and converted back to
+        // the enum by the same HasConversion<string> declared on the keyless
+        // type — so this reads exactly as it did.
+        var counts = await _db.ApplicationStatusCounts
             .AsNoTracking()
-            .GroupBy(a => a.Status)
-            .Select(g => new { Status = g.Key, Count = g.Count() })
             .ToDictionaryAsync(x => x.Status, x => x.Count, ct);
 
         // A stage with no applications has no row to group, so SQL cannot return

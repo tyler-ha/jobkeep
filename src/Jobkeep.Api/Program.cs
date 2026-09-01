@@ -11,6 +11,7 @@ using Jobkeep.Modules.Analytics;
 using Jobkeep.Modules.Applications;
 using Jobkeep.Modules.Ats;
 using Jobkeep.Modules.Documents;
+using Jobkeep.Modules.Skills;
 using Jobkeep.Shared;
 using Microsoft.EntityFrameworkCore;
 
@@ -38,14 +39,43 @@ builder.Services.AddDbContext<AppDbContext>((sp, options) => options
     .UseNpgsql(connectionString)
     .AddInterceptors(sp.GetRequiredService<AuditSaveChangesInterceptor>()));
 
+// Phase 13.2 — the per-module views of that one context. Each interface exposes
+// only its own module's DbSets, so a handler physically cannot name another
+// module's table: the property is not there to type.
+//
+// Registered HERE, in the composition root, and that placement is the point. The
+// module projects still reference Jobkeep.Infrastructure.Data (it dies at 13.3),
+// so any of them could resolve AppDbContext by name if it were wired locally.
+// Keeping the concrete type in one file means there is exactly one place a
+// module could cheat from, and an architecture test watches for it.
+//
+// All six resolve the SAME scoped AppDbContext rather than constructing one
+// each. That matters: a slice holding two of these interfaces is holding one
+// change tracker and one transaction, exactly as before. Registering them as
+// separate contexts would have made SaveChanges mean different things depending
+// on which interface was asked — a behaviour change smuggled into the one step
+// whose whole value is that it has none. 13.3 splits them for real.
+builder.Services.AddScoped<IApplicationsDbContext>(sp => sp.GetRequiredService<AppDbContext>());
+builder.Services.AddScoped<ISkillsDbContext>(sp => sp.GetRequiredService<AppDbContext>());
+builder.Services.AddScoped<IDocumentsDbContext>(sp => sp.GetRequiredService<AppDbContext>());
+builder.Services.AddScoped<IAiDbContext>(sp => sp.GetRequiredService<AppDbContext>());
+builder.Services.AddScoped<IAtsDbContext>(sp => sp.GetRequiredService<AppDbContext>());
+builder.Services.AddScoped<IAnalyticsDbContext>(sp => sp.GetRequiredService<AppDbContext>());
+
 // Every use case is a vertical slice under Modules/ (docs/architecture.md §2).
 // Each slice handler takes AppDbContext directly, so this registers them and
 // nothing else — as of Phase 2.3 there is no repository layer left to register.
 builder.Services.AddApplicationsModule();
 
-// Phase 2.4. Read-only: three aggregate queries, no tables of its own. It reads
-// Applications-owned tables, which bends architecture.md rule 2 deliberately —
-// AnalyticsModule.cs has the reasoning and the accepted cost.
+// Phase 13.2. The shared skill taxonomy, promoted out of Applications a step
+// early because ISkillCatalog needs an owner. No routes: a skill is never the
+// thing a user asks for (SkillsModule.cs).
+builder.Services.AddSkillsModule();
+
+// Phase 2.4. Read-only: three aggregate queries and no tables of its own. Since
+// Phase 13.2 it reads three PUBLISHED VIEWS rather than Applications' tables, so
+// the decision-13 exception it relied on is retired — Views/AnalyticsViews.cs
+// has the argument, and IAnalyticsDbContext has no SaveChangesAsync at all.
 builder.Services.AddAnalyticsModule();
 
 // Phase 4. Owns `ai_analyses`; reaches Applications-owned tables through

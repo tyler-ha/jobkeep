@@ -1,4 +1,5 @@
 using Jobkeep.Data;
+using Jobkeep.Modules.Applications;
 using Jobkeep.Shared;
 using Microsoft.EntityFrameworkCore;
 
@@ -30,32 +31,54 @@ public record AnalysisSummaryResponse(
 
 public class GetAnalysisHandler
 {
-    private readonly AppDbContext _db;
+    private readonly IAiDbContext _db;
+    private readonly IApplicationContract _applications;
 
-    public GetAnalysisHandler(AppDbContext db) => _db = db;
+    public GetAnalysisHandler(IAiDbContext db, IApplicationContract applications)
+    {
+        _db = db;
+        _applications = applications;
+    }
 
     public async Task<SliceResult<AnalysisSummaryResponse>> HandleAsync(
         Guid applicationId, CancellationToken ct = default)
     {
-        // One query from application to analysis across the posting FK. This
-        // traverses `job_applications` and `job_postings`, which Ai does not own —
-        // but it reads nothing from them beyond the join, projecting only
-        // ai_analyses columns. A contract method to resolve an id to a posting id
-        // already exists (IPostingContract.GetContentAsync), and using it here
-        // would pull the whole description over just to discard it. The cap on
-        // that interface is deliberate, so this slice takes the join instead and
-        // says so out loud.
+        // PHASE 13.2 — This used to be ONE query: an EXISTS over job_applications
+        // inside a query on ai_analyses, joining across the posting FK. The
+        // comment here argued for that join on the grounds that the only contract
+        // method available (IPostingContract.GetContentAsync) would have pulled a
+        // whole job description over just to discard it, and that IPostingContract
+        // was capped at two methods so a narrower one could not be added.
+        //
+        // Both halves of that argument are now gone. The cap belonged to the world
+        // decision 17 described, where a cross-module READ was ordinary and only a
+        // write needed guarding; Phase 13 reverses that, because a read across a
+        // boundary is exactly what stops being possible when the module is a
+        // separate deployable. And IApplicationContract.GetPostingIdAsync is the
+        // narrow method the old comment wanted and could not have.
+        //
+        // The cost is one extra round trip, and it is worth naming rather than
+        // hiding: two indexed primary-key lookups instead of one join. At 13.3
+        // this stops being a choice at all — `job_applications` will be in another
+        // schema and the join will not translate.
+        var postingId = await _applications.GetPostingIdAsync(applicationId, ct);
+
+        if (postingId is null)
+            // Distinguished from "no analysis yet" now, which the old single-query
+            // shape could not do — it saw one null and had to guess. The comment
+            // it replaces said splitting these "would cost a second query"; the
+            // second query is no longer optional, so the distinction is free.
+            // Both are still 404, so no caller sees a different status.
+            return SliceResult<AnalysisSummaryResponse>.NotFound(
+                $"Application {applicationId} not found.");
+
         var found = await _db.AiAnalyses
-            .Where(a => _db.JobApplications
-                .Any(app => app.Id == applicationId && app.PostingId == a.PostingId))
+            .AsNoTracking()
+            .Where(a => a.PostingId == postingId.Value)
             .Select(a => new AnalysisSummaryResponse(
                 a.PostingId, a.Seniority, a.Summary, a.ModelUsed, a.AnalyzedAtUtc))
             .FirstOrDefaultAsync(ct);
 
-        // "No analysis yet" and "no such application" are both NotFound here, and
-        // the message says which. Distinguishing them would cost a second query
-        // to prove the application exists, for a caller that is about to POST
-        // /analyze either way.
         return found is null
             ? SliceResult<AnalysisSummaryResponse>.NotFound(
                 $"No analysis stored for application {applicationId}. Run the analyzer first.")

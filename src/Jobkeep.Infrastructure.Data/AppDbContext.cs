@@ -6,7 +6,22 @@ namespace Jobkeep.Data;
 // The EF Core unit-of-work. All relational mapping lives here in OnModelCreating
 // (Fluent API) rather than scattered as attributes on the model classes, so the
 // schema decisions are readable in one place.
-public class AppDbContext : DbContext
+//
+// PHASE 13.2 — it now implements six per-module interfaces, each exposing only
+// that module's own DbSets, and no module names this class any more. The
+// existing properties satisfy them as they stand, so nothing below changed:
+// what changed is that a handler holding IDocumentsDbContext has no `Skills`
+// property to reach for. Contexts/IApplicationsDbContext.cs has the reasoning,
+// including why the interfaces live in this project. All of it — the interfaces
+// and this class — is replaced by six real contexts in 13.3.
+public class AppDbContext
+    : DbContext,
+      IApplicationsDbContext,
+      ISkillsDbContext,
+      IDocumentsDbContext,
+      IAiDbContext,
+      IAtsDbContext,
+      IAnalyticsDbContext
 {
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
@@ -26,6 +41,13 @@ public class AppDbContext : DbContext
     public DbSet<ResumeSkill> ResumeSkills => Set<ResumeSkill>();
     public DbSet<ResumeExperience> ResumeExperiences => Set<ResumeExperience>();
     public DbSet<ResumeEducation> ResumeEducations => Set<ResumeEducation>();
+
+    // Phase 13.2 — the three views Applications publishes to Analytics. Keyless,
+    // read-only, and mapped at the bottom of OnModelCreating. Views/AnalyticsViews.cs
+    // has the argument for publishing a view instead of exposing the tables.
+    public DbSet<ApplicationStatusCount> ApplicationStatusCounts => Set<ApplicationStatusCount>();
+    public DbSet<CompanyApplicationCount> CompanyApplicationCounts => Set<CompanyApplicationCount>();
+    public DbSet<PostingSkillDemand> PostingSkillDemands => Set<PostingSkillDemand>();
 
     protected override void OnModelCreating(ModelBuilder model)
     {
@@ -366,6 +388,33 @@ public class AppDbContext : DbContext
                 .HasForeignKey(x => x.ResumeId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
+
+        // -------------------------------------------------------------------
+        // Phase 13.2 — the views Applications publishes to Analytics
+        // -------------------------------------------------------------------
+        // HasNoKey + ToView: EF reads them and will never try to write them, and
+        // it leaves them out of the migration model entirely — the CREATE VIEW
+        // statements are hand-written in the AnalyticsViews migration, because a
+        // view is not something EF scaffolds.
+        //
+        // They are mapped here rather than in Analytics because Applications
+        // publishes them. That is the whole point of the shape: the owner
+        // decides what it exposes. At 13.3 they move into the `applications`
+        // schema with the tables they read.
+        model.Entity<ApplicationStatusCount>(e =>
+        {
+            e.HasNoKey().ToView("v_application_status_counts");
+            // The underlying column is text (HasConversion<string> on
+            // JobApplication.Status), so the view's column is text too and the
+            // same conversion has to be declared on the way back in.
+            e.Property(x => x.Status).HasConversion<string>();
+        });
+
+        model.Entity<CompanyApplicationCount>(e =>
+            e.HasNoKey().ToView("v_company_application_counts"));
+
+        model.Entity<PostingSkillDemand>(e =>
+            e.HasNoKey().ToView("v_posting_skill_demand"));
 
         // -------------------------------------------------------------------
         // Phase 7, F11 — database-side defaults, applied as a convention

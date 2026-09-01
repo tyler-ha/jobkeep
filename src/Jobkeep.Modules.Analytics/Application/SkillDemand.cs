@@ -1,4 +1,5 @@
 using Jobkeep.Data;
+using Jobkeep.Modules.Skills;
 using Jobkeep.Shared;
 using Microsoft.EntityFrameworkCore;
 
@@ -31,9 +32,14 @@ public class SkillDemandHandler
     private const int MaxTop = 100;
     private const int DefaultTop = 20;
 
-    private readonly AppDbContext _db;
+    private readonly IAnalyticsDbContext _db;
+    private readonly ISkillCatalog _skills;
 
-    public SkillDemandHandler(AppDbContext db) => _db = db;
+    public SkillDemandHandler(IAnalyticsDbContext db, ISkillCatalog skills)
+    {
+        _db = db;
+        _skills = skills;
+    }
 
     public async Task<SliceResult<List<SkillDemandItem>>> HandleAsync(
         int? top, CancellationToken ct = default)
@@ -45,41 +51,73 @@ public class SkillDemandHandler
         if (take < 1 || take > MaxTop)
             return SliceResult<List<SkillDemandItem>>.Invalid($"top must be between 1 and {MaxTop}.");
 
-        // The aggregate runs in Postgres, not in C#. Ordering and Take are part
-        // of the same statement, so the database returns at most `take` rows —
-        // loading posting_skills and counting with LINQ-to-Objects would be the
-        // same answer at the cost of the whole table, and is the thing "what
-        // good looks like here" specifically rules out.
+        // PHASE 13.2 — the aggregate still runs in Postgres, but it now runs in
+        // a view Applications publishes, and the view stops at SkillId.
         //
-        // Grouped by (Name, Category) rather than by SkillId because the count
-        // that means something is per distinct skill *name*, and the name is
-        // already unique in `skills`. Category rides along as a group key rather
-        // than an aggregate for the same reason: it is functionally dependent on
-        // the name, so grouping by it adds nothing and costs nothing.
+        // That is the interesting decision in this file, so it is worth being
+        // exact about. `posting_skills` belongs to Applications and `skills` is
+        // its own module (13.3 gives them separate schemas). A view that joined
+        // them would not have removed the cross-module read — it would have moved
+        // it from C#, where the compiler can see it, into SQL, where nothing can.
+        // So the view counts rows it owns, and the names are resolved afterwards
+        // through the catalog.
         //
-        // COUNT(*) over posting_skills is a count of POSTINGS, not applications.
-        // The composite PK means a skill is linked to a posting at most once, so
-        // one posting contributes one row here even if you applied to it twice.
-        // "Which skills does the market ask for" is a question about ads, not
-        // about how many times you hit send.
-        var demand = await _db.PostingSkills
+        // The aggregate, the ordering and the LIMIT are all still one statement:
+        // Postgres returns at most `take` rows, and the second query resolves at
+        // most `take` ids. Loading posting_skills and counting in C# would be the
+        // same answer at the cost of the whole table, and is the thing "what good
+        // looks like here" specifically rules out. Two bounded queries is not that.
+        var counts = await _db.PostingSkillDemands
             .AsNoTracking()
-            .GroupBy(ps => new { ps.Skill.Name, ps.Skill.Category })
-            .OrderByDescending(g => g.Count())
-            // Alphabetical tiebreak, for the same reason ListApplications sorts
-            // by Id after DateApplied: ties plus a LIMIT is how a row goes
-            // missing between two otherwise identical calls.
-            .ThenBy(g => g.Key.Name)
-            .Select(g => new SkillDemandItem(g.Key.Name, g.Key.Category, g.Count()))
+            .OrderByDescending(d => d.PostingCount)
+            // Tiebreak on SkillId rather than on the name, because the name is
+            // not in this view. See the note below on what that costs.
+            .ThenBy(d => d.SkillId)
             .Take(take)
             .ToListAsync(ct);
 
-        // Known gap, recorded not fixed: `skills` dedups case-sensitively, so
-        // "C#" and "c#" are two rows and appear here as two entries splitting
-        // one skill's count. This is where that defect actually costs something
-        // — a demand table is exactly what a duplicate row corrupts. The fix is
-        // a case-insensitive natural key, which is a migration, so it has its
-        // own phase. See CLAUDE.md "Known gaps".
+        var names = await _skills.GetAsync(counts.Select(c => c.SkillId).ToList(), ct);
+
+        // ACCEPTED BEHAVIOUR CHANGE, and the only one in 13.2 — the alphabetical
+        // tiebreak is now WITHIN THE PAGE, not across the whole table.
+        //
+        // Before: ORDER BY count DESC, name ASC, then LIMIT, so among skills tied
+        // on count the alphabetically-first ones were the ones kept. Now the
+        // database breaks that tie on SkillId, which is arbitrary, and the
+        // alphabetical sort happens after the names arrive. Same rows in the
+        // common case; a different subset of a tied group at the LIMIT boundary.
+        //
+        // Why that is the right trade rather than a regression tolerated: the
+        // alternative is the view joining `skills`, which is the coupling this
+        // step exists to remove. The ordering that actually carries meaning — by
+        // demand — is unchanged and still computed in SQL over the whole table.
+        // The tiebreak was always a determinism device (see the note below), and
+        // it still is one: ThenBy(SkillId) makes the page stable across calls,
+        // which is the property that stopped rows going missing between two
+        // otherwise identical requests.
+        //
+        // A skill id with no row in the catalog is skipped. That cannot happen
+        // today — the FK guarantees it — but the FK is one of the five 13.3
+        // drops, so the code is written for the world it is heading into.
+        var demand = counts
+            .Where(c => names.ContainsKey(c.SkillId))
+            .Select(c => new SkillDemandItem(
+                names[c.SkillId].Name, names[c.SkillId].Category, c.PostingCount))
+            .OrderByDescending(d => d.PostingCount)
+            .ThenBy(d => d.Name, StringComparer.Ordinal)
+            .ToList();
+
+        // The known gap this comment used to record — `skills` dedupping
+        // case-sensitively, so "C#" and "c#" appeared as two entries splitting
+        // one skill's count — was FIXED in Phase 7 by a stored lower() generated
+        // column with the unique index on it. This is where that defect cost the
+        // most, which is why the note stays rather than being deleted: a demand
+        // table is exactly what a duplicate row corrupts.
+        //
+        // It also retired a subtlety. This used to GROUP BY (Name, Category)
+        // because the count that meant something was per distinct NAME; with the
+        // name now unique in `skills`, grouping by SkillId in the view is the
+        // same grouping, which is what let the join leave this file at all.
         return SliceResult<List<SkillDemandItem>>.Ok(demand);
     }
 }

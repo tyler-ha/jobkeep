@@ -1,7 +1,7 @@
 # Phase 13 — module-owned Clean Architecture, on the road to services
 
-**Status: In progress. Step 13.1 done 2026-09-01** (branch
-`phase-13/module-boundaries`, suite 239 → 244 green). 13.2–13.6 remain.
+**Status: In progress. Steps 13.1 and 13.2a–b done 2026-09-01** (branch
+`phase-13/module-boundaries`, suite 239 → 244 → 246 green). 13.2c–e and 13.3–13.6 remain.
 
 **This doc was rewritten on 2026-09-01.** The version before it (written the same
 day, commit `bf968a0`) planned a **layer-first** migration: one `Domain`, one
@@ -45,7 +45,7 @@ src/
 │                                  Zero package references, on purpose.
 ├── Jobkeep.Contracts/             public interfaces + DTOs, one folder per module.
 │                                  Zero package references, on purpose.
-├── Jobkeep.Modules.Skills/        schema `skills`  — the shared taxonomy (13.3)
+├── Jobkeep.Modules.Skills/        schema `skills`  — the shared taxonomy (promoted early, 13.2a)
 ├── Jobkeep.Modules.Applications/  schema `applications`
 ├── Jobkeep.Modules.Documents/     schema `documents`
 ├── Jobkeep.Modules.Ai/            schema `ai`
@@ -168,41 +168,141 @@ Other deviations worth recording:
   `Jobkeep.Api`, and `dotnet ef` now needing `--project Jobkeep.Infrastructure.Data
   --startup-project Jobkeep.Api`.
 
-### 13.2 — contracts and per-module context interfaces — **NEXT**
+### 13.2 — contracts and per-module context interfaces
 
 The hard logical decoupling, done while the database is still safe. After this step
 no module can name another module's tables, but nothing has moved in Postgres — so
 it is fully reversible and every test still passes.
 
-- `Jobkeep.Contracts` gains `ISkillCatalog`, `IResumeContract`,
-  `IApplicationContract` beside the `IPostingContract` already there.
-- Each module gets an `I<X>DbContext` exposing **only its own** `DbSet`s;
-  `AppDbContext` implements all of them. This is the seam 13.3 cuts.
-- The cross-module reads to convert, counted:
-  - **Ats** — `Resumes`, `ResumeSkills` (Documents) + `PostingSkills`,
-    `JobRequirements`, `JobApplications` (Applications). Five; the largest job.
-  - **Applications** — `Resumes` ×2 (Documents), `Skills` ×4 (Skills).
-  - **Documents** — `Skills` ×4 (Skills).
-  - **Ai** — `JobApplications` ×1 (Applications).
-  - **Analytics** — `JobApplications` ×2, `PostingSkills` ×1 (Applications).
-- **Ats's skill gap changes shape, and it must be written down.** Today it is a SQL
-  set difference over `posting_skills` vs `resume_skills`. Those land in two schemas
-  Ats owns neither of, so it becomes two contract calls returning `Guid[]` and an
-  in-memory `Except`. That knowingly breaks CLAUDE.md's *"aggregate in SQL, not in
-  memory"* — justified because the sets are tens of items and bounded, and because
-  the alternative is a join that will not exist across a service boundary.
-- **Analytics reads published views, not tables.** Applications ships three
-  read-only views in its own schema; Analytics maps them in a read-only context.
-  This keeps the `GROUP BY` in SQL and makes the boundary a *published* interface
-  rather than a peek — and it avoids the trap decision 13 named, because a contract
-  with a method per question is `IJobApplicationRepository` returning for the fourth
-  time.
+**Split into five sub-steps**, each ending green and runnable, because the whole of
+it is several sessions' work at the context budget this project runs to. **13.2a and
+13.2b landed 2026-09-01; 13.2c–e remain.**
+
+| | Module | State |
+|---|---|---|
+| **13.2a** | the seam: six `I<X>DbContext`, DI, `Jobkeep.Modules.Skills` | **Done** |
+| **13.2b** | Ai, Analytics | **Done** |
+| 13.2c | Documents | Not started |
+| 13.2d | Applications | Not started |
+| 13.2e | Ats | Not started |
+
+#### Scope correction taken 2026-09-01, before any code moved
+
+**This section's original count was low, and the gap is the kind that only shows up
+at 13.3.** It listed 15 cross-module `_db.<DbSet>` reads. There are ~10 more crossings
+the compiler hides behind navigation properties: `ps.Skill.Name` in seven places,
+`a.Resume.Label` in `ApplicationDetail`, `r.Resume.Label` in `GetAtsResult`, and
+`ListApplications`'s `EF.Functions.ILike(ps.Skill.Name, …)` filter. Every one of them
+is a join across a future schema boundary, and every one of them compiles perfectly
+today and would keep compiling after 13.2 as originally scoped.
+
+They are **in scope**, decided with the user. Leaving them makes 13.3 a schema move
+*and* a rewrite of ten projections — which is exactly the failure mode 13.1's own
+deviation note records, one step later and with a migration attached.
+
+#### What landed in 13.2a
+
+- **Six `I<X>DbContext` interfaces**, each exposing only its module's own `DbSet`s,
+  in `src/Jobkeep.Infrastructure.Data/Contexts/`. `AppDbContext` implements all six.
+  The location is forced rather than chosen, and the file says so at length: they
+  cannot go in `Contracts` (a `DbSet<T>` will not survive a network hop, and the
+  foundation-projects test forbids it taking dependencies), and they cannot go in the
+  module projects (`AppDbContext` implements them, so Infrastructure.Data would have
+  to reference all six modules while they reference it — a cycle that does not
+  compile). They die with that project at 13.3.
+- **All six resolve the same scoped `AppDbContext`**, registered in `Program.cs`.
+  Deliberate: a slice holding two interfaces holds one change tracker and one
+  transaction, exactly as before. Separate contexts would have made `SaveChanges` mean
+  different things depending on which interface was asked — a behaviour change
+  smuggled into the one step whose whole value is that it has none.
+- **`IAnalyticsDbContext` has no `SaveChangesAsync`.** Decision 13's entire
+  justification was that Analytics is read-only. That was asserted in a comment for
+  four phases; it is now a fact about the type.
+- **`Jobkeep.Modules.Skills` was promoted early** — the plan created it at 13.3.
+  `ISkillCatalog` needed an owner the moment four modules were find-or-creating
+  against `skills`, and parking the implementation in Applications would have meant
+  moving the file again one step later for no gain in between. The `Skill` entity and
+  its Fluent config stay in Infrastructure.Data until 13.3 like every other entity.
+  The module has no routes, which its csproj argues is a legitimate shape rather than
+  a missing feature.
+- **Two architecture tests**, `No_module_takes_the_shared_context` and its canary
+  `The_shared_context_allowlist_still_names_real_work`. The existing suite checks
+  *assembly* references; this checks the *type* that made them necessary, because
+  every module still references Infrastructure.Data and could name `AppDbContext`
+  while the boundary test passed. The allowlist names Applications, Ats and Documents
+  and empties at 13.2e — it is the work item, not a policy, and the canary fails if an
+  entry outlives the work.
+
+#### What landed in 13.2b
+
+- **Ai.** `IApplicationContract.GetPostingIdAsync` — narrower than
+  `IPostingContract.GetContentAsync`, which would have pulled a 20,000-character job
+  ad over to discard it. `GetAnalysis` costs one extra round trip and now
+  distinguishes "no such application" from "no analysis yet", which the old
+  single-query shape could not; both are still 404. The comment that argued *for* the
+  join is rewritten rather than deleted — its reasoning was correct under decision 17,
+  which this phase reverses.
+- **Analytics reads three published views**, in one additive migration,
+  `AnalyticsViews`. Hand-written SQL: `ToView` keeps keyless types out of the migration
+  model, so `migrations add` produced an empty `Up`/`Down` by design. Every `COUNT(*)`
+  is cast to `::int` — Postgres counts in bigint, the CLR properties are `int`, and
+  without the cast Npgsql refuses at read time rather than at build time.
+- **`v_posting_skill_demand` stops at `SkillId`.** A view joining `skills` would not
+  have removed the cross-module read, only moved it from C# where a compiler sees it
+  into SQL where nothing does. `SkillDemand` resolves ids through `ISkillCatalog`.
+- **The one accepted behaviour change in 13.2, and it is in `SkillDemand`:** the
+  alphabetical tiebreak is now *within the page*. Before, `ORDER BY count DESC, name`
+  ran before the `LIMIT`, so among skills tied on count the alphabetically-first
+  survived. Now the database ties on `SkillId` and the alphabetical sort happens after
+  the names arrive. Same rows in the common case; a different subset of a tied group at
+  the limit boundary. `AnalyticsTests` asserts the top item only, so it did not move.
+  Accepted because the alternative is the join this step exists to remove, and because
+  the tiebreak was always a determinism device rather than a promise.
+- **`AnalyticsModule.cs`'s long boundary argument was rewritten, not left.** It was
+  answering *"is this safe?"* — and it is: a read-only module can never leave another
+  module's data in a state that module did not choose. Phase 13 asks *"can this be
+  lifted out?"*, where read-only buys nothing, because a `SELECT` across a boundary is
+  precisely what stops working when the boundary becomes a network. The third option it
+  never considered is the one that shipped.
+
+#### What remains, and what each sub-step has to answer
+
+The cross-module reads still to convert, counted:
+
+- **Ats (13.2e)** — `Resumes`, `ResumeSkills` (Documents) plus `PostingSkills`,
+  `JobRequirements`, `JobApplications` (Applications), and the `ps.Skill.Name` and
+  `r.Resume.Label` traversals. The largest job.
+- **Applications (13.2d)** — `Resumes` ×2 (Documents), `Skills` ×4, plus the
+  traversals in `ApplicationDetail`, `ListApplications` and `RemoveSkillFromPosting`.
+  The `ILike` skill filter becomes `ISkillCatalog` resolving the pattern to ids.
+- **Documents (13.2c)** — `Skills` ×4, the `GetResume` and `RemoveSkillFromResume`
+  traversals, and the `CommitImport` work below.
+
+Then:
+
+- **Ats's skill gap changes shape, and it must be written down.** Today it is a SQL set
+  difference over `posting_skills` vs `resume_skills`. Those land in two schemas Ats
+  owns neither of, so it becomes two contract calls returning `Guid[]` and an in-memory
+  `Except`. That knowingly breaks CLAUDE.md's *"aggregate in SQL, not in memory"* —
+  justified because the sets are tens of items and bounded, and because the alternative
+  is a join that will not exist across a service boundary.
+- **`IPostingContract`'s two-method cap is lifted at 13.2e, deliberately.** Its cap
+  comment and `AtsModule.cs`'s "this is why it stays at two" paragraph both argue from
+  decision 17, which this phase reverses. Rewrite both rather than growing past them
+  quietly. `ISkillCatalog` already carries the replacement test: does a proposed method
+  name a *skill operation*, or a question the caller has about its own feature?
 - **`CommitImport` stops being a transaction.** It currently opens one spanning
-  Documents writes and calls into Applications' handlers. It becomes: commit
-  locally, then call Applications through a contract; on failure mark the import
-  `CommitFailed` and leave it re-runnable — the idempotency guard it already has
+  Documents writes and calls into Applications' handlers. It becomes: commit locally,
+  then call Applications through a contract; on failure mark the import `CommitFailed`
+  and leave it re-runnable — the idempotency guard it already has
   (`CommittedEntityId`) is what makes that safe. **Accepted cost:** a partial commit
-  becomes possible, and is recovered by re-running rather than rolled back.
+  becomes possible, and is recovered by re-running rather than rolled back. Read the
+  25-line comment above the `BeginTransactionAsync` call before deleting it: it names
+  the duplicate-application failure the transaction was protecting against, and the
+  replacement has to answer it.
+- Dropping the Documents-to-Applications project reference at 13.2c also means deleting
+  the `AllowedEdges` entry and the `The_recorded_exception_is_actually_visible_to_this_test`
+  canary, which is written to fail at exactly that moment.
 
 ### 13.3 — the physical split
 

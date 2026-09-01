@@ -20,9 +20,9 @@ public class CompanyRollupHandler
     private const int MaxTop = 100;
     private const int DefaultTop = 20;
 
-    private readonly AppDbContext _db;
+    private readonly IAnalyticsDbContext _db;
 
-    public CompanyRollupHandler(AppDbContext db) => _db = db;
+    public CompanyRollupHandler(IAnalyticsDbContext db) => _db = db;
 
     public async Task<SliceResult<List<CompanyRollupItem>>> HandleAsync(
         int? top, CancellationToken ct = default)
@@ -32,30 +32,31 @@ public class CompanyRollupHandler
         if (take < 1 || take > MaxTop)
             return SliceResult<List<CompanyRollupItem>>.Invalid($"top must be between 1 and {MaxTop}.");
 
-        // Grouped from the application side rather than by walking Companies and
-        // counting their postings' applications. Both answer the question; this
-        // one is a single GROUP BY with two joins, where the other is a
-        // correlated subquery per company row.
+        // PHASE 13.2 — the join and the GROUP BY moved into a view Applications
+        // publishes; the ordering and the LIMIT stay here, because "top N" is
+        // this module's question and not a property of the rollup.
         //
-        // The consequence, stated rather than hidden: a company with postings but
-        // no applications does not appear at all, because it has no row to group.
-        // Today that state is unreachable — companies are only ever created by
-        // CreateApplication's find-or-create — so the alternative would be paying
-        // for a case that cannot happen. If a posting-only import path ever lands
-        // (scraping, Phase 4), this becomes a real omission and the query has to
-        // start from `companies` with a LEFT JOIN.
-        var rollup = await _db.JobApplications
+        // The consequence the old comment recorded is unchanged and now lives in
+        // the view's SQL: it groups from the application side, so a company with
+        // postings but no applications has no row and does not appear. That state
+        // is still unreachable — companies are only ever created by
+        // CreateApplication's find-or-create — so the view pays for the case that
+        // can happen rather than the one that cannot. A posting-only import path
+        // would make it a real omission, and the fix would be a LEFT JOIN in the
+        // view rather than a change here.
+        var rollup = await _db.CompanyApplicationCounts
             .AsNoTracking()
-            .GroupBy(a => a.Posting.Company.Name)
-            .OrderByDescending(g => g.Count())
-            .ThenBy(g => g.Key)
-            .Select(g => new CompanyRollupItem(g.Key, g.Count()))
+            .OrderByDescending(c => c.ApplicationCount)
+            .ThenBy(c => c.CompanyName)
             .Take(take)
+            .Select(c => new CompanyRollupItem(c.CompanyName, c.ApplicationCount))
             .ToListAsync(ct);
 
-        // Company dedup is case-sensitive too, so "Canva" and "canva" split into
-        // two rows here exactly as "C#"/"c#" do in skill demand. Same known gap,
-        // same migration-shaped fix. See CLAUDE.md "Known gaps".
+        // The case-sensitive dedup gap this comment used to record — "Canva" and
+        // "canva" splitting one employer into two rows — was FIXED in Phase 7:
+        // companies.Name carries a stored lower() generated column and the unique
+        // index sits on it. Kept as a note rather than deleted because the rollup
+        // is where that defect actually cost something visible.
         return SliceResult<List<CompanyRollupItem>>.Ok(rollup);
     }
 }

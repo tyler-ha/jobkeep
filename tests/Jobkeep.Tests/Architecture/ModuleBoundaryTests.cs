@@ -26,6 +26,22 @@ public class ModuleBoundaryTests
         "Jobkeep.Modules.Ai",
         "Jobkeep.Modules.Ats",
         "Jobkeep.Modules.Documents",
+        // Phase 13.2 promoted Skills a step early: ISkillCatalog needed an owner
+        // once four modules were find-or-creating against the shared table.
+        "Jobkeep.Modules.Skills",
+    ];
+
+    // Phase 13.2. The modules that may still take AppDbContext, shrinking to empty
+    // as the step lands module by module. Each entry is a module whose handlers
+    // have not yet moved onto their own I<X>DbContext.
+    //
+    // This list is the work item, not a policy. When it is empty, delete it and the
+    // conditional in No_module_takes_the_shared_context along with it.
+    private static readonly HashSet<string> ModulesStillOnAppDbContext =
+    [
+        "Jobkeep.Modules.Applications",
+        "Jobkeep.Modules.Ats",
+        "Jobkeep.Modules.Documents",
     ];
 
     // The exceptions, named one by one rather than allowed as a category.
@@ -102,6 +118,65 @@ public class ModuleBoundaryTests
             + string.Join(", ", ours));
     }
 
+
+    [Fact]
+    public void No_module_takes_the_shared_context()
+    {
+        // The reference rule above is about ASSEMBLIES; this one is about the type
+        // that made the assemblies necessary. Every module still references
+        // Jobkeep.Infrastructure.Data — it holds the entities until 13.3 — so any
+        // of them could name AppDbContext and reach all thirteen tables, and the
+        // boundary test would pass while the boundary did not exist.
+        //
+        // Phase 13.2 gives each module an I<X>DbContext exposing only its own
+        // DbSets. This is what makes that stick: a handler cannot quietly take the
+        // shared context back, because the missing property is what stops it
+        // naming another module's table.
+        //
+        // Constructor parameters rather than fields, because DI is how a handler
+        // gets one. A module that new'd up an AppDbContext would need a connection
+        // string it has no way to reach.
+        var violations = new List<string>();
+
+        foreach (var module in Modules)
+        {
+            if (ModulesStillOnAppDbContext.Contains(module)) continue;
+
+            var assembly = Assembly.Load(new AssemblyName(module));
+
+            foreach (var type in assembly.GetTypes())
+                foreach (var ctor in type.GetConstructors())
+                    foreach (var parameter in ctor.GetParameters())
+                        if (parameter.ParameterType.Name == "AppDbContext")
+                            violations.Add($"{module}: {type.Name}({parameter.Name})");
+        }
+
+        Assert.True(violations.Count == 0,
+            "A module takes AppDbContext. Depend on that module's I<X>DbContext instead, "
+            + "and reach another module through Jobkeep.Contracts:\n  "
+            + string.Join("\n  ", violations));
+    }
+
+    [Fact]
+    public void The_shared_context_allowlist_still_names_real_work()
+    {
+        // The canary for the list above, and the same idea as the one below it: a
+        // stale exception is worse than no exception, because it reads as a rule.
+        // If a module has been converted but its name is still here, this fails and
+        // says so — which is the reminder to delete the entry rather than leave a
+        // permission standing that nothing needs.
+        var converted = ModulesStillOnAppDbContext
+            .Where(module => !Assembly.Load(new AssemblyName(module))
+                .GetTypes()
+                .SelectMany(type => type.GetConstructors())
+                .SelectMany(ctor => ctor.GetParameters())
+                .Any(parameter => parameter.ParameterType.Name == "AppDbContext"))
+            .ToList();
+
+        Assert.True(converted.Count == 0,
+            "These modules no longer take AppDbContext, so remove them from "
+            + "ModulesStillOnAppDbContext:\n  " + string.Join("\n  ", converted));
+    }
 
     [Fact]
     public void The_recorded_exception_is_actually_visible_to_this_test()

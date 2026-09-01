@@ -181,7 +181,7 @@ Full reasoning, the extraction triggers, and the decision record are in
 ### Where new code goes
 
 > **PHASE 13 IS IN PROGRESS AND THIS SECTION IS OUT OF DATE.** Step 13.1 landed
-> 2026-09-01: `src/` is now **nine projects**, one per module plus SharedKernel,
+> 2026-09-01: `src/` is now **ten projects**, one per module plus SharedKernel,
 > Contracts and Api — see `docs/phases/phase-13-clean-architecture.md` for the
 > target shape and the reference rule (*a module never references another module*),
 > which `tests/Jobkeep.Tests/Architecture/ModuleBoundaryTests.cs` enforces. The
@@ -374,7 +374,7 @@ dotnet build Jobkeep.slnx
 dotnet run --project Jobkeep.Api
 ```
 
-Since Phase 13.1 there are nine projects under `src/`, so a bare `dotnet build` /
+Since Phase 13.1 there are ten projects under `src/`, so a bare `dotnet build` /
 `dotnet run` in that directory fails with **MSB1011** — name the solution or the
 project, as above. `docker compose up --build` is unaffected and remains the
 normal way to start the stack.
@@ -589,12 +589,28 @@ about that date — verify it before relying on it.
 
 ## When asked to move to the next phase
 
-**Currently up next: Phase 13.2 — contracts and per-module context interfaces.**
-Read `docs/phases/phase-13-clean-architecture.md`; it is the live plan, and it was
+**Currently up next: Phase 13.2c — Documents.** Read
+`docs/phases/phase-13-clean-architecture.md`; it is the live plan, and it was
 rewritten on 2026-09-01 when the user confirmed **microservices is the destination**.
-The short version: `src/` is now nine projects, one per module, and 13.2 puts every
+The short version: `src/` is now ten projects, one per module, and 13.2 puts every
 cross-module read behind a contract *while the tables stay put*, so 13.3 can split
 the schema without also being the step that changes behaviour.
+
+**13.2 is split into five sub-steps and two of them have landed** (2026-09-01, suite
+244 → 246). Three things from them change how the remaining three are written:
+
+- **A module takes its own `I<X>DbContext`, never `AppDbContext`.** Six interfaces
+  live in `src/Jobkeep.Infrastructure.Data/Contexts/`, each exposing only one
+  module's `DbSet`s; the shared context implements all six and is named only in
+  `Program.cs`. `ModuleBoundaryTests.No_module_takes_the_shared_context` enforces it,
+  with an allowlist naming the three modules still to convert — **delete your
+  module's entry as you convert it**, or its canary fails.
+- **`Jobkeep.Modules.Skills` exists now**, promoted a step early because
+  `ISkillCatalog` needed an owner. Every find-or-create against `skills` goes through
+  that contract, which owns `NaturalKey.Of` so four modules cannot each forget it.
+- **Cross-module *navigation traversals* count as crossings** — `ps.Skill.Name`,
+  `a.Resume.Label`. The phase doc's original count missed them; they are in scope,
+  and the correction is recorded there.
 
 **Phase 6.5 group 4 (paste text) is parked**, by decision, until the 13.3 boundary.
 
