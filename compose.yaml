@@ -1,0 +1,132 @@
+# JobKeep -- the whole local stack as containers: Postgres, the API, the front end.
+#
+#   docker compose up --build     first run, or after any code change
+#   docker compose up             images already built
+#   docker compose down           stop everything; the database volume survives
+#   docker compose down -v        stop everything and delete the database
+#   docker compose logs -f api    follow one service
+#
+# The API answers on http://localhost:5080 (Swagger at /swagger, the GraphQL IDE
+# at /graphql) and the front end on http://localhost:5173 -- the same ports
+# run.cmd uses, deliberately, so nothing else in the repo has to know which
+# launcher started the stack.
+#
+# This does NOT replace run.cmd, and it is worth knowing which one you want:
+#
+#   * run.cmd runs the API and Vite as native Windows processes. Fastest inner
+#     loop for C#: edit, Ctrl+C, `dotnet run`. No image rebuild.
+#   * compose runs all three as containers, so it needs nothing installed but
+#     Docker -- no .NET SDK, no Node. That is what makes it the honest
+#     quick-start for someone who just cloned the repo. The cost is that a C#
+#     edit needs `docker compose up --build api`, because the API image is a
+#     published build rather than a bind mount (`dotnet watch` over a bind mount
+#     would drag the host's Windows-built obj/ into a Linux container, which
+#     fails in ways that look like compiler bugs).
+#
+# The front end is the real Vite dev server with ./web bind-mounted, not a static
+# build behind nginx: hot reload is why anyone runs the front end locally at all,
+# and a container that took it away would just go unused.
+#
+# Only ONE of the two stacks can run at a time -- both bind :5432, :5080 and
+# :5173. `run.cmd -Stop -StopDatabase` clears the other one.
+#
+# The two databases are NOT shared. run.cmd's `jobkeep-db` container keeps its
+# rows in its own container layer; this stack keeps them in the `pgdata` volume
+# declared at the bottom. Same schema, different data.
+#
+# The test suite is not here on purpose: it starts its own throwaway Postgres via
+# Testcontainers and refuses to run against anything else (docs/phases/phase-2.2).
+
+name: jobkeep
+
+services:
+  db:
+    # Must match the image run.cmd creates, and the connection string in
+    # src/appsettings.Development.json. Changing it in one place only is how you
+    # get a database the app cannot see.
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD: dev
+      POSTGRES_DB: jobkeep
+    ports:
+      # Published so psql / DataGrip / `dotnet ef` on the host can reach it.
+      # Nothing in this file needs it -- `api` reaches Postgres over the compose
+      # network, on the container port, whatever is published here.
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # pg_isready, not just an open port: Postgres accepts TCP connections
+      # before it will accept queries, and the API's startup migration is the
+      # first query. Without this the API loses that race on a cold start and
+      # exits before Postgres is ready to answer.
+      test: ["CMD-SHELL", "pg_isready -U postgres -d jobkeep"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build:
+      # ./src, not the repo root: the csproj references nothing above it, and a
+      # narrower context is a smaller upload and a better cache.
+      context: ./src
+    ports:
+      # 5080 on the host, 8080 in the container -- see src/Dockerfile for why the
+      # container port is 8080 and not the 5080 launchSettings.json names.
+      - "5080:8080"
+    environment:
+      # Development on purpose. It is what makes migrations auto-apply on boot,
+      # serves Swagger, and applies the CORS policy -- all three are
+      # `IsDevelopment()` branches in Program.cs. A deployed environment is
+      # Phase 10's problem and gets none of them.
+      ASPNETCORE_ENVIRONMENT: Development
+      # Environment variables beat appsettings.Development.json, which points at
+      # localhost -- and inside a container localhost is the container. `db` is
+      # the service name above, resolved by Docker's DNS on the default network.
+      # Double underscore is ASP.NET's separator for a nested config key.
+      ConnectionStrings__Postgres: "Host=db;Port=5432;Database=jobkeep;Username=postgres;Password=dev"
+      # __0 indexes into the Cors:AllowedOrigins array. The origin is the
+      # BROWSER's view of the front end (localhost:5173), not the container's --
+      # CORS is enforced against the Origin header the browser sends.
+      Cors__AllowedOrigins__0: "http://localhost:5173"
+      # Ollama runs on the host, not in this stack: it is a multi-GB model server
+      # that has no business being rebuilt or restarted with the app. Without
+      # this line the API would look for it on its own loopback and every AI call
+      # would fail with a connection refused that reads like a model problem.
+      Ai__Endpoint: "http://host.docker.internal:11434"
+    extra_hosts:
+      # Docker Desktop resolves host.docker.internal for free; Linux does not.
+      # host-gateway makes the line above work on both.
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ./web
+    ports:
+      - "5173:5173"
+    environment:
+      # The BROWSER makes the API calls, not this container, so this is a host
+      # URL. It is the same value src/lib/api.ts falls back to; set explicitly
+      # because a fallback that is only ever exercised is a fallback nobody
+      # notices breaking.
+      VITE_API_BASE_URL: "http://localhost:5080"
+    volumes:
+      # Bind mount for hot reload: an edit on the host reaches Vite immediately.
+      - ./web:/app
+      # Anonymous volume, and the order matters -- it masks node_modules inside
+      # the bind mount above, so the container keeps the Linux packages `npm ci`
+      # installed at build time instead of inheriting the host's Windows ones.
+      # (esbuild and rollup ship platform-specific binaries; the host's do not
+      # run here.) Adding a dependency therefore needs `up --build`.
+      - /app/node_modules
+    depends_on:
+      # Ordering only, not readiness: the front end is a static-asset server as
+      # far as the browser is concerned, and the API is called from the browser.
+      # Vite starting first would work; it would just render error states.
+      - api
+
+volumes:
+  pgdata:

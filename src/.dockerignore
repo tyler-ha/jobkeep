@@ -1,0 +1,16 @@
+# Keep the build context small, and keep Windows build output out of a Linux
+# build. obj/ is the one that actually breaks things: project.assets.json records
+# absolute host paths and the host's RID, so a copied obj/ makes `dotnet publish`
+# fail inside the container with errors that name packages it never asked for.
+bin/
+obj/
+TestResults/
+
+# The image does not build itself.
+Dockerfile
+.dockerignore
+
+# IDE and editor droppings.
+.vs/
+*.user
+*.suo

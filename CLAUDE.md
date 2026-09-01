@@ -316,6 +316,25 @@ tear a stack down (it also kills the stray `Jobkeep.exe` that makes the next
 build fail with MSB3027). Logs land in `logs/`. The script is
 `scripts/run.ps1`; read its header before changing ports or the container name.
 
+**`docker compose up --build` does the same job in containers** — `compose.yaml`
+at the root, plus `src/Dockerfile` and `web/Dockerfile`. It needs nothing
+installed but Docker, which is what makes it the quick start for a fresh clone.
+The two launchers are not interchangeable and only one can run at a time (both
+bind :5432, :5080, :5173):
+
+- `run.cmd` is the **fast inner loop for C#** — native processes, no image
+  rebuild.
+- compose is the **portable one**. The front end is still the real Vite dev
+  server with `./web` bind-mounted, so hot reload survives; the API is a
+  published build, so a C# edit costs `docker compose up --build api`. That
+  asymmetry is deliberate — `dotnet watch` over a bind mount would drag the
+  host's Windows `obj/` into a Linux container.
+
+The compose stack keeps its rows in the `pgdata` volume; `run.cmd`'s `jobkeep-db`
+container keeps its own. Same schema, **different data** — a row created under one
+launcher is not visible under the other. The test suite is in neither: it starts
+its own throwaway Postgres via Testcontainers.
+
 By hand:
 
 ```bash
@@ -415,8 +434,9 @@ You can still exercise endpoints by hand via Swagger, the Nitro IDE, or
 
 ## Known gaps (don't re-discover these)
 
-No `docker-compose`, no health check, no auth. These are **recorded**, not
-forgotten — see the gap register in `docs/architecture.md`.
+No health check, no auth. These are **recorded**, not forgotten — see the gap
+register in `docs/architecture.md`. (`docker-compose` used to be on this line;
+`compose.yaml` landed 2026-09-01.)
 
 Tests and CI landed in **Phase 2.2**, scheduled straight after 2.1 because the gap
 register called them the highest-value missing items. Findings still **recorded, not

@@ -67,7 +67,20 @@ it; every use case is now a slice under `Modules/`.
 .\run.cmd                 # -NoFrontend for backend only, -NoBrowser, -Stop to tear down
 ```
 
-It brings each layer up only once the one below it answers, so a failure is
+or, with nothing installed but Docker — no .NET SDK, no Node:
+
+```bash
+docker compose up --build   # down to stop; down -v to drop the database too
+```
+
+The two do different jobs. `run.cmd` runs the API and Vite as native processes,
+which is the fastest inner loop for C#; `compose.yaml` runs all three as
+containers, which is the honest quick start for a machine that has just cloned
+the repo. Only one can run at a time — they bind the same three ports. Compose
+still gives the front end a real Vite dev server with hot reload, but a C# edit
+costs an image rebuild (`docker compose up --build api`).
+
+`run.cmd` brings each layer up only once the one below it answers, so a failure is
 reported against the thing that failed rather than as a fetch error in the
 browser. Ctrl+C stops what it started; the Postgres container is deliberately
 left running, because it holds your data and costs nothing idle. If a launcher

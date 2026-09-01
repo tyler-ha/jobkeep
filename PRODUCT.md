@@ -130,9 +130,10 @@ reads, and the ATS check. 228 tests green.
 - A module may **read** another module's tables; only a **write** needs a
   contract (architecture decision 17).
 
-**Known and recorded — do not re-discover:** no auth, no health check, no
-docker-compose; skill/company/résumé-label dedup is case-sensitive; no index on
-`Status` or `DateApplied`. All are in the gap register in `docs/architecture.md`.
+**Known and recorded — do not re-discover:** no auth, no health check. Three
+items that used to sit on this line are fixed: case-sensitive dedup and the
+missing `Status` / `DateApplied` indexes went in Phase 7, and `compose.yaml`
+landed 2026-09-01. The rest are in the gap register in `docs/architecture.md`.
 
 ## Brand Commitments
 
