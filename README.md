@@ -61,31 +61,31 @@ it; every use case is now a slice under `Modules/`.
 
 ## Quick start
 
-**The whole stack, one command** — Postgres, the API and the front end:
-
-```powershell
-.\run.cmd                 # -NoFrontend for backend only, -NoBrowser, -Stop to tear down
-```
-
-or, with nothing installed but Docker — no .NET SDK, no Node:
+**The whole stack, one command** — Postgres, the API and the front end, with
+nothing installed but Docker:
 
 ```bash
 docker compose up --build   # down to stop; down -v to drop the database too
+docker compose logs -f api  # follow one service
 ```
 
-The two do different jobs. `run.cmd` runs the API and Vite as native processes,
-which is the fastest inner loop for C#; `compose.yaml` runs all three as
-containers, which is the honest quick start for a machine that has just cloned
-the repo. Only one can run at a time — they bind the same three ports. Compose
-still gives the front end a real Vite dev server with hot reload, but a C# edit
-costs an image rebuild (`docker compose up --build api`).
+The API answers on `http://localhost:5080` (Swagger at `/swagger`, the GraphQL
+IDE at `/graphql`) and the front end on `http://localhost:5173`. The front end is
+the real Vite dev server with `./web` bind-mounted, so hot reload works; the API
+is a published build, so **a C# edit costs `docker compose up --build api`**.
 
-`run.cmd` brings each layer up only once the one below it answers, so a failure is
-reported against the thing that failed rather than as a fetch error in the
-browser. Ctrl+C stops what it started; the Postgres container is deliberately
-left running, because it holds your data and costs nothing idle. If a launcher
-is ever killed from outside, `.\run.cmd -Stop` cleans up after it — including
-the stray `Jobkeep.exe` that otherwise makes the next build fail with MSB3027.
+There used to be a second launcher — a `run.cmd` that started the same three
+layers as native Windows processes, which was a faster inner loop for C#. It was
+removed on 2026-09-01 so there is one way to start the app rather than two that
+bind the same three ports. One thing went with it: it used to kill the stray
+`Jobkeep.exe` that makes the next build fail with MSB3027, so if you run
+`dotnet run` by hand, stop it yourself before rebuilding.
+
+**Ollama is not in the compose stack, on purpose** — it is a multi-GB model
+server with no business being rebuilt and restarted with the app, so the API
+container reaches it on the host at `host.docker.internal:11434`. Everything
+works without it except the three features that call a model; see
+[Where the model runs](#where-the-model-runs).
 
 By hand, if you'd rather. Storage is **PostgreSQL via EF Core**; in Development
 the app talks to a local Postgres container and auto-applies EF migrations on
@@ -170,6 +170,49 @@ cascades, shared rows (a company, a skill) refuse to disappear underneath you.
 
 Redraw both diagrams after a schema change with the `schema-diagram` skill; it
 generates the DDL from EF rather than reading the model classes.
+
+## Where the model runs
+
+**Not in Docker.** The compose stack is three containers — Postgres, the API, Vite
+— and Ollama is not one of them. It is a multi-GB model server that has no
+business being rebuilt or restarted with the app, so it runs natively on the host
+and the API container reaches it through `host.docker.internal:11434`
+(`compose.yaml`, `Ai__Endpoint`). On a bare `docker compose up` with no Ollama
+installed, every model call fails with a connection refused that reads like a
+model problem and isn't one.
+
+```bash
+ollama serve                 # on the host, not in a container
+ollama pull llama3.2:3b      # the model the app asks for by name
+```
+
+One model does all of it: **`llama3.2:3b`**, configured in `appsettings.json`
+under `Ai` and bound to `ModelOptions` in `src/Shared/ModelClient.cs`. It is
+registered once as an `IChatClient` (OllamaSharp implements the interface
+directly) and injected wherever a module wants it — `Ai` does not own the
+technology, it owns the `ai_analyses` table.
+
+Three callers, and **they are not equally dependent on it**:
+
+| Caller | What it asks the model for | What happens with Ollama down |
+|---|---|---|
+| `Modules/Ai/AnalyzePosting.cs` — "Analyse the ad" | Seniority, a 2–3 sentence summary, and **every technology named in the ad**, from `job_postings.Description` | 500, with a message naming the endpoint. Nothing is stored. |
+| `Modules/Documents/DocumentStructurer.cs` — the upload pipeline | Structure for an uploaded PDF/DOCX/text: a résumé's roles and education, or a job ad's title, company, skills and requirements | The import blocks for up to 180s and then fails. Text extraction itself never touches the model. |
+| `Modules/Ats/CheckAts.cs` — the ATS check | **Only free-text requirement coverage.** | **Degrades, does not fail** — three of the four stages need no model. The warning is stored, so a later read cannot mistake an empty `UnmetRequirements` for "every requirement met". |
+
+The ATS row is the one worth reading twice. **The skill gap is a SQL set
+difference, not a model call** — a posting's skills and a résumé's skills are rows
+in the same `skills` table joined on the same `SkillId`, so "what does this ad ask
+for that this CV does not have" is a join. Exact, instant, free, and it cannot
+hallucinate. The plan for Phase 5 said to prompt the model for it; the
+implementation refused, and that is the decision in the phase doc.
+
+Timeouts are generous on purpose: `TimeoutSeconds = 180`, because a 3B model on
+CPU is slow and the first request after boot also pays for loading the weights.
+The `Ai` config section is committed rather than kept in a secret store, which is
+only acceptable because none of it is a credential — Ollama is local and has no
+API key. A hosted provider's key would come from an environment variable, the way
+the connection string does.
 
 ## Project structure
 

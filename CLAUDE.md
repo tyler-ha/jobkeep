@@ -309,31 +309,44 @@ that would have prevented it.
 
 ## Commands
 
-**`.\run.cmd` starts the whole local stack** — Docker, Postgres, the API, the
-front end — waiting for each layer to answer before starting the next, so a
-failure names the layer that failed. `-NoFrontend` for backend only, `-Stop` to
-tear a stack down (it also kills the stray `Jobkeep.exe` that makes the next
-build fail with MSB3027). Logs land in `logs/`. The script is
-`scripts/run.ps1`; read its header before changing ports or the container name.
+**`docker compose up --build` starts the whole local stack** — Postgres, the API
+and the front end, three containers, `compose.yaml` at the root plus
+`src/Dockerfile` and `web/Dockerfile`. It needs nothing installed but Docker.
+`docker compose down` stops it, `down -v` drops the database, `logs -f api`
+follows one service.
 
-**`docker compose up --build` does the same job in containers** — `compose.yaml`
-at the root, plus `src/Dockerfile` and `web/Dockerfile`. It needs nothing
-installed but Docker, which is what makes it the quick start for a fresh clone.
-The two launchers are not interchangeable and only one can run at a time (both
-bind :5432, :5080, :5173):
+- The front end is the **real Vite dev server** with `./web` bind-mounted, so hot
+  reload survives. The API is a **published build**, so a C# edit costs
+  `docker compose up --build api`. That asymmetry is deliberate — `dotnet watch`
+  over a bind mount would drag the host's Windows `obj/` into a Linux container.
+- Adding an npm dependency also needs `up --build`: an anonymous volume masks
+  `node_modules` so the container keeps its Linux packages.
 
-- `run.cmd` is the **fast inner loop for C#** — native processes, no image
-  rebuild.
-- compose is the **portable one**. The front end is still the real Vite dev
-  server with `./web` bind-mounted, so hot reload survives; the API is a
-  published build, so a C# edit costs `docker compose up --build api`. That
-  asymmetry is deliberate — `dotnet watch` over a bind mount would drag the
-  host's Windows `obj/` into a Linux container.
+**There was a second launcher, `run.cmd` / `scripts/run.ps1`, and it was deleted
+on 2026-09-01** at the user's instruction — one way to start the app instead of
+two that bind the same three ports (:5432, :5080, :5173). Don't reintroduce it,
+and don't look for it in docs that predate the removal. Two things it used to do
+now have to be done by hand:
 
-The compose stack keeps its rows in the `pgdata` volume; `run.cmd`'s `jobkeep-db`
-container keeps its own. Same schema, **different data** — a row created under one
-launcher is not visible under the other. The test suite is in neither: it starts
-its own throwaway Postgres via Testcontainers.
+- It killed the stray `Jobkeep.exe` that makes the next build fail with **MSB3027**
+  ("Exceeded retry count of 10 … locked by Jobkeep"). That trap is still live for
+  anyone running `dotnet run` directly — stop the process before rebuilding.
+- It waited for each layer to answer before starting the next, so a failure named
+  the layer that failed. Compose has a `pg_isready` healthcheck on `db` and
+  `depends_on: service_healthy` on `api`, which covers the race that actually
+  mattered; the front end has ordering only, deliberately, since the browser is
+  what calls the API.
+
+The compose stack keeps its rows in the `pgdata` volume. **The old `jobkeep-db`
+container from `run.cmd` may still exist on this machine with different data in
+it** — `docker rm -f jobkeep-db` if it gets in the way of :5432. The test suite is
+in neither: it starts its own throwaway Postgres via Testcontainers.
+
+**Ollama is deliberately NOT in compose.** It runs on the host; the API container
+reaches it at `host.docker.internal:11434` (`Ai__Endpoint` in `compose.yaml`).
+`ollama serve` + `ollama pull llama3.2:3b` are prerequisites for the three model
+callers, and nothing else in the app needs them. See "Where the model runs" in
+the root `README.md` for which caller degrades and which fails.
 
 By hand:
 

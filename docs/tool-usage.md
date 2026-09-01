@@ -44,10 +44,15 @@ anything POSIX-shaped; PowerShell for Windows process work
 - **`cd` does not persist between Bash calls.** Several commands have failed with
   "No such file or directory" for this reason alone. Use absolute paths, or `cd`
   inside the same compound command.
-- **Markdown in this repo contains escaped backslashes.** `README.md` holds
-  `.\\run.cmd`, not `.\run.cmd`. A literal-string find-and-replace that assumes
-  one backslash silently matches nothing. Cost two failed edits on 2026-09-01;
-  the fix is to print `repr()` of the region before assuming.
+- **A quoted Bash heredoc still eats backslashes here.** `<<'PY'` is supposed to
+  be literal, and in this environment a double backslash inside the heredoc
+  reaches Python as a real newline — which silently corrupted a JS regex
+  (`/\n{2,}/`) and made three exact-match replacements fail to match on
+  2026-09-01. Two fixes that work: build the character with `chr(92)` / `chr(10)`
+  instead of typing it, or write the replacement text to a scratchpad file and
+  have Python read it back. Print `repr()` of the region before assuming a match.
+  Note the scratchpad path differs by tool: Bash wants `/c/Users/...`, Python
+  (native Windows) wants `C:\Users\...`.
 - **EF's generated SQL is CRLF + BOM.** `tr -d '\r'` before grepping it, or every
   pattern fails for no visible reason.
 - **`docker compose build` buffers all output** until it exits. An empty log file
@@ -58,7 +63,10 @@ anything POSIX-shaped; PowerShell for Windows process work
 - **`dotnet ef --no-build` reads the compiled assembly**, so a deleted migration
   still "exists" until you rebuild.
 - **`dotnet test` fails against a locked `Jobkeep.exe`** with MSB3027. Stop the
-  process first; `.\run.cmd -Stop` does it too.
+  process first — by hand, since `run.cmd -Stop` was deleted on 2026-09-01:
+  `taskkill /IM Jobkeep.exe /F`, or `docker compose down` if the API is running in
+  a container. A containerised API cannot lock the host's `obj/` at all, which is
+  the quiet upside of dropping the native launcher.
 - **`gh pr merge` is blocked** by the permission classifier. Merge with plain
   git: `git checkout develop && git merge --no-ff <branch> && git push`.
 - **Don't put `\&` through a shell-quoted `python -c`** — it lands literally in
@@ -114,7 +122,7 @@ command.
 | `impeccable` / `frontend-design` | UI design and review work. `PRODUCT.md` already exists, so no re-init. **`impeccable`'s detector runs DEGRADED here — an empty result is an undercount, not a pass.** |
 | `handoff` | Ending a session. Writes to the OS temp dir, never the repo. |
 | `code-review` | Reviewing a diff or branch. |
-| `run` | Launching the app. Here that is `.\run.cmd` or `docker compose up --build`. |
+| `run` | Launching the app. Here that is `docker compose up --build` — the only launcher since 2026-09-01. |
 
 ---
 
@@ -124,5 +132,6 @@ command.
   tokens per session, or per task within a session (`--task <prefix>`). The
   source for `docs/token-log.md`. **The transcripts are local and not kept
   forever**, so a phase that isn't logged when it ends may not be recoverable.
-- `scripts/run.ps1` (via `run.cmd`) — the native local stack. Read its header
-  before changing ports or the container name.
+- ~~`scripts/run.ps1` (via `run.cmd`)~~ — **deleted 2026-09-01.** The native local
+  stack, replaced by `compose.yaml` as the single launcher. `scripts/` now holds
+  one file.

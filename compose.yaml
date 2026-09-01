@@ -7,43 +7,44 @@
 #   docker compose logs -f api    follow one service
 #
 # The API answers on http://localhost:5080 (Swagger at /swagger, the GraphQL IDE
-# at /graphql) and the front end on http://localhost:5173 -- the same ports
-# run.cmd uses, deliberately, so nothing else in the repo has to know which
-# launcher started the stack.
+# at /graphql) and the front end on http://localhost:5173.
 #
-# This does NOT replace run.cmd, and it is worth knowing which one you want:
+# THIS IS THE ONLY LAUNCHER. There used to be a second one -- run.cmd, which
+# started the same three layers as native Windows processes and was a faster
+# inner loop for C#. It was deleted on 2026-09-01: two stacks binding the same
+# three ports (:5432, :5080, :5173) is a footgun, and one obvious way in was
+# judged worth the rebuild cost. Two consequences to know about:
 #
-#   * run.cmd runs the API and Vite as native Windows processes. Fastest inner
-#     loop for C#: edit, Ctrl+C, `dotnet run`. No image rebuild.
-#   * compose runs all three as containers, so it needs nothing installed but
-#     Docker -- no .NET SDK, no Node. That is what makes it the honest
-#     quick-start for someone who just cloned the repo. The cost is that a C#
-#     edit needs `docker compose up --build api`, because the API image is a
-#     published build rather than a bind mount (`dotnet watch` over a bind mount
-#     would drag the host's Windows-built obj/ into a Linux container, which
-#     fails in ways that look like compiler bugs).
+#   * A C# edit costs `docker compose up --build api`, because the API image is
+#     a published build rather than a bind mount. (`dotnet watch` over a bind
+#     mount would drag the host's Windows-built obj/ into a Linux container,
+#     which fails in ways that look like compiler bugs.)
+#   * Nothing kills a stray Jobkeep.exe for you any more. That only matters if
+#     you run `dotnet run` by hand -- a containerised API cannot lock the host's
+#     obj/, so MSB3027 stops being reachable through this file.
 #
-# The front end is the real Vite dev server with ./web bind-mounted, not a static
+# The front end IS the real Vite dev server with ./web bind-mounted, not a static
 # build behind nginx: hot reload is why anyone runs the front end locally at all,
 # and a container that took it away would just go unused.
 #
-# Only ONE of the two stacks can run at a time -- both bind :5432, :5080 and
-# :5173. `run.cmd -Stop -StopDatabase` clears the other one.
-#
-# The two databases are NOT shared. run.cmd's `jobkeep-db` container keeps its
-# rows in its own container layer; this stack keeps them in the `pgdata` volume
-# declared at the bottom. Same schema, different data.
+# The old run.cmd `jobkeep-db` container may still exist on a machine that ran
+# it, holding DIFFERENT data from this stack's `pgdata` volume. If :5432 is
+# already taken, that is why: `docker rm -f jobkeep-db`.
 #
 # The test suite is not here on purpose: it starts its own throwaway Postgres via
 # Testcontainers and refuses to run against anything else (docs/phases/phase-2.2).
+# It needs the .NET SDK on the host, as do `dotnet ef` migrations -- compose
+# removes the need to install .NET to RUN the app, not to develop it.
+#
+# Ollama is not here either, and that is deliberate -- see the `api` service.
 
 name: jobkeep
 
 services:
   db:
-    # Must match the image run.cmd creates, and the connection string in
-    # src/appsettings.Development.json. Changing it in one place only is how you
-    # get a database the app cannot see.
+    # Must match the connection string in src/appsettings.Development.json,
+    # which is what a host-side `dotnet ef` or `dotnet run` uses. Changing it in
+    # one place only is how you get a database the app cannot see.
     image: postgres:16-alpine
     environment:
       POSTGRES_PASSWORD: dev

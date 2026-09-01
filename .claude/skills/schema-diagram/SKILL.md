@@ -40,7 +40,7 @@ Write it to a scratch path, never into the repo.
 **If a database is already running, dump it instead — it is the better source.**
 
 ```bash
-docker compose up -d db          # or run.cmd -NoFrontend
+docker compose up -d db          # just the database; the API is not needed here
 docker compose exec -T db pg_dump -U postgres -d jobkeep --schema-only --no-owner > <scratch>/live.sql
 ```
 
