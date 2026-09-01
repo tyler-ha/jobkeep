@@ -161,9 +161,125 @@ reasons, the second is a live inconsistency the front end walked into.
 
 | Candidate | What it is | Cost / size | Likely home | Notes |
 |---|---|---|---|---|
-| **Scrape a job ad from its URL** | Paste a Seek / LinkedIn / Indeed link and have the app fetch the ad itself | High, and the cost is structural rather than in code | **NOT SCHEDULED — refused, see notes** | **Asked for by the user in Phase 6.5 and declined with reasons, not deferred for time.** All three boards serve an ad as a JS shell behind bot protection, so it needs either a headless browser (Playwright, ~300 MB, needs a container image — which **breaks the Phase 10 Lambda-behind-a-Function-URL deploy**) or a paid scraping API ($30-150/month — which **breaks priority 1 outright**). All three sites' terms prohibit automated collection, and that matters more than usual here because this repo is a portfolio: it is the one feature where "I built it" is a liability unless the ToS position can be defended out loud. `hiQ v. LinkedIn` is narrower than its reputation — the CFAA claim failed, but LinkedIn won on breach of contract. Scrapers also break silently on a redesign. **What ships instead:** paste the ad's text (Phase 6.5 group 4), with `job_postings.SourceUrl` (varchar 2000, already exists) and the upload form's "Link to the ad" input keeping the link as provenance. Reopen only if a board ships a public ads API. |
+| **Scrape a job ad from its URL** | Paste a Seek / LinkedIn / Indeed link and have the app fetch the ad itself | High, and the cost is structural rather than in code | **NOT SCHEDULED — refused, see notes** | **Asked for by the user in Phase 6.5 and declined with reasons, not deferred for time.** All three boards serve an ad as a JS shell behind bot protection, so it needs either a headless browser (Playwright, ~300 MB, needs a container image — which **breaks the Phase 10 Lambda-behind-a-Function-URL deploy**) or a paid scraping API ($30-150/month — which **breaks priority 1 outright**). All three sites' terms prohibit automated collection, and that matters more than usual here because this repo is a portfolio: it is the one feature where "I built it" is a liability unless the ToS position can be defended out loud. `hiQ v. LinkedIn` is narrower than its reputation — the CFAA claim failed, but LinkedIn won on breach of contract. Scrapers also break silently on a redesign. **What ships instead:** paste the ad's text (Phase 6.5 group 4), with `job_postings.SourceUrl` (varchar 2000, already exists) and the upload form's "Link to the ad" input keeping the link as provenance. Reopen only if a board ships a public ads API. **See the browser-extension section below (2026-09-01): it is a DIFFERENT mechanism, and this refusal's own objections are the argument for it.** |
 | **A description input on the app forms** | Somewhere to type or paste a job description onto an application that already exists | Low — one `textarea`, the wire already accepts it | **Phase 12 (P3)** | A live inconsistency, not a missing feature: `JobPost.tsx:226` renders *"No description was saved with this one. Paste the ad in and the analyser has something to read"* — and **no screen anywhere exposes a description input**, though `CreateApplicationRequest.description` and the `PATCH` both accept one. So the app invites an action it does not offer. The user was shown this in Phase 6.5 and chose **not** to close it there, because the paste-an-ad path (group 4) covers the common case of a job that has not been created yet; this row is the remaining case, an application added by hand and enriched later. Cheap whenever it is picked up. |
 
+
+### Added by the intake question (2026-09-01)
+
+Raised by the user, in the session that finished Phase 13.2e:
+
+> *"We are missing the aspect that where can we get those data for job ad."*
+
+**This is the largest unaddressed gap in the product, and it is not a feature gap.**
+Every capability the app has — the analyser, the ATS check, skill-demand analytics,
+the requirement extractor — reads `job_postings.Description`. All of them assume an ad
+is already in the database. Nothing in the app is good at putting one there:
+
+| Path | State | Why it does not solve intake |
+|---|---|---|
+| Upload a document | Built (Phase 4.5) | Aimed at a **CV**. Nobody has their job ads as files. |
+| Paste the ad's text | **Parked** (Phase 6.5 group 4) | Works, and is manual: switch tab, select all, copy, switch back, paste. |
+| Type a description | Not built (row above, P3) | Manual and worse. |
+| Fetch the ad from its URL | **Refused**, row above | Server-side scraping, with the costs recorded there. |
+
+So the app's intake is *"retype what is already on your screen."* Every screen after
+that is well designed, and the funnel starts with the worst step.
+
+| Candidate | What it is | Cost / size | Likely home | Notes |
+|---|---|---|---|---|
+| **Browser extension: save the ad you are looking at** | A button in the toolbar that takes the page you already have open, sends its text to JobKeep, and creates a draft application through the existing import review cycle | Medium-high, and it is mostly *new-codebase* cost rather than hard cost | **Candidate for its own phase. Blocked on Phase 11 (auth) for any public ship; usable locally before that** | See the argument below. |
+
+#### Why this is not the URL scraper wearing a hat
+
+The refusal above is scoped to **the server fetching a URL**. An extension reads a page
+**the user has already navigated to, in their own browser, as themselves.** Every
+objection the refusal raises is answered by that change of mechanism, and it is worth
+laying them side by side because the refusal is the strongest argument available:
+
+| The refusal's objection | What an extension does about it |
+|---|---|
+| Boards serve a JS shell behind bot protection | The page has **already rendered**. There is no bot to detect and no shell to defeat. |
+| Needs Playwright (~300 MB) — breaks the Lambda deploy | Uses the browser the user already has. **Zero server cost, zero deploy impact.** |
+| Or a paid scraping API ($30-150/mo) — breaks priority 1 | Nothing to pay for. See the Chrome Web Store note below for the one real cost. |
+| Terms prohibit automated collection | A person reading a page and saving it to their own tracker is not automated collection. **This is the mechanism the whole category settled on**, which is the ToS position being defensible out loud rather than argued from first principles. |
+| Scrapers break silently on a redesign | **The one objection that partly survives — and this repo already has the answer.** See below. |
+
+**The redesign objection is the interesting one, and JobKeep is unusually well placed.**
+A normal extension extracts fields with CSS selectors (`.job-title`, `.description`),
+which is exactly what a redesign breaks. This app does not need selectors: it already
+has a pipeline that turns **unstructured text** into a structured draft — the Phase 4.5
+`DocumentStructurer` and the Phase 4 `AnalyzePosting`. So the content script's whole job
+is `document.body.innerText`, and the model does the rest. There is no selector to
+break, and it works on a board nobody has ever tested it against. **The AI extractor
+stops being a nice-to-have and becomes the thing that makes the intake robust** — which
+is a genuinely good interview answer about why the AI is there at all.
+
+#### The market check
+
+**Every serious tracker in this category ships a browser extension, and for most of them
+it is the primary intake.** This document already records one instance without drawing
+the conclusion: the Huntr row above notes *"Chrome-extension autofill for
+Workday/Greenhouse."* Teal ships one too, as does Simplify (which this doc correctly
+says is autofill-first) and Careerflow.
+
+So the honest framing is the opposite of the usual backlog question. This is not "should
+we build a differentiator?" — it is **"we are missing the table stakes."** The
+skill-demand analytics that this doc calls our differentiator only has data to work on
+if intake works.
+
+**Verification status, following this document's own norm on overconfident
+attributions:** that Huntr and Teal ship extensions is safe to state — the Huntr claim
+is already verified in this file. The specifics of *what each extension captures* (full
+page text vs. per-board parsers, which boards are supported, whether they use a model)
+are **not verified and should not be repeated in an interview** until they are. Check
+each product's own store listing before relying on the detail.
+
+#### What it would actually cost, stated plainly
+
+Not cheap, and the cost is in a shape this project has not paid before:
+
+- **A third codebase.** `src/` and `web/` become `src/`, `web/` and `extension/` —
+  Manifest V3, a service worker, a content script, its own build and its own tests. The
+  Phase 12 lesson (a feature is a slice *and* a screen, so estimates double) becomes a
+  third half.
+- **Blocked on Phase 11 for anything public.** The app has no auth. An extension posting
+  to an unauthenticated Function URL is an open write endpoint on the public internet,
+  which is a different and much worse thing than a local app with no login. **Locally it
+  is fine**, and that is the version worth building first — priority 4 says local-first,
+  and a personal-use extension pointed at `localhost:5080` needs no store listing, no
+  review and no auth.
+- **The Chrome Web Store costs a one-off developer registration fee** (US$5 at last
+  check — verify). Flagged against priority 1 and it **passes**: the rule is that
+  nothing in the deployed architecture may bill *per hour*, and a one-time registration
+  is not recurring. It is only payable if the extension is ever listed publicly, which
+  the local version does not require.
+- **CORS and host permissions.** The extension's origin has to be allowed by the API's
+  CORS policy, and the manifest has to declare the sites it may read. Both are small,
+  and the CORS policy has been exercised since Phase 6.1 by design.
+- **Firefox is a second listing**, not a second codebase — MV3 is broadly portable.
+  Ignore it until Chrome works.
+
+#### The cheapest version that is still worth having
+
+Worth writing down so this is not remembered as an all-or-nothing item. In rough order
+of cost:
+
+1. **Group 4 first, regardless.** Paste-the-ad (Phase 6.5, parked until the 13.3
+   boundary) is the endpoint an extension would post to anyway. **Building it is not
+   throwaway work — it is the extension's backend.** Nothing here changes its priority
+   except to raise it.
+2. **A bookmarklet.** One `javascript:` link that grabs `document.body.innerText` and
+   POSTs it. No store, no manifest, no review, no third codebase. Ugly, and it proves
+   the whole loop end to end in an afternoon.
+3. **The local extension.** MV3, one toolbar button, posts to `localhost:5080`. Personal
+   use, no auth, no listing.
+4. **The public extension.** After Phase 11. Store listing, auth, per-user data.
+
+**Recommended sequencing:** 1 and 2 are cheap and answer the question *"does the model
+reliably turn a Seek page's raw text into a usable draft?"* — which is the one real
+technical risk, and it is answerable before committing to a third codebase. If the
+answer is no, nothing else on this list is worth starting.
 
 ## Convention / industry-standard adoptions (committed intent, unscheduled)
 

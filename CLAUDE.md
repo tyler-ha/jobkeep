@@ -691,6 +691,17 @@ parsed file. It is the only group that touches `src/`. The phase doc has the who
 plan; do not re-derive it, and do not re-argue the URL scraper — it is refused
 with reasons in `docs/backlog.md`.
 
+**That refusal is about the SERVER fetching a URL, and it is not the last word on
+intake.** On 2026-09-01 the user named the real gap — *"we are missing the aspect that
+where can we get those data for job ad"* — and `docs/backlog.md` gained an **intake
+question** section for it. The short version worth having before touching this area: a
+**browser extension** reads a page the user already opened, so it answers every one of
+the scraper refusal's objections rather than reviving them, and this app is unusually
+well placed for one because it already turns unstructured text into a draft (Phase 4.5
+`DocumentStructurer`) and so needs **no CSS selectors to break on a redesign**. It is
+blocked on Phase 11 for any public ship, and paste-the-ad (group 4) is its backend
+either way.
+
 Phase 6 itself has two things left: the **visual pass on the other seven screens**
 (the user has seen the app and says there are problems, but has not said which —
 ask directly, screen by screen; all eight were built on the same patterns, so a
