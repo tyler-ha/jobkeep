@@ -112,8 +112,11 @@ public class CommitImportHandler
         // CompanyLookup, and the same known limitation: the comparison is
         // case-sensitive, so "Backend" and "backend" are two resumes. That is the
         // dedup gap already recorded against skills and companies; it is left
-        // consistent here rather than fixed on one table (CLAUDE.md, Phase 2.7).
-        if (await _db.Resumes.AnyAsync(r => r.Label == label, ct))
+        // consistent here rather than fixed on one table (CLAUDE.md, Phase 7).
+        // Phase 7 — the conflict check must ask the same question the unique
+        // index does, or the user is told the label is free and then gets a 500.
+        var labelKey = NaturalKey.Of(label);
+        if (await _db.Resumes.AnyAsync(r => r.LabelNormalized == labelKey, ct))
             return SliceResult<CommitResponse>.Invalid(
                 $"A resume labelled \"{label}\" already exists. Pick a different label.");
 
@@ -224,7 +227,12 @@ public class CommitImportHandler
         var deduped = names
             .Where(n => !string.IsNullOrWhiteSpace(n))
             .Select(n => Clip(n.Trim(), 100)!)
-            .Distinct(StringComparer.Ordinal)
+            // Phase 7 — dedup WITHIN the batch on the natural key too. Ordinal
+            // let one import carry both "C#" and "c#" through to two inserts;
+            // that was a silent duplicate before the unique index existed and
+            // would be a failed INSERT after it. First spelling in the document
+            // wins, which keeps the row the user can see in their CV.
+            .DistinctBy(NaturalKey.Of, StringComparer.Ordinal)
             .ToList();
 
         if (deduped.Count == 0) return 0;
@@ -232,9 +240,10 @@ public class CommitImportHandler
         // One query for the whole batch, then decide in memory — the same shape
         // PostingContract uses, and for the same reason: a per-skill round trip
         // would be one query and one insert per skill.
+        var keys = deduped.Select(NaturalKey.Of).ToList();
         var existing = await _db.Skills
-            .Where(s => deduped.Contains(s.Name))
-            .ToDictionaryAsync(s => s.Name, ct);
+            .Where(s => keys.Contains(s.NameNormalized))
+            .ToDictionaryAsync(s => s.NameNormalized, ct);
 
         // Provenance follows where the content came from, not who approved it.
         // A draft the model wrote and the user confirmed unchanged is still
@@ -244,13 +253,13 @@ public class CommitImportHandler
 
         foreach (var name in deduped)
         {
-            if (!existing.TryGetValue(name, out var skill))
+            if (!existing.TryGetValue(NaturalKey.Of(name), out var skill))
             {
                 // Added explicitly: Skill.Id is client-generated, so EF reads the
                 // set key as "already exists" and skips the INSERT unless told.
                 skill = new Skill { Name = name };
                 _db.Skills.Add(skill);
-                existing[name] = skill;
+                existing[NaturalKey.Of(name)] = skill;
             }
 
             resume.ResumeSkills.Add(new ResumeSkill { SkillId = skill.Id, Source = source });

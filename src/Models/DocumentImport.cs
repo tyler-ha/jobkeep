@@ -94,7 +94,7 @@ public enum SourceFormat
 //
 // Keeping the original file is on the backlog as "document versions", where it
 // belongs — it is a storage decision with a bill attached, not part of parsing.
-public class DocumentImport
+public class DocumentImport : IAuditable
 {
     public Guid Id { get; set; } = Guid.NewGuid();
 

@@ -25,7 +25,7 @@ namespace Jobkeep.Models;
 // mentions" is one join rather than a text search. That is also exactly what
 // Phase 5's ATS check needs, and it is why the skills table was made shared in
 // the first place.
-public class Resume
+public class Resume : IAuditable
 {
     public Guid Id { get; set; } = Guid.NewGuid();
 
@@ -68,6 +68,13 @@ public class Resume
     // and the format rule treats null as "unknown, say nothing", which is honest
     // rather than guessing.
     public SourceFormat? SourceFormat { get; set; }
+
+    // Phase 7 — the case-insensitive natural key, matching companies.Name and
+    // skills.Name. A STORED generated column computed by Postgres, so "Backend"
+    // and "backend" are one label rather than two resumes. All three tables got
+    // this together; fixing one would have made them disagree, which is exactly
+    // why 4.5 left the defect in place rather than half-fixing it.
+    public string LabelNormalized { get; private set; } = string.Empty;
 
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;

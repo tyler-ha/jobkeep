@@ -24,11 +24,20 @@ while building demonstrable C# + AWS + AI integration experience.
 | 2.4 | Analytics endpoints (skill demand, status funnel, company rollup) | Done — three `GROUP BY`s, on both surfaces |
 | 2.5 | Enforce the application status lifecycle | Done — one rule, both surfaces, no schema change |
 | 2.6 | Upgrade to .NET 10 (LTS) — .NET 8 EOL 10 Nov 2026 | Done — no C# changed; caught a critical CVE in a transitive package |
-| 3 | Deploy to AWS Lambda (Function URL) + Neon Postgres | **Parked** (plan done, $0/month) |
 | 4 | AI job-description analyzer (local Ollama) | Done — behind `IChatClient`, local model only |
 | 4.5 | Document import (PDF/DOCX/text) with a confirm step | Done — upload → parse → review → confirm → rows |
 | 5 | ATS compatibility check | Done — deterministic skill gap + one model call; no score, on purpose |
-| 6 | Front end | Not started |
+| 6 | Front end (React + Vite, eight screens) | In progress — screens built and tested; visual pass + README remain |
+| 7 | Data integrity, audit baseline & the case-insensitive dedup key | **Done** — one migration; F7/F8/F11/F12/F13/F14 closed, 239 tests |
+| 8 | Soft delete / archive | Planned — rides Phase 7's index migration |
+| 9 | The three reads the front end could not get | Planned — found by building the screens |
+| 10 | Deploy to AWS Lambda (Function URL) + Neon Postgres | Parked (plan done, $0/month) |
+| 11 | Authentication & owner scoping | Planned — tied to the deploy |
+| 12 | Feature expansion | Placeholder — pulls from `docs/backlog.md` |
+
+Phases 1–6 keep the numbers they shipped under; 7 onward were renumbered on
+2026-09-01 into build order, ranked by which work gets *more expensive the longer
+it waits*. Phase 10 was formerly "Phase 3" and Phase 12 formerly "Phase 7".
 
 Full detail for each phase, including cost notes and interview talking
 points, is in [`docs/`](docs/README.md) — start with the index there.
@@ -50,7 +59,7 @@ enforced on one and missed on the other. There used to be a second path — the
 Phase 2 repository, drawn dashed here because it was retiring. Phase 2.3 deleted
 it; every use case is now a slice under `Modules/`.
 
-## Quick start (Phase 2.3, current state)
+## Quick start
 
 **The whole stack, one command** — Postgres, the API and the front end:
 
@@ -137,11 +146,11 @@ REST, `INTERVIEWING` over GraphQL — not as an int.
 
 ### The schema those migrations build
 
-![Entity relationship diagram of the eight-table JobKeep schema, with
+![Entity relationship diagram of the thirteen-table JobKeep schema, with
 job_postings at the centre. Solid edges are ON DELETE RESTRICT, dashed edges
 are ON DELETE CASCADE.](docs/diagrams/schema-erd.svg)
 
-Eight normalized tables with `job_postings` — the job ad — at the centre. Your
+Thirteen normalized tables with `job_postings` — the job ad — at the centre. Your
 record of applying is a separate row, so one posting can carry several
 applications. Delete behaviour is chosen per relationship: derived data
 cascades, shared rows (a company, a skill) refuse to disappear underneath you.

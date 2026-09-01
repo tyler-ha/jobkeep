@@ -40,4 +40,4 @@ Two rules worth knowing before editing:
 - **On a tinted surface the label is the `-dark` token, never the base.** That is
   what holds WCAG 2.2 AA without auditing components one at a time.
 
-The full rules are in `docs/phases/phase-7-feature-expansion.md`.
+The full rules are in `docs/phases/phase-12-feature-expansion.md`.

@@ -4,7 +4,7 @@ namespace Jobkeep.Models;
 
 // The external job ad — the thing you found on Indeed/LinkedIn. This is the
 // unit the AI analyzer (Phase 4) reads, and AI-derived facts describe it.
-public class JobPosting
+public class JobPosting : IAuditable
 {
     public Guid Id { get; set; } = Guid.NewGuid();
 
@@ -25,6 +25,10 @@ public class JobPosting
     public DateOnly? PostedDate { get; set; }
     public string? SourceUrl { get; set; }
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+
+    // Phase 7 — F8: PATCH mutates Title, Location, Description and CompanyId,
+    // and until now nothing recorded that it had.
+    public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
 
     // Skills the ad asks for, via the shared Skill table (many-to-many).
     // IsRequired on the join row splits must-have vs nice-to-have.

@@ -113,16 +113,21 @@ public sealed class AnalyticsTests(PostgresFixture fixture) : IntegrationTestBas
     }
 
     [Fact]
-    public async Task SkillDemand_SplitsSkillsDifferingOnlyInCase_WhichIsTheKnownDedupGap()
+    public async Task SkillDemand_CountsSkillsDifferingOnlyInCaseAsOne()
     {
-        // A known defect written as an executable test, the way the parity tests record
-        // theirs. `skills` dedups case-sensitively, so "C#" and "c#" are two rows. Nowhere
-        // does that cost more than here: a demand ranking is precisely what a duplicate
-        // row corrupts, and the true answer below is one skill wanted by two postings —
-        // not two skills wanted by one each.
+        // PHASE 7 FLIPPED THIS TEST. It used to be named
+        // `SkillDemand_SplitsSkillsDifferingOnlyInCase_WhichIsTheKnownDedupGap`
+        // and asserted the defect: `skills` dedupped case-sensitively, so "C#"
+        // and "c#" were two rows, and a demand ranking is precisely what a
+        // duplicate row corrupts. The old test's own comment said that when the
+        // natural key landed it would fail, and that the failure would be the
+        // signal the fix worked. It did, and this is the same scenario asserting
+        // the truth instead of the bug.
         //
-        // When the case-insensitive natural key lands (its own phase, since it is a
-        // migration) this test fails, and that failure is the signal the fix worked.
+        // Kept in place rather than deleted and rewritten elsewhere, so `git log`
+        // on this method shows the defect and its fix in one history.
+        //
+        // The true answer: ONE skill, wanted by TWO postings.
         var canva = await Client.CreateApplicationAsync("Canva", "Backend Engineer", Ct);
         var atlassian = await Client.CreateApplicationAsync("Atlassian", "Platform Engineer", Ct);
         (await Client.AddSkillAsync(canva, "C#", Ct)).EnsureSuccessStatusCode();
@@ -130,8 +135,28 @@ public sealed class AnalyticsTests(PostgresFixture fixture) : IntegrationTestBas
 
         var demand = await SkillDemandAsync();
 
-        Assert.Equal(2, demand.Length);
-        Assert.All(demand, s => Assert.Equal(1, Count(s)));
+        var only = Assert.Single(demand);
+        Assert.Equal(2, Count(only));
+    }
+
+    [Fact]
+    public async Task SkillDemand_KeepsTheFirstSpellingItSaw()
+    {
+        // The other half of the natural key, and the part a user notices: the
+        // stored row keeps the spelling that created it. Adding "c#" second
+        // resolves to the existing "C#" row rather than renaming it, so the
+        // ranking reads the way the user typed it the first time.
+        //
+        // This is a deliberate choice, not a side effect. Letting a later write
+        // restyle an existing row would mean a résumé import could silently
+        // relabel a skill the user entered by hand.
+        var canva = await Client.CreateApplicationAsync("Canva", "Backend Engineer", Ct);
+        var atlassian = await Client.CreateApplicationAsync("Atlassian", "Platform Engineer", Ct);
+        (await Client.AddSkillAsync(canva, "PostgreSQL", Ct)).EnsureSuccessStatusCode();
+        (await Client.AddSkillAsync(atlassian, "postgresql", Ct)).EnsureSuccessStatusCode();
+
+        var only = Assert.Single(await SkillDemandAsync());
+        Assert.Equal("PostgreSQL", only.GetProperty("name").GetString());
     }
 
     // ------------------------------------------------------------------

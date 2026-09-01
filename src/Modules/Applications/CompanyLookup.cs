@@ -1,5 +1,6 @@
 using Jobkeep.Data;
 using Jobkeep.Models;
+using Jobkeep.Shared;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jobkeep.Modules.Applications;
@@ -20,16 +21,23 @@ namespace Jobkeep.Modules.Applications;
 // queries — and when a third slice needs something different, it writes its own
 // query rather than growing this file.
 //
-// Known limit, shared with the skills table: the match is case-sensitive, so
-// "Canva" and "canva" are two companies. It is the same defect already recorded
-// against skill dedup, and it wants the same fix — a case-insensitive natural
-// key, which is a migration and therefore its own phase.
+// Phase 7 closed the known limit this file used to carry. The match was
+// case-sensitive, so "Canva" and "canva" were two companies with one rollup
+// each. It now resolves against `NameNormalized`, the STORED generated column
+// Postgres computes as lower("Name"), which is also where the unique index
+// lives — so the lookup and the constraint agree by construction rather than by
+// both remembering to call ToLower().
 internal static class CompanyLookup
 {
     public static async Task<Company> ResolveAsync(
         AppDbContext db, Company incoming, CancellationToken ct = default)
     {
-        var existing = await db.Companies.FirstOrDefaultAsync(c => c.Name == incoming.Name, ct);
+        // Normalise in C# with the same rule Postgres uses for the generated
+        // column. EF translates this to a plain equality against an indexed
+        // column, so it is an index seek — unlike `c.Name.ToLower() == ...`,
+        // which would have to compute lower() for every row it scanned.
+        var key = NaturalKey.Of(incoming.Name);
+        var existing = await db.Companies.FirstOrDefaultAsync(c => c.NameNormalized == key, ct);
 
         // Not found: hand back the new instance so the caller inserts it as part
         // of whatever graph it is building.
@@ -46,4 +54,5 @@ internal static class CompanyLookup
 
     public static Task<Company> ResolveAsync(AppDbContext db, string name, CancellationToken ct = default)
         => ResolveAsync(db, new Company { Name = name }, ct);
+
 }

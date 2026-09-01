@@ -14,11 +14,24 @@ var builder = WebApplication.CreateBuilder(args);
 // Storage is PostgreSQL via EF Core. The connection string comes from config:
 // appsettings.Development.json points at the local Docker container; a deployed
 // environment supplies it via an environment variable instead — so local vs cloud
-// is a config change, not a code change. (Phase 3 is parked, and no longer names
+// is a config change, not a code change. (The deploy, Phase 10, is parked, and no longer names
 // RDS: the plan it holds is Neon over the public internet, which is still just a
 // connection string to everything below this line.)
 var connectionString = builder.Configuration.GetConnectionString("Postgres");
-builder.Services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connectionString));
+
+// Phase 7 — the audit-timestamp interceptor (F8). Registered here rather than
+// inside AppDbContext because AppDbContext's job is the schema, in one readable
+// place, and because a test needs to be able to swap the clock or leave the
+// interceptor off entirely to write a known timestamp and watch it change.
+//
+// Singleton: it holds a clock function and nothing else, so there is no state to
+// scope. AddDbContext is scoped, and a singleton dependency inside a scoped
+// service is the safe direction — the captive-dependency hazard runs the other
+// way.
+builder.Services.AddSingleton<AuditSaveChangesInterceptor>();
+builder.Services.AddDbContext<AppDbContext>((sp, options) => options
+    .UseNpgsql(connectionString)
+    .AddInterceptors(sp.GetRequiredService<AuditSaveChangesInterceptor>()));
 
 // Every use case is a vertical slice under Modules/ (docs/architecture.md §2).
 // Each slice handler takes AppDbContext directly, so this registers them and
@@ -116,7 +129,7 @@ builder.Services.ConfigureHttpJsonOptions(o =>
 });
 
 // GraphQL (HotChocolate). Runs in-process on the same ASP.NET app, so it rides
-// the same Lambda deployment in Phase 3 — no separate service. Resolvers pull
+// the same Lambda deployment in Phase 10 — no separate service. Resolvers pull
 // slice handlers from DI, so GraphQL and REST share one code path.
 builder.Services
     .AddGraphQLServer()
@@ -140,7 +153,7 @@ if (app.Environment.IsDevelopment())
 }
 
 // Only expose the interactive docs in Development — no reason to ship
-// the UI to a deployed environment (and it keeps the Lambda in Phase 3 lean).
+// the UI to a deployed environment (and it keeps the Lambda in Phase 10 lean).
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();

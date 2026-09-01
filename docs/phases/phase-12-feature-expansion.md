@@ -1,4 +1,8 @@
-# Phase 7 — feature expansion, after the front end exists
+# Phase 12 — feature expansion, after the front end exists
+
+> **Formerly "Phase 7".** Renumbered 2026-09-01 when the roadmap was reordered by
+> compounding cost and phases 7–11 were slotted in front of it. Its content is
+> unchanged; it is still not a feature list. See `architecture.md` decision 18.
 
 **Status: placeholder.** Nothing here is scheduled and nothing here is committed.
 

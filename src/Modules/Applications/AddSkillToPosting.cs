@@ -57,7 +57,11 @@ public class AddSkillToPostingHandler
         // Reuse the shared skill row if it exists — this is the dedup that makes
         // "top skills across all my tracked jobs" a single GROUP BY over `skills`,
         // and the reason Postgres was chosen over DynamoDB (decision 1).
-        var skill = await _db.Skills.FirstOrDefaultAsync(s => s.Name == skillName, ct);
+        // Phase 7 — resolve on the case-insensitive natural key, so adding
+        // "c#" to a posting finds the existing "C#" row instead of tripping the
+        // unique index.
+        var key = NaturalKey.Of(skillName);
+        var skill = await _db.Skills.FirstOrDefaultAsync(s => s.NameNormalized == key, ct);
         if (skill is null)
         {
             // Add explicitly: Skill.Id is client-generated (Guid.NewGuid() in the

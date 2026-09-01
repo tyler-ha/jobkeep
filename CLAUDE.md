@@ -31,7 +31,8 @@ can. Prefer the defensible choice over the impressive-sounding one.
    DynamoDB) without flagging the cost tradeoff explicitly. Note: storage is
    PostgreSQL (see Architecture). Local dev uses Postgres in Docker (free);
    the deployed DB is **Neon's free tier** (serverless Postgres, scales to
-   zero, $0). This replaced RDS free-tier in Phase 3 — see that doc for why,
+   zero, $0). This replaced RDS free-tier in the deploy phase (now Phase 10, see
+   `docs/phases/phase-10-aws-deploy.md`) — see that doc for why,
    and for the rule it produced: **nothing in the deployed architecture may
    bill per hour.**
 2. **Each phase should end in something runnable.** The person has a
@@ -155,7 +156,8 @@ drawn now so services can be extracted later if a real trigger appears.**
 Full reasoning, the extraction triggers, and the decision record are in
 `docs/architecture.md`.
 
-- **Backend**: ASP.NET Core 8 (`src/`). See "Framework deadline" below.
+- **Backend**: ASP.NET Core on `net10.0` (`src/`). See "Conventions" for the
+  TFM and why it moved.
 - **API surfaces**: REST (minimal-API endpoints) **and** GraphQL
   (HotChocolate, `src/GraphQL/`, served at `/graphql`). Both sit on the same
   data layer — GraphQL didn't replace REST. Added in Phase 2b. This dual
@@ -172,7 +174,7 @@ Full reasoning, the extraction triggers, and the decision record are in
   **`Ai` owns the `ai_analyses` table, not the technology**. `IChatClient` is a
   shared dependency any module may inject, like `AppDbContext`.
 - **Deployment target**: AWS Lambda behind a **Function URL** (no API Gateway
-  — see Phase 3 doc), with PostgreSQL on **Neon's free tier**. The Lambda
+  — see the Phase 10 doc), with PostgreSQL on **Neon's free tier**. The Lambda
   deliberately stays *out* of a VPC, so no NAT Gateway is ever needed. Both the
   REST and GraphQL endpoints ride the same Lambda.
 
@@ -295,7 +297,7 @@ Prefer putting the detail in the **phase doc** — one accurate place beats four
 half-synchronised ones.
 
 **On a cadence, never per feature.** Doc audits and consistency sweeps run at
-phase-group boundaries only — before Phase 3 (the AWS deploy) and before Phase 6
+phase-group boundaries only — before the AWS deploy (Phase 10) and before Phase 6
 — and **always in a fresh session**. The cadence and the session boundary do the
 saving together: the same sweep late in a long session costs roughly 3x what it
 costs early.
@@ -358,6 +360,20 @@ is MTP, and the .NET 10 SDK refuses the old VSTest bridge. Pass the project as
 `--project <path>`, not positionally. No SDK version is pinned in `global.json`,
 so the `dotnet-ef` tool pin is independent of it.
 
+Front end (Phase 6) — Vite + React in `web/`, and `npm` is run from there:
+
+```bash
+cd web
+npm run dev     # http://localhost:5173 — expects the API already up on 5080
+npm test        # Vitest, 35 tests, ~2s. No container, no API needed
+npm run build   # tsc -b && vite build
+npm run lint    # oxlint
+```
+
+`npm run dev` makes a **genuine cross-origin request** to the API — there is no
+dev-server proxy, deliberately, so the CORS policy is exercised from day one
+rather than first met on deploy. Nothing in `web/` needs Docker.
+
 You can still exercise endpoints by hand via Swagger, the Nitro IDE, or
 `src/Jobkeep.http` (works in VS / VS Code / Rider, no account needed).
 
@@ -405,17 +421,15 @@ forgotten — see the gap register in `docs/architecture.md`.
 Tests and CI landed in **Phase 2.2**, scheduled straight after 2.1 because the gap
 register called them the highest-value missing items. Findings still **recorded, not
 fixed** — don't re-discover them:
-- **Skill dedup is case-sensitive**, so `C#` and `c#` are two rows in the table whose
-  purpose is deduplication. Company dedup has the same defect, and since Phase 4.5
-  so does `resumes.Label` — deliberately, to keep all three consistent rather than
-  fixing one and making them disagree. Both need a
-  case-insensitive natural key, which is a migration and so its own phase. Note the
-  *filters* added in 2.3 are case-insensitive (ILIKE), so searching finds both rows —
-  which hides the problem without fixing it. Phase 2.4 is where it actually costs
-  something: a duplicate row splits one skill's count in `/stats/skill-demand`. It is
-  now pinned by a test that asserts the defect
-  (`SkillDemand_SplitsSkillsDifferingOnlyInCase_WhichIsTheKnownDedupGap`), so the fix
-  announces itself by breaking that test.
+- ~~**Skill dedup is case-sensitive**~~ — **FIXED in Phase 7.** All three tables
+  (`skills.Name`, `companies.Name`, `resumes.Label`) now carry a STORED generated
+  column, `lower(...)`, and the unique index sits on that. Use
+  `Jobkeep.Shared.NaturalKey.Of(name)` before any find-or-create — **the C# side and
+  the generated column must agree**, or a lookup misses a row the index then refuses
+  to insert, and the user gets a 500 on an ordinary name. Two tests asserted the
+  defect and both broke on the migration, which is exactly what writing defects down
+  as tests is for; both were flipped in place. Résumés are **not** merged — duplicate
+  labels were suffixed, because two documents are two documents.
 - **The EF version asymmetry survived Phase 2.6 — it was never about the major
   version.** The app resolves EF 10.0.11 throughout, but the Npgsql provider
   declares a *range* (`[10.0.4, 11.0.0)`) while EF Design pins an *exact* 10.0.11.
@@ -423,9 +437,13 @@ fixed** — don't re-discover them:
   `Jobkeep.Tests.csproj` must keep naming `Microsoft.EntityFrameworkCore` and
   `.Relational` explicitly; removing them fails with CS1705. Bump those two in
   lockstep with EF Design. Reasons are in the csproj comment — read it first.
-- **No index on `Status` or `DateApplied`** even though 2.3 filters and sorts on
-  both. Deliberate — see F14 — and parked in Phase 2.7 with the rest of the audit
-  migration.
+- ~~**No index on `Status` or `DateApplied`**~~ — **FIXED in Phase 7**, along with
+  F7 (`xmin` concurrency), F8 (the audit interceptor), F11 (DB-side defaults), F12
+  (CHECK constraints) and F13 (bounded text). The one rule worth carrying out of it:
+  **`UpdatedAtUtc` records when THAT ROW changed, not when anything beneath it did.**
+  Adding a skill to a posting does not bump the posting — the interceptor only sees
+  entities EF marks `Added`/`Modified`, and stamping parents would need an aggregate
+  definition this codebase has never written down.
 
 **Fixed in Phase 2.3, so don't re-report them:** A2 (entities as the API contract),
 A3 (the repository), A4 (surface-specific validation) and A7 (EF entities reachable
@@ -442,7 +460,7 @@ through the GraphQL schema). A1 is *partly* fixed — read decision 11 before
   work matches the intended scope for that stage.
 - `docs/security-and-data-audit.md` — schema/config exposure, F1-F18, and the
   phased remediation plan. **Refresh on a cadence, not per phase:** once before
-  Phase 3 ships to AWS, and once before auth lands. Those are the points where a
+  the AWS deploy ships (Phase 10), and once before auth lands (Phase 11). Those are the points where a
   stale finding would actually cost something.
 - `docs/user-journeys.md` — what the user actually does, step by step, and where
   that procedure has holes. The counterpart to `architecture.md`: that one
@@ -469,27 +487,66 @@ through the GraphQL schema). A1 is *partly* fixed — read decision 11 before
   tokens per session, or per task within a session (`--task <prefix>`). The
   source for `docs/token-log.md`.
 - `src/` — the actual .NET project.
+- `web/` — the React front end (Phase 6). Its own `README.md` covers the layout;
+  the rules for where front-end code goes are in
+  `docs/phases/phase-12-feature-expansion.md`.
+- `PRODUCT.md` — the binding brand commitments and the measured contrast table.
+  **Read before touching UI**; the palette and the tone rules are decided there,
+  not re-derived per screen.
 - Root `README.md` — status table and quick start.
 
 ## When asked to move to the next phase
 
-**Currently up next: Phase 6 step 6.2** (`docs/phases/phase-6-frontend.md`) —
-scaffold the React app. The phase is **staged 6.1-6.4** because it is too big to be
-one runnable unit, and step **6.1 is done** (2026-08-29): CORS, `GET /resumes`,
-`GET /resumes/{id}` and the `DELETE /resumes/{id}/skills/{skillName}` inverse. Read
-the phase doc rather than the sub-step list here; `docs/README.md` has the full
-table. A doc/security-audit sweep is still due (see "Documenting as you go" —
-cadence, and in a fresh session). **The stack is already decided and the design is
-already approved** — React, dnd-kit, lucide-react, no component kit, eight approved
-screens; the build tool is the one open choice and 6.2 asks about it. Don't re-open
-any of the rest; the user asked to be asked before any new dependency is added.
+**Currently up next: finish Phase 6, then Phase 7.**
+
+Phase 6 has two things left: the **visual pass** (the user has seen the app and
+says there are problems, but has not said which — ask directly, screen by screen;
+all eight were built on the same patterns, so a systemic problem is eightfold) and
+**step 6.4**, the README. Steps 6.1-6.3 are done (2026-08-29 to 2026-08-31): CORS
+and the résumé reads, the Vite scaffold and the token system, then all eight
+screens plus a Vitest suite of 35. **The stack and the design are decided** —
+React, Vite, react-router, dnd-kit, lucide-react, no component kit. Don't re-open
+any of it; the user asked to be asked before any new dependency is added.
+
+**Phase 7 is DONE** (2026-09-01) — one migration, `DataIntegrityAndNaturalKeys`,
+suite 228 → 239 green. `docs/diagrams/schema-erd.svg` was redrawn on 2026-09-01,
+in the session after the one that moved the schema, so that trigger is discharged.
+Final state, if you need it without re-deriving: 13 tables, 13 FKs (7 CASCADE /
+6 RESTRICT), 5 unique indexes, 12 plain. One method note worth keeping — the
+redraw derived the schema from `pg_dump --schema-only` against the migrated
+database rather than from `dotnet ef migrations script`, because an *idempotent*
+script is a sequence of migrations and later `ALTER`s silently correct earlier
+`CREATE`s; reading the final state out of that text is guesswork, and the dump is
+the applied result.
+
+**Then Phase 8** (`docs/phases/phase-8-soft-delete.md`) — soft delete, which needs
+the filtered unique indexes Phase 7's natural-key work created. Note its cost is
+overwhelmingly *front-end*: five list routes, five empty states, an undo.
+
+**The roadmap was reordered and renumbered on 2026-09-01** (architecture.md
+decision 18). Read `docs/README.md` for the table; what matters here is the rule
+that produced it and the two traps it leaves:
+
+- **Phases are now ordered by *compounding* cost, not by appeal.** The test is
+  "does deferring this make the later work bigger?" Almost nothing passes it —
+  reminders, contacts, export, interview rounds, a target profile and the
+  HotChocolate major all cost the same in six months, so they are P3/P4 and wait.
+  Three items pass and are now Phases 7, 8 and 11.
+- **Numbers are history for built work and build order for unbuilt work.** Phases
+  1-6 keep the numbers they shipped under. **Phase 3 is now Phase 10** and
+  **"Phase 2.7" is now Phase 7**; the old placeholder Phase 7 is now Phase 12.
+- **Done phase docs still say "Phase 3" and "Phase 2.7", deliberately.** They are
+  dated records of what was decided then. Do not sweep them — that is exactly the
+  re-reading-unchanged-markdown cost decision 12 exists to stop. Forward-looking
+  docs and `src/` comments were updated; both renamed docs carry a "formerly" note.
 
 **The commit before any front-end code exists is tagged `checkpoint/backend-complete`**,
 and `docs/phases/phase-6-frontend.md` freezes the API surface as at that point. From
 here **a feature has two halves** — a slice *and* a screen — so estimates carried
 over from Phases 2-5 are about half the real cost. That, and the checklist it
-implies, is `docs/phases/phase-7-feature-expansion.md`; it is deliberately not a
-feature list, because `docs/backlog.md` already is one.
+implies, is `docs/phases/phase-12-feature-expansion.md`; it is deliberately not a
+feature list, because `docs/backlog.md` already is one. It also records the **three
+backend gaps the front end found**, which are now Phase 9.
 
 Phase 5 is done (2026-08-28): `Modules/Ats/`, two slices, both surfaces. Four
 things from it are worth carrying forward, and the first two change how new work
@@ -527,19 +584,22 @@ were written but **never executed** — Docker was down that session — and wer
 for the first time during Phase 4.5, passing 10/10 unchanged. Don't repeat the
 pattern: a phase whose tests have not run is not verified, whatever the doc says.
 
-**Phase 3 is parked, not blocked** (2026-08-27). Its plan is complete, researched
-and costs $0/month; the decision was that *time* is better spent on local feature
-work first, and that deploying is only worth doing once there is enough tool to
-justify clicking the link. Nothing about it expires — the always-free grants have
-no clock. Read `docs/phases/phase-3-aws-deploy.md` before reopening it; the Aurora
+**The deploy — now Phase 10, formerly Phase 3 — is parked, not blocked**
+(2026-08-27). Its plan is complete, researched and costs $0/month; the decision
+was that *time* is better spent on local feature work first, and that deploying is
+only worth doing once there is enough tool to justify clicking the link. Nothing
+about it expires — the always-free grants have no clock. Read
+`docs/phases/phase-10-aws-deploy.md` before reopening it; the Aurora
 and API Gateway alternatives are already rejected there with reasons, and the
 account has **no free tier left**, so "t3.micro is free" style advice does not
-apply.
+apply. Being built past by four phases is what triggered the 2026-09-01 renumber:
+the number said "third" and the schedule said "tenth".
 
-Two things are due **when Phase 3 unparks**, not on a calendar: the
+Two things are due **when the deploy unparks**, not on a calendar: the
 **doc/security-audit sweep** (see "Documenting as you go" — cadence, and in a
 fresh session) and the audit's **transport & secrets hardening**. Both were tied
-to "before Phase 3 ships to AWS", so the trigger moved with the phase.
+to "before Phase 3 ships to AWS", so the trigger moved with the phase — and moved
+again with its number, to Phase 10.
 
 Phase 2.6 is done (2026-08-26): `net10.0` everywhere, EF/Npgsql/`dotnet-ef` on
 the 10.x line, CI down to one SDK. **No C# changed** — the whole upgrade is four
@@ -548,7 +608,7 @@ project/config files. Two things worth carrying forward:
   NU1904 on `HotChocolate.Language` 14.3.0 — an uncatchable stack-overflow DoS
   reachable from the unauthenticated `/graphql` endpoint, *before* validation
   runs. Fixed by 14.3.1 (patch, no API change). The 14 → 16 major jump was
-  refused and is in `backlog.md`, along with a parse-depth guard for Phase 3.
+  refused and is in `backlog.md`, along with a parse-depth guard for Phase 10.
 - **`net8.0` is gone from the build but not from the migrations.** The snapshot
   and initial designer file still say `ProductVersion "8.0.11"`. That is metadata,
   deliberately left; EF 10 reports no model drift from it. Don't regenerate

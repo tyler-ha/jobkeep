@@ -29,14 +29,59 @@ public class AppDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder model)
     {
+        // Phase 7, F7 — optimistic concurrency via Postgres's own `xmin` system
+        // column, which every row already has. Zero added columns and no schema
+        // change on the table itself: EF maps it as a shadow property, reads it
+        // with the row, and adds it to the UPDATE's WHERE clause. A second write
+        // against a stale copy then matches no rows and EF raises
+        // DbUpdateConcurrencyException instead of silently discarding the first.
+        //
+        // Written out rather than using the provider's old
+        // `UseXminAsConcurrencyToken()` helper, which was REMOVED in the Npgsql
+        // 7 provider — this is the shape its own migration guidance replaced it
+        // with. Applied to the three tables with a read-modify-write update
+        // path; link and child rows are insert-or-delete and have no lost-update
+        // to lose.
+        static void UseXmin<T>(Microsoft.EntityFrameworkCore.Metadata.Builders.EntityTypeBuilder<T> e)
+            where T : class
+            => e.Property<uint>("xmin")
+                .HasColumnName("xmin")
+                .HasColumnType("xid")
+                .ValueGeneratedOnAddOrUpdate()
+                .IsConcurrencyToken();
+
         // Store every enum as its string name (e.g. "Applied") instead of an int,
         // so raw rows are self-explanatory. Applied per-property below.
         model.Entity<Company>(e =>
         {
             e.ToTable("companies");
-            // Unique name backs the find-or-create-by-name dedup in the repository.
-            e.HasIndex(c => c.Name).IsUnique();
             e.Property(c => c.Name).HasMaxLength(200);
+
+            // Phase 7 — the case-insensitive natural key. The unique index moved
+            // OFF Name and onto a STORED generated column, so "Canva" and "canva"
+            // collide instead of becoming two employers with one rollup each.
+            //
+            // A generated column rather than an expression index (CREATE UNIQUE
+            // INDEX ... ON companies (lower(name))) because EF cannot model the
+            // latter: it would have to be hand-written into the migration and the
+            // model snapshot would then disagree with the database forever. A
+            // generated column IS in the model, so `dotnet ef migrations add`
+            // keeps producing correct migrations after this one.
+            e.Property(c => c.NameNormalized)
+                .HasMaxLength(200)
+                .HasComputedColumnSql("lower(\"Name\")", stored: true);
+            e.HasIndex(c => c.NameNormalized).IsUnique();
+
+            // F13 — the three columns that were unbounded `text`.
+            e.Property(c => c.Website).HasMaxLength(500);
+            e.Property(c => c.Industry).HasMaxLength(100);
+            e.Property(c => c.HqLocation).HasMaxLength(200);
+
+            // F7 — xmin is Postgres's own row version, so this costs zero added
+            // columns. A concurrent overwrite now throws
+            // DbUpdateConcurrencyException instead of silently discarding the
+            // other write.
+            UseXmin(e);
         });
 
         model.Entity<JobPosting>(e =>
@@ -49,6 +94,35 @@ public class AppDbContext : DbContext
             e.Property(p => p.SalaryMin).HasPrecision(12, 2);
             e.Property(p => p.SalaryMax).HasPrecision(12, 2);
 
+            // F13 — previously unbounded `text`.
+            e.Property(p => p.Location).HasMaxLength(200);
+            e.Property(p => p.SourceUrl).HasMaxLength(2000);
+            // Description holds a whole pasted job ad, so the bound is generous
+            // rather than tight. The point is that it HAS one: on an
+            // unauthenticated write endpoint an unbounded text column is a
+            // storage vector, and 20k characters is far past any real ad.
+            e.Property(p => p.Description).HasMaxLength(20000);
+
+            // F12 — the two CHECK constraints the schema was missing. Table-level
+            // because both are statements about a row rather than a column, and
+            // in the database rather than in C# because a rule enforced only in
+            // the app is one any other writer (a psql fix, a backfill, a future
+            // service) can ignore without noticing.
+            e.ToTable(t =>
+            {
+                t.HasCheckConstraint(
+                    "ck_job_postings_salary_range",
+                    "\"SalaryMin\" IS NULL OR \"SalaryMax\" IS NULL OR \"SalaryMin\" <= \"SalaryMax\"");
+
+                // ISO-4217 is three uppercase letters. varchar(3) accepted "XX!"
+                // before this; it does not now.
+                t.HasCheckConstraint(
+                    "ck_job_postings_currency_iso4217",
+                    "\"SalaryCurrency\" ~ '^[A-Z]{3}$'");
+            });
+
+            UseXmin(e);
+
             // A posting belongs to one company; block deleting a company that
             // still has postings (Restrict) rather than silently cascading.
             e.HasOne(p => p.Company)
@@ -60,9 +134,17 @@ public class AppDbContext : DbContext
         model.Entity<Skill>(e =>
         {
             e.ToTable("skills");
-            e.HasIndex(s => s.Name).IsUnique();
             e.Property(s => s.Name).HasMaxLength(100);
             e.Property(s => s.Category).HasMaxLength(50);
+
+            // Phase 7 — see companies above. This is the table where the defect
+            // was costing something measurable: a duplicate row split one
+            // skill's count in /stats/skill-demand, and the Phase 5 ATS check
+            // matches skill ROWS, so a difference of case read as a gap.
+            e.Property(s => s.NameNormalized)
+                .HasMaxLength(100)
+                .HasComputedColumnSql("lower(\"Name\")", stored: true);
+            e.HasIndex(s => s.NameNormalized).IsUnique();
         });
 
         model.Entity<PostingSkill>(e =>
@@ -87,6 +169,7 @@ public class AppDbContext : DbContext
         {
             e.ToTable("job_requirements");
             e.Property(r => r.Kind).HasConversion<string>().HasMaxLength(20);
+            e.Property(r => r.Text).HasMaxLength(1000);   // F13
             e.HasOne(r => r.Posting)
                 .WithMany(p => p.Requirements)
                 .HasForeignKey(r => r.PostingId)
@@ -97,6 +180,10 @@ public class AppDbContext : DbContext
         {
             e.ToTable("ai_analyses");
             e.Property(a => a.Seniority).HasConversion<string>().HasMaxLength(20);
+            // F13. ModelUsed holds an identifier like "llama3.2:3b" — the
+            // clearest case in the audit that a bound was simply forgotten.
+            e.Property(a => a.Summary).HasMaxLength(4000);
+            e.Property(a => a.ModelUsed).HasMaxLength(100);
             // 1:1 — one analysis per posting.
             e.HasOne(a => a.Posting)
                 .WithOne(p => p.AiAnalysis)
@@ -108,6 +195,21 @@ public class AppDbContext : DbContext
         {
             e.ToTable("job_applications");
             e.Property(a => a.Status).HasConversion<string>().HasMaxLength(20);
+            e.Property(a => a.Notes).HasMaxLength(10000);   // F13
+
+            // F14 — the indexes behind the default query. ListApplications sorts
+            // on DateApplied descending and filters on Status; before this only
+            // the foreign keys were indexed.
+            //
+            // Phase 2.3 shipped the filtering and deliberately parked these so
+            // this phase stays one migration, reasoning that an index added
+            // before the query pattern settles is a guess. It has settled. The
+            // descending order is not decoration: it matches the sort, so
+            // Postgres can walk the index instead of sorting the result.
+            e.HasIndex(a => a.Status);
+            e.HasIndex(a => a.DateApplied).IsDescending();
+
+            UseXmin(e);
 
             // The application points at a posting, but deleting the application
             // must NOT delete the posting (a posting can have several applications).
@@ -136,6 +238,7 @@ public class AppDbContext : DbContext
             e.Property(r => r.MissingNiceToHaveKeywords).HasColumnType("text[]");
             e.Property(r => r.UnmetRequirements).HasColumnType("text[]");
             e.Property(r => r.FormattingRiskNotes).HasColumnType("text[]");
+            e.Property(r => r.Warning).HasMaxLength(500);   // F13
 
             // 1:1 — one ATS result per application; cascade on application delete.
             e.HasOne(r => r.Application)
@@ -200,9 +303,17 @@ public class AppDbContext : DbContext
             // uniqueness is case-sensitive, so "Backend" and "backend" are two
             // resumes. That is the dedup gap already recorded against skills and
             // companies (CLAUDE.md), and it is left consistent here on purpose —
-            // fixing one table would make the three disagree. Phase 2.7 fixes
-            // all of them together with a case-insensitive natural key.
-            e.HasIndex(r => r.Label).IsUnique();
+            // fixing one table would make the three disagree.
+            //
+            // PHASE 7 FIXED ALL THREE. The unique index moved off Label onto the
+            // generated LabelNormalized column, so "Backend" and "backend" are
+            // now one resume — matching companies.Name and skills.Name, which is
+            // the consistency 4.5 was protecting when it left the defect in
+            // rather than half-fixing it.
+            e.Property(r => r.LabelNormalized)
+                .HasMaxLength(100)
+                .HasComputedColumnSql("lower(\"Label\")", stored: true);
+            e.HasIndex(r => r.LabelNormalized).IsUnique();
         });
 
         model.Entity<ResumeSkill>(e =>
@@ -255,5 +366,45 @@ public class AppDbContext : DbContext
                 .HasForeignKey(x => x.ResumeId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
+
+        // -------------------------------------------------------------------
+        // Phase 7, F11 — database-side defaults, applied as a convention
+        // -------------------------------------------------------------------
+        // Before this the schema had NO defaults at all: every id and every
+        // timestamp originated in a C# property initialiser. That is fine while
+        // this application is the only writer and wrong the moment anything else
+        // is — a migration backfill, a `psql` fix, a future extracted service.
+        // Such a writer could insert a row with a null timestamp or a zero GUID
+        // and the schema would not notice, because the invariant lived in a
+        // language the database does not speak.
+        //
+        // Applied in a loop rather than as twenty repeated lines for the same
+        // reason F8 got an interceptor: a rule that must hold for every entity
+        // should not depend on remembering it for every entity. A new table
+        // picks this up by existing.
+        //
+        // Note these defaults are almost never exercised in normal operation —
+        // EF always sends a value, so Postgres never falls back. That is the
+        // point. They are the floor under everyone who is not EF.
+        foreach (var entity in model.Model.GetEntityTypes())
+        {
+            foreach (var property in entity.GetDeclaredProperties())
+            {
+                // gen_random_uuid() is built in from Postgres 13; no pgcrypto
+                // extension needed, which matters because Neon's free tier is
+                // the deploy target and an extension is one more thing to
+                // provision.
+                if (property.ClrType == typeof(Guid) && property.IsPrimaryKey())
+                    property.SetDefaultValueSql("gen_random_uuid()");
+
+                // The audit pair only. Domain timestamps that mean something
+                // more specific — AnalyzedAtUtc, CheckedAtUtc, CommittedAtUtc —
+                // are set when that thing happened, not when the row was
+                // written, so a default would be actively misleading.
+                if (property.ClrType == typeof(DateTime)
+                    && property.Name is "CreatedAtUtc" or "UpdatedAtUtc")
+                    property.SetDefaultValueSql("now() at time zone 'utc'");
+            }
+        }
     }
 }

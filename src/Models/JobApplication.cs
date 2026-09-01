@@ -5,7 +5,7 @@ namespace Jobkeep.Models;
 // Aggregate root: YOUR record of applying to a posting. The storage interface
 // (IJobApplicationRepository) is still expressed in terms of this type — it now
 // simply carries a JobPosting and related data via navigation properties.
-public class JobApplication
+public class JobApplication : IAuditable
 {
     public Guid Id { get; set; } = Guid.NewGuid();
 

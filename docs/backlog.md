@@ -10,7 +10,14 @@ grow.
 when we actually decide to build it. Committed work lives in `phase-N-*.md` and
 the README status table — not here.
 
-Last reviewed: 2026-08-28 (real-CV test; see the 2026-08-28 section).
+Last reviewed: **2026-09-01** — every row was given a phase home and a **P1–P4**
+band. The bands come from one test, recorded as `architecture.md` decision 18:
+**does deferring this make the later work bigger?** P1 passes it and is scheduled
+now; P2 is gated on the deploy; P3 is flat-cost feature work that waits without
+penalty; P4 stays here, recorded and unscheduled. Most of this list is P3 or P4,
+and that is the finding — appeal and urgency are not the same axis.
+
+Previously reviewed 2026-08-28 (real-CV test; see the 2026-08-28 section).
 
 ## How this was sourced
 
@@ -53,14 +60,14 @@ Ordered roughly cheapest/most-Phase-2-shaped first.
 
 | Candidate | What it is | Cost / size | Likely home | Notes |
 |---|---|---|---|---|
-| **Soft delete / archive** | Mark rows inactive instead of hard `DELETE` so nothing is lost | Low — CRUD only, one nullable column + query filter | Could be a small Phase 2.x | No new concepts; cheap. Strongest candidate to pull in. **Gotcha found during the audit:** the unique indexes on `companies.Name` / `skills.Name` must become *filtered* unique indexes, or a soft-deleted company permanently blocks re-adding that name — and the find-or-create dedup depends on them. See [`security-and-data-audit.md`](security-and-data-audit.md) §5 step 2. |
-| **Data export (CSV/JSON)** | Export your applications | Low — read + serialize, no schema change | Could be a small Phase 2.x | Cheap, self-contained, ends runnable. |
-| **Reminders / follow-ups** | Date-based nudges ("follow up in 7 days", "interview tomorrow") | Medium — new entity + a due-date query; notifications later | Own phase (e.g. 2.5) | Flagship tracker feature. New entity = real scope. Notifications (email/push) are a *further* deferral tied to deploy. |
-| **Contacts / recruiter tracking** | Log who you spoke to at each company | Medium — new `Contact` entity + relationships | Own phase | Common in Huntr. New entity. |
-| **Keep the uploaded file itself** | Store the original PDF/DOCX, not just the text extracted from it | Medium — a storage decision with a bill attached | Own phase | **Deferred deliberately in Phase 4.5, at the user's request** (*"For now, no saving documents yet. We will have it in the backlog."*). Today the bytes are read, converted to text, hashed for provenance and dropped. Bringing them back means either `bytea` in Postgres — which eats Neon's free-tier 0.5 GB, the only genuinely scarce resource in the deployed plan — or S3, a new AWS surface. It would also reintroduce the filename/path-handling risk that currently **cannot** occur, since nothing is written to disk. Worth doing when there is a reason to re-download the exact file that was sent, not before. |
-| **Document / resume versions** | Attach the specific resume/cover-letter version sent per application | Low now — the hard part shipped | Own small phase | **Mostly done by Phase 4.5**: `resumes` is a labelled aggregate and `job_applications.ResumeId` points at the version used. What remains is cover letters, and the file attachment covered by the row above. |
-| **Audit / activity history** | "What changed and when" — a change log per entity | Medium-High — new table + write-path change on *every* mutation | Own phase | Touches everything; don't fold into an unrelated phase. `CreatedAtUtc`/`UpdatedAtUtc` exist but aren't a log — and per the audit (A8) they aren't even reliable yet; fix those first. |
-| **Authentication / multi-user** | Scope all data per user; turn the tool into a real product | High — architectural, every query gets user-scoped | Own phase, tied to deploy (Phase 3+) | Deliberately *not* a Phase 2 item — would violate the small-phase priority. Scoping root is decided in `architecture.md` decision 9 (`skills` stays global). |
+| **Soft delete / archive** | Mark rows inactive instead of hard `DELETE` so nothing is lost | Low — CRUD only, one nullable column + query filter | **Phase 8 (P1)** | No new concepts; cheap on the backend, **wide on the front** — five list routes, five empty states, an undo. Scheduled because that front-end cost grows per screen. **Gotcha found during the audit:** the unique indexes on `companies.Name` / `skills.Name` must become *filtered* unique indexes, or a soft-deleted company permanently blocks re-adding that name — and the find-or-create dedup depends on them. See [`security-and-data-audit.md`](security-and-data-audit.md) §5 step 2. |
+| **Data export (CSV/JSON)** | Export your applications | Low — read + serialize, no schema change | **Phase 12 (P3)** | Cheap, self-contained, ends runnable. The cheapest real feature on the list now a UI exists — and flat-cost, so there is no penalty for waiting. |
+| **Reminders / follow-ups** | Date-based nudges ("follow up in 7 days", "interview tomorrow") | Medium — new entity + a due-date query; notifications later | **Phase 12 (P3)** | Flagship tracker feature, and it gives the Today screen its reason to exist. New entity = real scope. Notifications (email/push) are a *further* deferral tied to deploy. |
+| **Contacts / recruiter tracking** | Log who you spoke to at each company | Medium — new `Contact` entity + relationships | **Phase 12 (P3)** | Common in Huntr. New entity, and the first genuinely new *screen* — a ninth, plus a presence on Job post. |
+| **Keep the uploaded file itself** | Store the original PDF/DOCX, not just the text extracted from it | Medium — a storage decision with a bill attached | **P4 — recorded, not scheduled** | **Deferred deliberately in Phase 4.5, at the user's request** (*"For now, no saving documents yet. We will have it in the backlog."*). Today the bytes are read, converted to text, hashed for provenance and dropped. Bringing them back means either `bytea` in Postgres — which eats Neon's free-tier 0.5 GB, the only genuinely scarce resource in the deployed plan — or S3, a new AWS surface. It would also reintroduce the filename/path-handling risk that currently **cannot** occur, since nothing is written to disk. Worth doing when there is a reason to re-download the exact file that was sent, not before. |
+| **Document / resume versions** | Attach the specific resume/cover-letter version sent per application | Low now — the hard part shipped | **Phase 12 (P3)** | **Mostly done by Phase 4.5**: `resumes` is a labelled aggregate and `job_applications.ResumeId` points at the version used. What remains is cover letters, and the file attachment covered by the row above. |
+| **Audit / activity history** | "What changed and when" — a change log per entity | Medium-High — new table + write-path change on *every* mutation | **P4 — after Phase 11** | Touches everything; don't fold into an unrelated phase. Blocked on auth anyway: F9 needs an actor to name. Note Phase 7's interceptor is the write-path hook this would extend, so it gets *cheaper* by waiting, not dearer. `CreatedAtUtc`/`UpdatedAtUtc` exist but aren't a log — and per the audit (A8) they aren't even reliable yet; fix those first. |
+| **Authentication / multi-user** | Scope all data per user; turn the tool into a real product | High — architectural, every query gets user-scoped | **Phase 11 (P2)** | Deliberately *not* a Phase 2 item — would violate the small-phase priority. Scoping root is decided in `architecture.md` decision 9 (`skills` stays global), **status still *Proposed* — confirm it before building**. The largest compounder on the roadmap, placed fourth on measurement: linear in slice count, near-flat on the front end. |
 
 ### Added by the user-journey review (2026-08-25)
 
@@ -71,10 +78,10 @@ everything else here: **not a commitment.**
 | Candidate | What it is | Cost / size | Likely home | Notes |
 |---|---|---|---|---|
 | ~~**Document intake (text-only)**~~ | — | — | — | **DONE, and larger than this row imagined — Phase 4.5.** It did not stay text-only: PDF and DOCX parsing shipped too (PdfPig, OpenXml), along with a human confirm-and-fix step before anything is written. `ResumeText` was not de-duplicated but deleted — the résumé moved to its own `resumes` table. See `docs/phases/phase-4.5-resume-import.md`. |
-| **AI-extracted requirements** | Extend Phase 4's prompt to write `job_requirements`, not just `posting_skills` | Low — prompt + inserts, table already exists | Fold into Phase 4 | Phase 4 extracts skills, seniority and a summary but never requirements — yet `job_requirements` exists *"for the Phase 5 ATS check"*. The AI phase currently feeds only half of the phase that depends on it. |
-| **Provenance on `job_requirements`** | A `Source` column mirroring `posting_skills.Source` (Parsed / AiExtracted) | Low — one column | With the row above | No way to tell a requirement you typed from one a model guessed. Harmless today, load-bearing the moment the row above ships. **Not recorded anywhere else**, including the audit. |
-| **Target profile** | Store the roles / seniority / skills you are aiming at | Medium — new entity + one analytics join | Own phase, after 2.3 | Upgrades the differentiator: Phase 2.4 answers *"what is in demand?"*; with a target it answers **"what is in demand that I do not have yet?"** — the question a job seeker actually has. |
-| **Interview rounds** | Round number, date, outcome, who you spoke to | Medium — new entity | Own phase | `Interviewing` is one enum value. "Second round Thursday" has nowhere to live but free-text `Notes`, which no query can use. Related: status history is scoped out of 2.4 (F16), and the audit lists interview rounds as missing against tracker convention. |
+| **AI-extracted requirements** | Extend Phase 4's prompt to write `job_requirements`, not just `posting_skills` | Low — prompt + inserts, table already exists | **Phase 12 (P3)** | Phase 4 extracts skills, seniority and a summary but never requirements — yet `job_requirements` exists *"for the Phase 5 ATS check"*. The AI phase currently feeds only half of the phase that depends on it. |
+| **Provenance on `job_requirements`** | A `Source` column mirroring `posting_skills.Source` (Parsed / AiExtracted) | Low — one column | **Phase 12 (P3)**, with the row above | No way to tell a requirement you typed from one a model guessed. Harmless today, load-bearing the moment the row above ships. **Not recorded anywhere else**, including the audit. |
+| **Target profile** | Store the roles / seniority / skills you are aiming at | Medium — new entity + one analytics join | **Phase 12 (P3)** | Upgrades the differentiator: Phase 2.4 answers *"what is in demand?"*; with a target it answers **"what is in demand that I do not have yet?"** — the question a job seeker actually has. |
+| **Interview rounds** | Round number, date, outcome, who you spoke to | Medium — new entity | **Phase 12 (P3)** | Reshapes the Pipeline board: `Interviewing` is one column today, and rounds make it a column with depth, so the drag semantics have to answer what moving between rounds means. `Interviewing` is one enum value. "Second round Thursday" has nowhere to live but free-text `Notes`, which no query can use. Related: status history is scoped out of 2.4 (F16), and the audit lists interview rounds as missing against tracker convention. |
 
 ### Added by the security & data audit (2026-08-25)
 
@@ -83,17 +90,17 @@ evidence in [`security-and-data-audit.md`](security-and-data-audit.md).
 
 | Candidate | What it is | Cost / size | Likely home | Notes |
 |---|---|---|---|---|
-| **Audit & integrity baseline** | Interceptor-maintained timestamps, DB-side defaults, CHECK constraints, `xmin` concurrency token, bounded text, two missing indexes | Low — one migration + one interceptor, no auth needed | Small Phase 2.7 | The cheapest real fix on this list, and it corrects a column that is already wrong (A8). Best interview story in the audit. |
-| **Transport & secrets hardening** | `SSL Mode=VerifyFull`, encryption at rest, untrack `appsettings.Development.json`, connection string in SSM Parameter Store (free tier) | Low — config only, no schema | **Phase 3** | Was written when Phase 3 targeted RDS, where storage encryption can only be enabled *at instance creation*. Phase 3 now uses Neon, which encrypts at rest and enforces TLS by default — so the deadline is gone, but the config items remain. |
-| **PII classification & retention** | Identify `ResumeText` / `Notes` / `Description` as personal information; decide whether they leave the machine once Phase 4 swaps off Ollama; retention rule per Privacy Act APP 11.2 | Low as a doc, Medium if purge is automated | Phase 4/5 guardrail | The one item here with an external obligation attached, not just good practice. |
-| **schema.org `JobPosting` gaps** | `validThrough` (expiry), `jobLocationType` (remote/hybrid), `identifier` (employer req id), source/channel | Low — four columns on `job_postings` | **Unowned** — 2.1 is Done; fold into 2.2 or its own small phase | Remote/hybrid is the most-filtered attribute in the current market and free-text `Location` cannot answer it. |
+| **Audit & integrity baseline** | Interceptor-maintained timestamps, DB-side defaults, CHECK constraints, `xmin` concurrency token, bounded text, two missing indexes | Low — one migration + one interceptor, no auth needed | **Phase 7 (P1) — next** | The cheapest real fix on this list, and it corrects a column that is already wrong (A8). Best interview story in the audit. **Scheduled first because it is the only item here whose cost grows while it waits** — per write path (F8) and per row of duplicate data. |
+| **Transport & secrets hardening** | `SSL Mode=VerifyFull`, encryption at rest, untrack `appsettings.Development.json`, connection string in SSM Parameter Store (free tier) | Low — config only, no schema | **Phase 10 (P2)** | Was written when the deploy targeted RDS, where storage encryption can only be enabled *at instance creation*. Phase 10 now uses Neon, which encrypts at rest and enforces TLS by default — so the deadline is gone, but the config items remain. |
+| **PII classification & retention** | Identify `ResumeText` / `Notes` / `Description` as personal information; decide whether they leave the machine once Phase 4 swaps off Ollama; retention rule per Privacy Act APP 11.2 | Low as a doc, Medium if purge is automated | **Phase 10 (P2)** | The one item here with an external obligation attached, not just good practice. |
+| **schema.org `JobPosting` gaps** | `validThrough` (expiry), `jobLocationType` (remote/hybrid), `identifier` (employer req id), source/channel | Low — four columns on `job_postings` | **Phase 12 (P3)** | Remote/hybrid is the most-filtered attribute in the current market and free-text `Location` cannot answer it — so of the four columns this is the one that earns a filter on Applications and a field on Job post. |
 
 ### Added by the .NET 10 upgrade (2026-08-26)
 
 | Candidate | What it is | Cost / size | Likely home | Notes |
 |---|---|---|---|---|
-| **HotChocolate 14 → 16** | The GraphQL server is on the tail of the 14 line (14.3.1); 16.6.x is current | Medium — two majors of breaking changes | **Unowned** | Deliberately *not* done in Phase 2.6. The only thing forcing a move then was [GHSA-qr3m-xw4c-jqw3](https://github.com/advisories/GHSA-qr3m-xw4c-jqw3), and 14.3.1 patches it, so the 14 line is secure and supported for now. Pull this forward if a second advisory lands on 14, or if Phase 4/5 wants something only 15+ ships. Doing it inside a framework bump would have made any failure ambiguous. |
-| **GraphQL parse-depth limit** | A document-size / nesting guard in front of `/graphql` | Low | **Phase 3** (with rate limiting) | The advisory above is the argument: the parser runs *before* validation, so `MaxExecutionDepth` cannot protect it, and `StackOverflowException` is uncatchable. Patching HotChocolate fixed *this* parser bug; it did not give the app a way to reject an absurd document. Belongs with the rest of the deploy-time API hygiene. |
+| **HotChocolate 14 → 16** | The GraphQL server is on the tail of the 14 line (14.3.1); 16.6.x is current | Medium — two majors of breaking changes | **P4 — recorded, not scheduled** | Deliberately *not* done in Phase 2.6. The only thing forcing a move then was [GHSA-qr3m-xw4c-jqw3](https://github.com/advisories/GHSA-qr3m-xw4c-jqw3), and 14.3.1 patches it, so the 14 line is secure and supported for now. Pull this forward if a second advisory lands on 14, or if Phase 4/5 wants something only 15+ ships. Doing it inside a framework bump would have made any failure ambiguous. |
+| **GraphQL parse-depth limit** | A document-size / nesting guard in front of `/graphql` | Low | **Phase 10 (P2)** (with rate limiting) | The advisory above is the argument: the parser runs *before* validation, so `MaxExecutionDepth` cannot protect it, and `StackOverflowException` is uncatchable. Patching HotChocolate fixed *this* parser bug; it did not give the app a way to reject an absurd document. Belongs with the rest of the deploy-time API hygiene. |
 
 
 ### Added by the real-CV test (2026-08-28)
@@ -120,10 +127,10 @@ the reason: **the format is doing more of the work than the parser is.**
 
 | Candidate | What it is | Cost / size | Likely home | Notes |
 |---|---|---|---|---|
-| **Letter-spaced heading recovery** | A heading tracked out for effect (`M a s t e r  o f  I T`) has letter gaps as wide as word gaps, so the word extractor splits it into single characters | Medium — needs a per-font width heuristic, and a wrong one damages ordinary text | **Unowned** | This is what costs the full name on a designed PDF. Nothing in the geometry distinguishes tracking from word spacing; the fix is statistical (compare the gap against the median intra-word gap for that font size) and can regress documents that currently work. Not worth it for one field the user types anyway. |
-| **Detached date columns** | Dates in their own narrow column segment as their own block and arrive separated from the entries they belong to | Medium — a column-association pass over blocks | **Unowned** | Partly self-correcting: the model reassociates most of them once blocks carry structure. Would matter more if the draft were ever committed without review, which the confirm gate is specifically designed to prevent. |
-| **Employer / title pairing across a sidebar** | Which line is the employer and which the role, when both columns supply candidates | Medium | **Unowned** | Same shape as above and the same mitigation — the review screen exists for exactly this. |
-| **OCR for scanned PDFs** | A scanned CV is a picture; it opens fine and yields nothing | High — Tesseract or a hosted vision model, plus a real latency and cost story | **Unowned** | Already detected and reported rather than silently stored empty. A different project, and the only item here that is a capability rather than a refinement. |
+| **Letter-spaced heading recovery** | A heading tracked out for effect (`M a s t e r  o f  I T`) has letter gaps as wide as word gaps, so the word extractor splits it into single characters | Medium — needs a per-font width heuristic, and a wrong one damages ordinary text | **P4** | This is what costs the full name on a designed PDF. Nothing in the geometry distinguishes tracking from word spacing; the fix is statistical (compare the gap against the median intra-word gap for that font size) and can regress documents that currently work. Not worth it for one field the user types anyway. |
+| **Detached date columns** | Dates in their own narrow column segment as their own block and arrive separated from the entries they belong to | Medium — a column-association pass over blocks | **P4** | Partly self-correcting: the model reassociates most of them once blocks carry structure. Would matter more if the draft were ever committed without review, which the confirm gate is specifically designed to prevent. |
+| **Employer / title pairing across a sidebar** | Which line is the employer and which the role, when both columns supply candidates | Medium | **P4** | Same shape as above and the same mitigation — the review screen exists for exactly this. |
+| **OCR for scanned PDFs** | A scanned CV is a picture; it opens fine and yields nothing | High — Tesseract or a hosted vision model, plus a real latency and cost story | **P4** | Already detected and reported rather than silently stored empty. A different project, and the only item here that is a capability rather than a refinement. |
 
 **The recommendation that falls out, and it is worth stating in an interview:**
 tell the user to upload a `.docx` when they have one. Not as an apology for the
@@ -188,10 +195,11 @@ worked against — and I can explain the tradeoff in both directions."*
 
 ## Explicitly NOT backlog (already owned or out of character)
 
-- **Kanban board / drag-and-drop** — frontend, belongs to **Phase 6** (the data
-  behind it is the Phase 2.4 analytics + status field).
+- ~~**Kanban board / drag-and-drop**~~ — **DONE, Phase 6.3.** `Pipeline.tsx`, dnd-kit,
+  and the drag is a `PATCH`; a 400 from the status lifecycle renders as a rule
+  refusal rather than an error.
 - **AI job-description analysis** — that's **Phase 4**, already planned.
-- **Rate limiting / production API hygiene** — revisit at deploy (**Phase 3**),
+- **Rate limiting / production API hygiene** — revisit at deploy (**Phase 10**),
   not before there's a real endpoint to protect.
 
 ## When we revisit
@@ -201,4 +209,4 @@ Good triggers to pull something off this list:
   (soft-delete / export are the low-cost picks).
 - A real need shows up while using the tool ("I keep forgetting to follow up" →
   reminders).
-- Deployment (Phase 3) forces the question (auth, rate limiting).
+- Deployment (Phase 10) forces the question (auth, rate limiting).

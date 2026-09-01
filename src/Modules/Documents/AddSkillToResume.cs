@@ -95,7 +95,9 @@ public class AddSkillToResumeHandler
         // Fixing it means a case-insensitive natural key on `skills` — a
         // migration, and its own phase — and fixing it in one of the three writers
         // would leave them disagreeing about what a duplicate is.
-        var skill = await _db.Skills.FirstOrDefaultAsync(s => s.Name == skillName, ct);
+        // Phase 7 — the case-insensitive natural key, same as the posting path.
+        var key = NaturalKey.Of(skillName);
+        var skill = await _db.Skills.FirstOrDefaultAsync(s => s.NameNormalized == key, ct);
         if (skill is null)
         {
             // Add explicitly: Skill.Id is client-generated in the property

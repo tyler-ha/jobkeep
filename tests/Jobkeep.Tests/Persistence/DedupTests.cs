@@ -64,14 +64,21 @@ public sealed class DedupTests(PostgresFixture fixture) : IntegrationTestBase(fi
     }
 
     [Fact]
-    public async Task SkillLookupIsCaseSensitive_SoCSharpAndLowercaseCSharpAreTwoRows()
+    public async Task SkillLookupIsCaseInsensitive_SoCSharpAndLowercaseCSharpAreOneRow()
     {
-        // Documents current behaviour, and it is a finding rather than a preference:
-        // AddSkillToPosting matches on `s.Name == skillName`, which Npgsql translates to
-        // a case-sensitive comparison. So "C#" and "c#" become two rows in a table whose
-        // whole purpose is deduplication, and skill-demand analytics will double-count
-        // them. Fixing it means a case-insensitive natural key (a citext column or a
-        // normalised name), which is a schema change and belongs to its own phase.
+        // FLIPPED IN PHASE 7. This used to be named
+        // `SkillLookupIsCaseSensitive_SoCSharpAndLowercaseCSharpAreTwoRows` and
+        // documented the defect: AddSkillToPosting matched on `s.Name == skillName`,
+        // which Npgsql translates to a case-sensitive comparison, so "C#" and "c#"
+        // became two rows in a table whose whole purpose is deduplication. Its own
+        // comment predicted the fix — "a case-insensitive natural key ... which is a
+        // schema change and belongs to its own phase" — and that is exactly what
+        // landed: a STORED generated column, `lower("Name")`, carrying the unique
+        // index.
+        //
+        // Two tests asserted this defect and both broke on the migration, which is
+        // the behaviour the project wanted from writing defects down as tests: the
+        // fix announces itself instead of being noticed later.
         var first = await Client.CreateApplicationAsync("Seek", "Engineer", Ct);
         var second = await Client.CreateApplicationAsync("REA Group", "Engineer", Ct);
 
@@ -81,7 +88,12 @@ public sealed class DedupTests(PostgresFixture fixture) : IntegrationTestBase(fi
         var names = await WithDbAsync(db =>
             db.Skills.Select(s => s.Name).OrderBy(n => n).ToListAsync(Ct));
 
-        Assert.Equal(2, names.Count);
+        Assert.Equal("C#", Assert.Single(names));
+
+        // And the link rows still point at that one skill from both postings —
+        // the dedup is what makes /stats/skill-demand count it as one skill
+        // wanted twice rather than two skills wanted once each.
+        Assert.Equal(2, await WithDbAsync(db => db.PostingSkills.CountAsync(Ct)));
     }
 
     [Fact]

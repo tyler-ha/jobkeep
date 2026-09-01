@@ -34,7 +34,7 @@ public class AiOptions
 // The Phase 4 plan originally had a step 4 — "swap the IChatClient to a cheap
 // hosted model for the deployed Lambda". That step is **not being done**, and the
 // phase doc records why. The consequence, stated rather than discovered later:
-// Ollama cannot run inside a Lambda, so if Phase 3 ever unparks, the deployed
+// Ollama cannot run inside a Lambda, so if the deploy (Phase 10) ever unparks, the deployed
 // build has no analyzer until a provider is chosen and paid for.
 //
 // The IChatClient abstraction is kept anyway, and it is worth being precise about

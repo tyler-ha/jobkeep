@@ -4,7 +4,7 @@ namespace Jobkeep.Models;
 
 // A structured requirement line from the ad. Kept structured (not just prose)
 // so the ATS check (Phase 5) can reason specifically about must-haves.
-public class JobRequirement
+public class JobRequirement : IAuditable
 {
     public Guid Id { get; set; } = Guid.NewGuid();
 
@@ -14,4 +14,9 @@ public class JobRequirement
     public string Text { get; set; } = string.Empty;
     public RequirementKind Kind { get; set; } = RequirementKind.Qualification;
     public bool IsMustHave { get; set; }
+
+    // Phase 7 — maintained by AuditSaveChangesInterceptor, never by hand.
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
+
 }

@@ -37,6 +37,22 @@ dotnet ef migrations script --idempotent -o <scratch>/schema.sql
 fails with `UnauthorizedAccessException: Access to the path '...\src' is denied`.
 Write it to a scratch path, never into the repo.
 
+**If a database is already running, dump it instead — it is the better source.**
+
+```bash
+docker compose up -d db          # or run.cmd -NoFrontend
+docker compose exec -T db pg_dump -U postgres -d jobkeep --schema-only --no-owner > <scratch>/live.sql
+```
+
+The reason is that `--idempotent` produces a *sequence of migrations*, not a
+picture of the result: a `CREATE TABLE` three migrations back is corrected by
+`ALTER`s further down, and every statement is wrapped in a `DO $EFMigrationsSql$`
+block, so counting tables or indexes out of that text gives the wrong answer.
+Phase 7 is the live case — it drops three unique indexes and adds three others,
+and both sets appear in the script. `pg_dump` shows the applied schema, which is
+what the diagram claims to be. Generate the migration script anyway when there is
+no database to dump; just do not count from it.
+
 ## Step 2 — confirm the model and the migrations agree
 
 ```bash

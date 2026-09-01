@@ -30,12 +30,22 @@ phase doc is a historical record, not a description of the current tree.
 | 2.4 | [Analytics endpoints](phases/phase-2.4-analytics.md) | Done |
 | 2.5 | [Enforce the status lifecycle](phases/phase-2.5-status-rules.md) | Done |
 | 2.6 | [Upgrade to .NET 10 (LTS)](phases/phase-2.6-dotnet10-upgrade.md) | Done |
-| 3 | [Deploy to AWS Lambda (Function URL)](phases/phase-3-aws-deploy.md) | **Parked** — plan done, $0/month, deferred behind local feature work |
 | 4 | [AI job-description analyzer](phases/phase-4-ai-analyzer.md) | **Done** — tests verified during Phase 4.5, all 10 passed unchanged |
 | 4.5 | [Document import: upload, parse, confirm, save](phases/phase-4.5-resume-import.md) | **Done** — PDF/DOCX/text → draft → human confirm → rows |
 | 5 | [ATS compatibility check](phases/phase-5-ats-check.md) | **Done** — skill gap is a SQL join, not a model call; degrades when the model is down |
-| 6 | [Front end](phases/phase-6-frontend.md) | **In progress** — staged 6.1–6.4; 6.1 (backend unblock: CORS, résumé reads) done, scaffold next |
-| 7 | [Feature expansion after the front end](phases/phase-7-feature-expansion.md) | **Placeholder** — not a feature list; what changes about *building* one once there are two halves |
+| 6 | [Front end](phases/phase-6-frontend.md) | **In progress** — 6.1–6.3 done (eight screens, 35 tests); the visual pass and 6.4 (README) remain |
+| 7 | [Data integrity & the dedup key](phases/phase-7-data-integrity.md) | **Done** (2026-09-01) — one migration; ERD redraw still outstanding. Formerly "Phase 2.7" |
+| 8 | [Soft delete / archive](phases/phase-8-soft-delete.md) | **Planned.** Rides Phase 7's index migration; highest front-end blast radius on the roadmap |
+| 9 | [The three reads the front end could not get](phases/phase-9-api-gaps.md) | **Planned.** Found by building the screens in 6.3 |
+| 10 | [Deploy to AWS Lambda (Function URL)](phases/phase-10-aws-deploy.md) | **Parked** — plan done, $0/month. Formerly "Phase 3" |
+| 11 | [Authentication & owner scoping](phases/phase-11-auth.md) | **Planned.** Gated on the deploy and on confirming decision 9 |
+| 12 | [Feature expansion after the front end](phases/phase-12-feature-expansion.md) | **Placeholder** — not a feature list; what changes about *building* one once there are two halves. Formerly "Phase 7" |
+
+**Numbers are build order for unbuilt work, and history for built work.**
+Phases 1–6 keep the numbers they shipped under. The remaining work was
+renumbered on 2026-09-01 so the table reads top-to-bottom as the order it will
+actually be built in — see `architecture.md` decision 18 for the ordering rule
+(compounding cost first) and for what was deliberately *not* rewritten.
 
 **If a phase doc contradicts `architecture.md`, follow `architecture.md` and fix
 the phase doc as part of the work.** The phase docs were written before the

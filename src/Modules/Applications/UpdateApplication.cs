@@ -112,7 +112,13 @@ public class UpdateApplicationHandler
         // (the four sub-resource slices, create, delete) saves without touching
         // a timestamp, so this column is already partly a lie. The fix is a
         // SaveChangesInterceptor, scheduled with the rest of the audit baseline.
-        application.UpdatedAtUtc = DateTime.UtcNow;
+        // Phase 7 — the hand-set timestamp that used to live here is gone.
+        // AuditSaveChangesInterceptor stamps every IAuditable on the way out, so
+        // assigning it here as well would put two writers on one column, which is
+        // the shape F8 was about in the first place. Note the interceptor also
+        // stamps `application.Posting` when this method changes the title or the
+        // location — job_postings.UpdatedAtUtc is new in this phase, and nothing
+        // in C# assigns to it at all.
         await _db.SaveChangesAsync(ct);
 
         var updated = await _db.JobApplications

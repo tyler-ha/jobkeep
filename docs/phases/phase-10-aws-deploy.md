@@ -1,4 +1,11 @@
-# Phase 3 — Deploy to AWS Lambda (Function URL)
+# Phase 10 — Deploy to AWS Lambda (Function URL)
+
+> **Formerly "Phase 3".** Renumbered 2026-09-01 into build order — the plan was
+> complete and parked while phases 4, 4.5, 5 and 6 were built past it, so a lower
+> number no longer meant earlier. Nothing about the plan below changed. Older
+> *done* phase docs and `src/` comments written before the renumber still say
+> "Phase 3"; those are dated records and were deliberately not rewritten. See
+> `architecture.md` decision 18.
 
 **Status: Parked (2026-08-27) — plan is complete and researched; not being built yet.**
 
@@ -11,7 +18,8 @@
 > design was selected for. **Unpark when there is a reason to click the link.**
 >
 > One consequence to carry: CLAUDE.md schedules the **doc/security-audit sweep**
-> "before Phase 3 ships to AWS". That trigger moves with this phase — it is due
+> "before Phase 3 ships to AWS" (this phase, under its old number). That
+> trigger moves with the phase — it is due
 > when this unparks, not on the calendar.
 
 > **Rewritten 2026-08-26**, then **revised 2026-08-27** after a pricing/latency
@@ -141,7 +149,7 @@ the 2026-08-26 version of this plan:
 - **Aurora is VPC-private, so the Lambda must join a VPC — and Phase 4 is AI
   calls.** A VPC-attached Lambda has no route to the internet without a **NAT
   Gateway (~$32–43/month)** or a per-service **interface endpoint (~$7/month)**.
-  Phase 3 alone would not have paid it; Phase 4 would, and by then the choice
+  The deploy alone would not have paid it; Phase 4 would, and by then the choice
   would already be made. The $0.10/month figure was true for exactly one phase.
 
 The 0-ACU reasoning itself was sound and is kept as the fallback. What the
@@ -160,7 +168,7 @@ What varies is who runs the database and which cold start you accept.
 | Lambda + Aurora Serverless v2 @ 0 ACU | ~$0.10–1 | 15s, 30s+ after 24h idle | Wake latency and the VPC/NAT consequence. Kept as fallback. |
 | Lambda + Supabase free tier | $0 | manual | 500 MB free, but free projects **pause after 7 days idle** and need a console click to wake. Strictly worse than Aurora for a link that sits untouched. |
 | Google Cloud Run + Neon | $0 | ~2s | Genuinely comparable — 2M requests, 180k vCPU-s, 360k GiB-s always free per *account*. Rejected only because it is a second cloud for no extra signal. |
-| Azure Container Apps + Neon | $0 | ~2s | Same free-grant shape, scale-to-zero to 0 replicas, and the best Melbourne-market signal of the three. The intended shape is a *later* "same container, second cloud" phase — doing it now costs a phase to re-prove Phase 3. Not scheduled, and deliberately not added to `backlog.md` yet. |
+| Azure Container Apps + Neon | $0 | ~2s | Same free-grant shape, scale-to-zero to 0 replicas, and the best Melbourne-market signal of the three. The intended shape is a *later* "same container, second cloud" phase — doing it now costs a phase to re-prove this one. Not scheduled, and deliberately not added to `backlog.md` yet. |
 | Oracle Cloud Always Free VM (Docker + Postgres) | $0 | **none** | The only $0 option with no cold start at all. Rejected: it hands back every piece of ops work serverless removes, and see "Deliberately not done here" for what Oracle did to the tier in June 2026. |
 | Fly / Render / Railway | $5–25 | ~0 | Not $0. Render also cut Hobby egress to 5 GB in April 2026. |
 

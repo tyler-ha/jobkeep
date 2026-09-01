@@ -1,8 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 760" width="1280" height="760" role="img" aria-labelledby="erdTitle erdDesc" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif">
-  <title id="erdTitle">JobKeep database schema, as of migration AtsCheckPhase5</title>
-  <desc id="erdDesc">Entity-relationship diagram of 13 PostgreSQL tables. companies feeds job_postings, which feeds job_applications, ai_analyses, job_requirements and posting_skills. resumes feeds resume_skills, resume_experiences, resume_educations, and is referenced by both job_applications and ats_results. The shared skills table is joined from both posting_skills and resume_skills. document_imports stands alone with no foreign keys. Solid dark-green edges are ON DELETE RESTRICT; dashed rust edges are ON DELETE CASCADE.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 780" width="1280" height="780" role="img" aria-labelledby="erdTitle erdDesc" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif">
+  <title id="erdTitle">JobKeep database schema, as of migration DataIntegrityAndNaturalKeys</title>
+  <desc id="erdDesc">Entity-relationship diagram of 13 PostgreSQL tables. companies feeds job_postings, which feeds job_applications, ai_analyses, job_requirements and posting_skills. resumes feeds resume_skills, resume_experiences, resume_educations, and is referenced by both job_applications and ats_results. The shared skills table is joined from both posting_skills and resume_skills. document_imports stands alone with no foreign keys. Solid dark-green edges are ON DELETE RESTRICT; dashed rust edges are ON DELETE CASCADE. Since Phase 7 the uniqueness of companies, skills and resumes is enforced on a STORED generated column holding the lower-cased name, not on the name itself.</desc>
 
-  <rect x="0" y="0" width="1280" height="760" fill="#FBFCFB"/>
+  <rect x="0" y="0" width="1280" height="780" fill="#FBFCFB"/>
 
   <defs>
     <marker id="restrictArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
@@ -28,7 +28,7 @@
   </style>
 
   <text class="h1" x="40" y="42">JobKeep — database schema</text>
-  <text class="sub" x="40" y="63">13 tables · derived from `dotnet ef migrations script`, not from the model classes · migration AtsCheckPhase5 (Phase 5)</text>
+  <text class="sub" x="40" y="63">13 tables · derived from the applied schema, not from the model classes · migration DataIntegrityAndNaturalKeys (Phase 7)</text>
 
   <!-- ============ row 1 (y=100) ============ -->
   <g>
@@ -38,7 +38,7 @@
     <text class="name" x="292" y="119">ai_analyses</text>
     <text class="col"  x="292" y="143">Id <tspan class="tag">PK</tspan></text>
     <text class="col"  x="292" y="161">PostingId <tspan class="tag">FK · UNIQUE</tspan></text>
-    <text class="type" x="292" y="178">Seniority text · Summary text</text>
+    <text class="type" x="292" y="178">Seniority, Summary — bounded varchar</text>
   </g>
 
   <g>
@@ -46,9 +46,9 @@
     <rect class="hdr" x="520" y="100" width="200" height="26" rx="4"/>
     <rect class="hdr" x="520" y="118" width="200" height="8"/>
     <text class="name" x="532" y="119">ats_results</text>
-    <text class="col"  x="532" y="141">ApplicationId <tspan class="tag">FK · UNIQUE</tspan></text>
-    <text class="col"  x="532" y="159">ResumeId <tspan class="tag">FK?</tspan></text>
-    <text class="type" x="532" y="177">5 × text[] · Warning text</text>
+    <text class="col"  x="532" y="143">Id <tspan class="tag">PK</tspan> · ApplicationId <tspan class="tag">FK · UNIQUE</tspan></text>
+    <text class="col"  x="532" y="161">ResumeId <tspan class="tag">FK?</tspan> — which resume was judged</text>
+    <text class="type" x="532" y="178">four text[] columns · Warning varchar(500)</text>
   </g>
 
   <!-- ============ row 2 (y=250) ============ -->
@@ -57,9 +57,9 @@
     <rect class="hdr" x="40" y="250" width="200" height="26" rx="4"/>
     <rect class="hdr" x="40" y="268" width="200" height="8"/>
     <text class="name" x="52" y="269">companies</text>
-    <text class="col"  x="52" y="293">Id <tspan class="tag">PK</tspan></text>
-    <text class="col"  x="52" y="311">Name <tspan class="tag">UNIQUE</tspan></text>
-    <text class="type" x="52" y="328">varchar(200)</text>
+    <text class="col"  x="52" y="291">Id <tspan class="tag">PK</tspan> · Name varchar(200)</text>
+    <text class="col"  x="52" y="309">NameNormalized <tspan class="tag">UNIQUE</tspan></text>
+    <text class="type" x="52" y="327">generated always as lower(Name), stored</text>
   </g>
 
   <g>
@@ -67,9 +67,9 @@
     <rect class="hdr" x="280" y="250" width="200" height="26" rx="4"/>
     <rect class="hdr" x="280" y="268" width="200" height="8"/>
     <text class="name" x="292" y="269">job_postings</text>
-    <text class="col"  x="292" y="293">Id <tspan class="tag">PK</tspan></text>
-    <text class="col"  x="292" y="311">CompanyId <tspan class="tag">FK</tspan></text>
-    <text class="type" x="292" y="328">Salary numeric(12,2)</text>
+    <text class="col"  x="292" y="293">Id <tspan class="tag">PK</tspan> · CompanyId <tspan class="tag">FK</tspan></text>
+    <text class="col"  x="292" y="311">SalaryMin/Max numeric(12,2)</text>
+    <text class="type" x="292" y="328">2 <tspan class="tag">CHECK</tspan> — min ≤ max, ISO-4217 currency</text>
   </g>
 
   <g>
@@ -79,7 +79,7 @@
     <text class="name" x="532" y="269">job_applications</text>
     <text class="col"  x="532" y="293">Id <tspan class="tag">PK</tspan></text>
     <text class="col"  x="532" y="311">PostingId <tspan class="tag">FK</tspan> · ResumeId <tspan class="tag">FK?</tspan></text>
-    <text class="type" x="532" y="328">Status text · DateApplied date</text>
+    <text class="type" x="532" y="328">Status, DateApplied desc — both <tspan class="tag">INDEX</tspan></text>
   </g>
 
   <g>
@@ -87,9 +87,9 @@
     <rect class="hdr" x="760" y="250" width="200" height="26" rx="4"/>
     <rect class="hdr" x="760" y="268" width="200" height="8"/>
     <text class="name" x="772" y="269">resumes</text>
-    <text class="col"  x="772" y="291">Id <tspan class="tag">PK</tspan> · Label <tspan class="tag">UNIQUE</tspan></text>
-    <text class="col"  x="772" y="309">SourceText text</text>
-    <text class="type" x="772" y="327">SourceFormat text — detected, not the extension</text>
+    <text class="col"  x="772" y="291">Id <tspan class="tag">PK</tspan> · Label varchar(100)</text>
+    <text class="col"  x="772" y="309">LabelNormalized <tspan class="tag">UNIQUE</tspan></text>
+    <text class="type" x="772" y="327">duplicates were suffixed, never merged</text>
   </g>
 
   <g>
@@ -99,7 +99,7 @@
     <text class="name" x="1012" y="269">resume_experiences</text>
     <text class="col"  x="1012" y="293">Id <tspan class="tag">PK</tspan></text>
     <text class="col"  x="1012" y="311">ResumeId <tspan class="tag">FK</tspan></text>
-    <text class="type" x="1012" y="328">Highlights text[]</text>
+    <text class="type" x="1012" y="328">Highlights text[] · Ordinal int</text>
   </g>
 
   <!-- ============ row 3 (y=400) ============ -->
@@ -110,7 +110,7 @@
     <text class="name" x="52" y="419">job_requirements</text>
     <text class="col"  x="52" y="443">Id <tspan class="tag">PK</tspan></text>
     <text class="col"  x="52" y="461">PostingId <tspan class="tag">FK</tspan></text>
-    <text class="type" x="52" y="478">Kind text · IsMustHave bool</text>
+    <text class="type" x="52" y="478">Kind varchar(20) · IsMustHave bool</text>
   </g>
 
   <g>
@@ -120,7 +120,7 @@
     <text class="name" x="292" y="419">posting_skills</text>
     <text class="col"  x="292" y="443">(PostingId, SkillId) <tspan class="tag">PK</tspan></text>
     <text class="col"  x="292" y="461">both <tspan class="tag">FK</tspan></text>
-    <text class="type" x="292" y="478">Source text · IsRequired bool</text>
+    <text class="type" x="292" y="478">Source varchar(20) · IsRequired bool</text>
   </g>
 
   <g>
@@ -128,9 +128,9 @@
     <rect class="hdr" x="520" y="400" width="200" height="26" rx="4"/>
     <rect class="hdr" x="520" y="418" width="200" height="8"/>
     <text class="name" x="532" y="419">skills</text>
-    <text class="col"  x="532" y="443">Id <tspan class="tag">PK</tspan></text>
-    <text class="col"  x="532" y="461">Name <tspan class="tag">UNIQUE</tspan></text>
-    <text class="type" x="532" y="478">shared — owned by no module</text>
+    <text class="col"  x="532" y="441">Id <tspan class="tag">PK</tspan> · Name varchar(100)</text>
+    <text class="col"  x="532" y="459">NameNormalized <tspan class="tag">UNIQUE</tspan></text>
+    <text class="type" x="532" y="477">shared — owned by no module</text>
   </g>
 
   <g>
@@ -140,7 +140,7 @@
     <text class="name" x="772" y="419">resume_skills</text>
     <text class="col"  x="772" y="443">(ResumeId, SkillId) <tspan class="tag">PK</tspan></text>
     <text class="col"  x="772" y="461">both <tspan class="tag">FK</tspan></text>
-    <text class="type" x="772" y="478">Source text</text>
+    <text class="type" x="772" y="478">Source varchar(20)</text>
   </g>
 
   <g>
@@ -235,6 +235,7 @@
     <text class="col" x="782" y="650">ON DELETE CASCADE — 7 edges (children of an aggregate)</text>
   </g>
 
-  <text class="sub" x="40" y="706">13 tables · 13 foreign keys (6 RESTRICT, 7 CASCADE) · 15 indexes, of which 5 are UNIQUE · enums stored as text, so rows read plainly in psql</text>
-  <text class="sub" x="40" y="726">Boxes show keys only. Full column lists live in src/Data/AppDbContext.cs, where the reasoning for each delete rule is written beside it.</text>
+  <text class="sub" x="40" y="706">13 tables · 13 foreign keys (6 RESTRICT, 7 CASCADE) · 17 indexes, of which 5 are UNIQUE · enums stored as text, so rows read plainly in psql</text>
+  <text class="sub" x="40" y="726">Phase 7: uniqueness for companies, skills and resumes sits on a STORED generated column, lower(...), so the database is case-insensitive by construction — not by convention.</text>
+  <text class="sub" x="40" y="746">Seven tables carry CreatedAtUtc / UpdatedAtUtc, written by an EF interceptor and defaulted in the DDL, and are version-checked with xmin. Full columns and the reasoning: src/Data/AppDbContext.cs.</text>
 </svg>

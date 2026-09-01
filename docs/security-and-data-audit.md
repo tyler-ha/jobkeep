@@ -9,7 +9,7 @@ running instance, not inferred from attributes.
 
 This document exists because of the standard set in `CLAUDE.md`: *"Write down the
 tradeoff."* Authentication is deferred **legibly** — it is recorded in `backlog.md`,
-in the gap register, and tied to Phase 3+. Encryption, PII handling, retention,
+in the gap register, and tied to the deploy (**Phase 10**) and auth (**Phase 11**). Encryption, PII handling, retention,
 secrets management and backup are not deferred; **they had zero mentions in any
 document before this one.** That is the difference between an accepted tradeoff and
 an undocumented risk, and it is the gap this audit closes.
@@ -35,7 +35,7 @@ job-search history. Today it does so with:
 | Retention / purge | **Absent**, and APP 11.2 applies |
 
 None of this is alarming for a single-user tool on `localhost`. **All of it becomes
-load-bearing at Phase 3**, which puts this schema on a public API Gateway in front of
+load-bearing at the deploy (**Phase 10**)**, which puts this schema on a public endpoint in front of
 an RDS instance. The audit is therefore ordered by *what must be true before deploy*
 rather than by theoretical severity.
 
@@ -118,7 +118,7 @@ most of these; `validThrough`, `jobLocationType`, `identifier` and source/channe
 
 ## 3. Findings
 
-### S1 — High: resolve before the Phase 3 deploy
+### S1 — High: resolve before the deploy (**Phase 10**)
 
 **F1 · No owner column on any table, and no authentication.**
 No `UserId`/`OwnerId`/`TenantId` anywhere; no `HasQueryFilter` in
@@ -151,7 +151,7 @@ credential-and-résumé disclosure with no signal that the downgrade happened.
 `.gitignore:21` excludes only `appsettings.*.local.json`, so this pattern slips
 through. The credential itself is a throwaway local Docker password also printed in
 `README.md` and `CLAUDE.md` — **the risk is the pattern, not this value.** That file
-is the obvious place a real RDS connection string lands in Phase 3, and it is already
+is the obvious place a real Neon connection string lands in Phase 10, and it is already
 tracked.
 
 **F5 · GraphQL is not defended by `[JsonIgnore]`. (Verified against the emitted SDL.)**
@@ -206,12 +206,16 @@ The ceiling matters on an unauthenticated surface for its own reason —
 
 ### S2 — Medium: schema integrity
 
-**F7 · No concurrency token** → last-write-wins on the read-modify-write in
+**F7 · No concurrency token. RESOLVED in Phase 7** — `xmin` shadow property on `job_applications`, `job_postings` and `companies`; zero added columns. Original finding follows.
+
+**F7 (as written)** · No concurrency token → last-write-wins on the read-modify-write in
 `Modules/Applications/UpdateApplication.cs`. Two concurrent PATCHes silently discard
 one. (The code moved out of `PostgresJobApplicationRepository.UpdateAsync` in Phase
 2.3; the read-modify-write, and this finding, moved with it unchanged.)
 
-**F8 · The audit columns are inconsistent, and one of them already lies.**
+**F8 · The audit columns are inconsistent, and one of them already lies. RESOLVED in Phase 7** — `IAuditable` on the seven independently-lifecycled entities, maintained by `AuditSaveChangesInterceptor` so there is one write path rather than one per slice. `job_postings.UpdatedAtUtc` now exists. Note the boundary the fix adopted: the timestamp records when **that row** changed, not when anything beneath it did. Original finding follows.
+
+**F8 (as written)** · The audit columns are inconsistent, and one of them already lies.
 
 - `job_postings` has `CreatedAtUtc` but **no** `UpdatedAtUtc`, despite PATCH mutating
   `Title`, `Location`, `Description` and `CompanyId`.
@@ -238,15 +242,21 @@ name yet.
 cascade rules then drop `ats_results`, and deleting a posting would drop its
 `ai_analyses`, `job_requirements` and `posting_skills`. Nothing is recoverable.
 
-**F11 · No DB-side defaults at all.** No `gen_random_uuid()` on any PK, no `now()` on
+**F11 · No DB-side defaults at all. RESOLVED in Phase 7** — `gen_random_uuid()` on every Guid PK and `now() at time zone 'utc'` on the audit timestamps, applied as a convention loop so a new table inherits it by existing. Original finding follows.
+
+**F11 (as written)** · No DB-side defaults at all. No `gen_random_uuid()` on any PK, no `now()` on
 any timestamp. Every id and timestamp originates in a C# property initializer, so any
 writer that is not this EF application — a migration backfill, a `psql` fix, a future
 service — violates the schema's own invariants without the schema noticing.
 
-**F12 · No CHECK constraints.** `SalaryMin <= SalaryMax` is unenforced.
+**F12 · No CHECK constraints. RESOLVED in Phase 7** — `ck_job_postings_salary_range` and `ck_job_postings_currency_iso4217`. Original finding follows.
+
+**F12 (as written)** · No CHECK constraints. `SalaryMin <= SalaryMax` is unenforced.
 `SalaryCurrency` is `varchar(3)` with no ISO-4217 validation, so `"XX!"` is accepted.
 
-**F13 · Eleven unbounded `text` columns.** Every column below is `type: "text"` with
+**F13 · Eleven unbounded `text` columns. RESOLVED in Phase 7** — all bounded. **The column list below is stale and was already stale before Phase 7**: it names `job_applications.ResumeText`, which Phase 4.5 deleted when the résumé moved to its own table. Eleven columns were bounded; not these eleven. Left uncorrected as an example of what "the standing docs lag between sweeps" looks like. Original finding follows.
+
+**F13 (as written)** · Eleven unbounded `text` columns. Every column below is `type: "text"` with
 no `HasMaxLength`, verified by line in `Migrations/20260819115119_InitialCreate.cs`:
 
 | Table | Columns | Lines |
@@ -261,10 +271,12 @@ On an unauthenticated public write endpoint that is an unbounded-storage vector.
 `ai_analyses.ModelUsed` is the clearest case that a bound is simply missing — it holds
 a model identifier like `llama3.2:3b`, so `varchar(100)` is generous.
 
-**F14 · No index backs the default query.** `ListApplicationsHandler` sorts on
+**F14 · No index backs the default query. RESOLVED in Phase 7** — `IX_job_applications_Status` and `IX_job_applications_DateApplied` (DESC, matching the sort). Original finding follows.
+
+**F14 (as written)** · No index backs the default query. `ListApplicationsHandler` sorts on
 `DateApplied` by default and filters on `Status`, `DateApplied`, and — through a
 join — company and skill names. None of those columns is indexed; only the FKs are.
-Phase 2.3 shipped the filtering and deliberately left the indexes to Phase 2.7 so
+Phase 2.3 shipped the filtering and deliberately left the indexes to what is now **Phase 7** (written as "Phase 2.7" at the time) so
 that phase stays one migration: at a few hundred personal rows the seq scan is
 sub-millisecond, and an index added before the query pattern settles is a guess.
 Still open, and now with a concrete query pattern to index *for*.
@@ -280,7 +292,7 @@ deliberately.
 **F17** Domain attribute gaps vs schema.org (§2) — `validThrough`, `jobLocationType`,
 `identifier` and source/channel are **not** currently in the backlog.
 
-**F18** No backup, restore, retention or PII register in any doc. Phase 3's disposal
+**F18** No backup, restore, retention or PII register in any doc. Phase 10's disposal
 plan is *"tear it down after the job search"*, which is a cost decision standing in
 for a data-lifecycle decision.
 
@@ -311,7 +323,7 @@ schema must redraw `docs/diagrams/*.svg` in the same change**, using the
 `schema-diagram` skill — it derives DDL from `dotnet ef migrations script`, which is
 why it catches the column types and delete rules that reading `Models/*.cs` misses.
 
-### Step 1 — Audit & integrity baseline *(one migration; no auth required)*
+### Step 1 — Audit & integrity baseline → **Phase 7 (next)** *(one migration; no auth required)*
 
 Closes F7, F8, F11, F12, F13, F14.
 
@@ -325,7 +337,7 @@ Closes F7, F8, F11, F12, F13, F14.
 - CHECK constraints, `HasMaxLength` on the eleven unbounded columns, and indexes on
   `DateApplied DESC` and `Status`.
 
-### Step 2 — Soft delete *(`backlog.md`'s "strongest candidate to pull in")*
+### Step 2 — Soft delete → **Phase 8** *(`backlog.md`'s "strongest candidate to pull in")*
 
 Closes F10. `IsDeleted` + `DeletedAtUtc` + `HasQueryFilter`.
 
@@ -335,7 +347,7 @@ Closes F10. `IsDeleted` + `DeletedAtUtc` + `HasQueryFilter`.
 > blocks ever re-adding that name — and the find-or-create dedup depends on those
 > exact indexes.
 
-### Step 3 — Owner scoping *(the big one; tie to Phase 3)*
+### Step 3 — Owner scoping → **Phase 11** *(the big one; tied to the deploy)*
 
 Closes F1, F9. A `users` table, and `OwnerUserId` on `job_applications`,
 `job_postings` and `companies`.
@@ -350,7 +362,7 @@ Closes F1, F9. A `users` table, and `OwnerUserId` on `job_applications`,
 query filter *plus* Postgres RLS**: the filter makes the app naturally query one
 user's rows; RLS makes a forgotten filter unable to leak.
 
-### Step 4 — Phase 3 hardening *(config, not schema)*
+### Step 4 — Deploy hardening → **Phase 10** *(config, not schema)*
 
 Closes F3, F4.
 
@@ -366,13 +378,13 @@ Closes F3, F4.
 - A least-privileged application role, not the RDS master user.
 - Enable RDS automated backups.
 
-### Step 5 — Privacy guardrail *(before Phase 4 deploys off Ollama)*
+### Step 5 — Privacy guardrail → **Phase 10** *(before `IChatClient` points off Ollama)*
 
 Closes F2, F18. A PII register in `docs/`; an explicit decision on whether
 `ResumeText` leaves the machine once `IChatClient` points at a hosted provider; and a
 retention rule for `ResumeText` per APP 11.2.
 
-### Later — `audit_events` (Tier 4), per `backlog.md:61`. Own phase.
+### Later — `audit_events` (Tier 4), per `backlog.md`. **P4**, after Phase 11 — F9 needs an actor to name, and Phase 7's interceptor is the write-path hook this extends.
 
 ---
 

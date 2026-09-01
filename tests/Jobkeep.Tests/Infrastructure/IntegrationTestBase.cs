@@ -80,4 +80,29 @@ public abstract class IntegrationTestBase(PostgresFixture fixture) : IAsyncLifet
         command.CommandText = sql;
         return await command.ExecuteScalarAsync(Ct);
     });
+
+    /// <summary>
+    /// Runs raw SQL for its effect. The counterpart to <see cref="ScalarAsync"/>, added
+    /// in Phase 7 for the one thing EF cannot express: an INSERT that behaves like a
+    /// writer which is *not* this application. Proving the database-side defaults (F11)
+    /// work requires a statement that names neither the id nor the timestamps, and EF
+    /// always supplies both.
+    /// </summary>
+    protected Task ExecuteAsync(string sql) =>
+        WithDbAsync(db => db.Database.ExecuteSqlRawAsync(sql, Ct));
+
+    /// <summary>
+    /// A second, independent AppDbContext in its own scope, for tests that need two
+    /// callers reading the same row at once. Concurrency cannot be tested through one
+    /// context: EF's change tracker would hand back the same tracked instance, and the
+    /// second "caller" would be writing the first one's entity.
+    ///
+    /// The caller owns the returned scope and must dispose it; disposing the scope
+    /// disposes the context with it.
+    /// </summary>
+    protected (IServiceScope Scope, AppDbContext Db) NewScopedDb()
+    {
+        var scope = Fixture.App.Services.CreateScope();
+        return (scope, scope.ServiceProvider.GetRequiredService<AppDbContext>());
+    }
 }
