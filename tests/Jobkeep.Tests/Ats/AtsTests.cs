@@ -174,6 +174,35 @@ public class AtsTests(PostgresFixture fixture) : IntegrationTestBase(fixture)
     }
 
     [Fact]
+    public async Task Check_SortsSkillNamesCaseInsensitively()
+    {
+        // Phase 13.2e. The gap used to be one query and `ORDER BY skills."Name"`,
+        // so the ordering was whatever the database collation said. It is now an
+        // in-memory sort, which means the comparer is a decision this code makes
+        // rather than one it inherits — and a silent switch to the default
+        // ordinal comparer is exactly the kind of regression a rename-free
+        // refactor slips through.
+        //
+        // These three names separate the two: ordinal puts every uppercase letter
+        // before every lowercase one, so it would answer C#, aws, terraform.
+        var (client, _) = AppWithModel(EvidencesNothing);
+        var id = await client.CreateApplicationAsync("Canva", "Engineer", Ct);
+
+        await client.AddSkillAsync(id, "terraform", Ct, isRequired: true);
+        await client.AddSkillAsync(id, "C#", Ct, isRequired: true);
+        await client.AddSkillAsync(id, "aws", Ct, isRequired: true);
+
+        var resumeId = await SeedResumeAsync("mine", []);
+
+        using var body = await BodyAsync(
+            await client.PostAsync($"/applications/{id}/ats-check?resumeId={resumeId}", null, Ct));
+
+        Assert.Equal(
+            ["aws", "C#", "terraform"],
+            Names(body.RootElement, "missingMustHaveSkills"));
+    }
+
+    [Fact]
     public async Task Check_UsesTheApplicationsOwnResume_WhenNoResumeIdIsPassed()
     {
         var (client, _) = AppWithModel(EvidencesNothing);

@@ -31,16 +31,17 @@ public class ModuleBoundaryTests
         "Jobkeep.Modules.Skills",
     ];
 
-    // Phase 13.2. The modules that may still take AppDbContext, shrinking to empty
-    // as the step lands module by module. Each entry is a module whose handlers
-    // have not yet moved onto their own I<X>DbContext.
+    // DELETED IN 13.2e: ModulesStillOnAppDbContext, and the conditional in
+    // No_module_takes_the_shared_context that read it.
     //
-    // This list is the work item, not a policy. When it is empty, delete it and the
-    // conditional in No_module_takes_the_shared_context along with it.
-    private static readonly HashSet<string> ModulesStillOnAppDbContext =
-    [
-        "Jobkeep.Modules.Ats",
-    ];
+    // It listed the modules that had not yet moved onto their own I<X>DbContext,
+    // and its own comment said to delete it when it emptied. Ats was the last
+    // entry. It is worth being clear about what kind of thing it was: not a
+    // policy with an exception, but a WORK ITEM written in the place the work
+    // would be checked — which is why it came with a canary
+    // (The_shared_context_allowlist_still_names_real_work, deleted with it) that
+    // failed if an entry outlived the conversion. Both are gone because the list
+    // reached zero, which is the outcome they were built to make visible.
 
     // The exceptions, named one by one rather than allowed as a category.
     //
@@ -138,8 +139,6 @@ public class ModuleBoundaryTests
 
         foreach (var module in Modules)
         {
-            if (ModulesStillOnAppDbContext.Contains(module)) continue;
-
             var assembly = Assembly.Load(new AssemblyName(module));
 
             foreach (var type in assembly.GetTypes())
@@ -153,27 +152,6 @@ public class ModuleBoundaryTests
             "A module takes AppDbContext. Depend on that module's I<X>DbContext instead, "
             + "and reach another module through Jobkeep.Contracts:\n  "
             + string.Join("\n  ", violations));
-    }
-
-    [Fact]
-    public void The_shared_context_allowlist_still_names_real_work()
-    {
-        // The canary for the list above, and the same idea as the one below it: a
-        // stale exception is worse than no exception, because it reads as a rule.
-        // If a module has been converted but its name is still here, this fails and
-        // says so — which is the reminder to delete the entry rather than leave a
-        // permission standing that nothing needs.
-        var converted = ModulesStillOnAppDbContext
-            .Where(module => !Assembly.Load(new AssemblyName(module))
-                .GetTypes()
-                .SelectMany(type => type.GetConstructors())
-                .SelectMany(ctor => ctor.GetParameters())
-                .Any(parameter => parameter.ParameterType.Name == "AppDbContext"))
-            .ToList();
-
-        Assert.True(converted.Count == 0,
-            "These modules no longer take AppDbContext, so remove them from "
-            + "ModulesStillOnAppDbContext:\n  " + string.Join("\n  ", converted));
     }
 
     // DELETED IN 13.2c: The_recorded_exception_is_actually_visible_to_this_test.

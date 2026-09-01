@@ -2,6 +2,9 @@ using System.ComponentModel;
 using System.Text.Json;
 using Jobkeep.Data;
 using Jobkeep.Models;
+using Jobkeep.Modules.Applications;
+using Jobkeep.Modules.Documents;
+using Jobkeep.Modules.Skills;
 using Jobkeep.Shared;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
@@ -15,10 +18,10 @@ namespace Jobkeep.Modules.Ats;
 // Four stages, and only one of them costs anything
 // ---------------------------------------------------------------------------
 //
-//   1. resolve      which application, which resume          two queries
-//   2. skill gap    posting_skills minus resume_skills       ONE query, no model
+//   1. resolve      which application, which resume          two contract calls
+//   2. skill gap    posting skills minus resume skills       three calls, no model
 //   3. requirements free-text coverage                       one model call
-//   4. formatting   static rules over the resume's metadata  no query, no model
+//   4. formatting   static rules over the resume's metadata  no call, no model
 //
 // The shape matters more than the code. Three quarters of this feature has no AI
 // dependency at all, so the whole thing keeps working when Ollama is not running —
@@ -27,19 +30,56 @@ namespace Jobkeep.Modules.Ats;
 // is a feature that will be discovered broken at the worst moment.
 //
 // ---------------------------------------------------------------------------
-// Why the skill gap is a SQL join and not a model call
+// Why the skill gap is a set difference and not a model call
 // ---------------------------------------------------------------------------
 // The Phase 5 doc originally said to prompt the model for keyword matching. That
-// is corrected in this phase, and the reason is a decision taken three phases
-// earlier: `skills` is a SHARED table. Posting skills and resume skills are rows
-// in the same table joined on the same SkillId, so "what does this ad ask for
-// that my resume never mentions" is a set difference Postgres computes exactly,
-// instantly and free. A model asked the same question would be slower, cost a
+// was corrected in Phase 5 itself, and the reason is a decision taken three
+// phases earlier: `skills` is a SHARED vocabulary. A posting's "C#" and a
+// resume's "C#" are the SAME ROW, so "what does this ad ask for that my resume
+// never mentions" is an exact set difference over skill ids rather than a
+// judgement about words. A model asked the same question would be slower, cost a
 // call, and — measured in Phase 4 — not be reproducible: Temperature = 0 gave
 // identical output on 6 of 7 runs, not 7 of 7.
 //
-// This is the query the shared-skills decision was made for, and until this slice
-// existed it had never been exercised.
+// That argument is untouched by Phase 13. What changed at 13.2e is WHERE the
+// difference is computed.
+//
+// ---------------------------------------------------------------------------
+// 13.2e: the set difference left SQL, and that breaks a standing rule on purpose
+// ---------------------------------------------------------------------------
+// Until 13.2e this was one query: `posting_skills` LEFT of a correlated EXISTS
+// over `resume_skills`, with the skill name joined in. Three tables, none of them
+// owned by this module. Phase 13 is making each module extractable, and that
+// query is precisely what stops working the day `resume_skills` lives behind
+// another service — a join does not survive a network hop.
+//
+// So it is now three contract calls and an in-memory Except:
+//
+//     IPostingContract.GetSkillsAsync   -> (SkillId, IsRequired) for the ad
+//     IResumeContract.GetSkillIdsAsync  -> SkillId[] for the CV
+//     ISkillCatalog.GetAsync            -> ids to names, for display
+//
+// This knowingly breaks CLAUDE.md's "aggregate in SQL, not in memory", and it is
+// worth being exact about why that is acceptable here rather than treating the
+// rule as advisory. The rule exists to stop a table being loaded so C# can count
+// it — an unbounded scan standing in for a GROUP BY. Neither set here is
+// unbounded: a job ad lists tens of skills and a resume lists tens of skills,
+// both hard-capped by what a human wrote. Nothing is aggregated; a HashSet lookup
+// replaces an EXISTS. And the alternative is not "keep the fast version", it is
+// "keep a join that will not exist", which trades a real future rewrite for a
+// saving of microseconds on sets of this size.
+//
+// Two consequences, stated rather than discovered later:
+//
+//   * The three reads are no longer ONE SNAPSHOT. Someone adding a skill to the
+//     resume between call two and call three would be reported as missing it.
+//     Harmless, and already the feature's shape: an ATS result is a stored
+//     judgement about a moment, which is the whole argument GetAtsResult.cs makes
+//     for storing it at all.
+//   * A posting skill whose catalog row is missing is DROPPED, not rendered
+//     blank. Impossible today — the foreign key guarantees the row — and a real
+//     gap to report at 13.3 when that key is gone. Same call GetResume.cs made in
+//     13.2c, for the same reason.
 //
 // ---------------------------------------------------------------------------
 // Why there is no score
@@ -66,21 +106,17 @@ public record AtsCheckResponse(
     string? Warning,
     DateTime CheckedAtUtc);
 
-// What stage 1 needs about the resume, in one projection. Includes the
-// experience count because stage 4's "implausibly short" rule is relative to it.
-internal sealed record ResumeFacts(
-    Guid Id,
-    string Label,
-    string? FullName,
-    string? Email,
-    string? Location,
-    SourceFormat? SourceFormat,
-    string SourceText,
-    int ExperienceCount);
+// DELETED IN 13.2e: the internal ResumeFacts record.
+//
+// It was this module's own projection of `resumes`, and every field on it is now
+// on IResumeContract's ResumeContent — including the experience count, which was
+// the one field that looked like it belonged to Ats and does not: "how many roles
+// did the import find" is a fact about a resume, and stage 4 below is merely the
+// first thing to ask.
 
-// One posting skill plus whether the resume has it. `OnResume` is computed by
-// Postgres as a correlated EXISTS, so the set difference happens in the database
-// and this side only buckets the rows.
+// One posting skill plus whether the resume has it. Since 13.2e `OnResume` is a
+// HashSet lookup here rather than a correlated EXISTS in Postgres — see the set
+// difference section above for why the query had to leave the database.
 internal sealed record SkillMatch(string Name, bool IsRequired, bool OnResume);
 
 // The shape the model is constrained to for stage 3.
@@ -115,13 +151,31 @@ public class CheckAtsHandler
     private const int MinCharsPerExperience = 200;
     private const int MinPlausibleResumeChars = 400;
 
-    private readonly AppDbContext _db;
+    // One table, and it is the only one this module owns. Everything else this
+    // slice needs arrives through a contract - which is the entire substance of
+    // 13.2e, since before it this field was AppDbContext and reached all thirteen.
+    private readonly IAtsDbContext _db;
+    private readonly IApplicationContract _applications;
+    private readonly IPostingContract _postings;
+    private readonly IResumeContract _resumes;
+    private readonly ISkillCatalog _skills;
     private readonly IChatClient _chat;
     private readonly ModelOptions _model;
 
-    public CheckAtsHandler(AppDbContext db, IChatClient chat, ModelOptions model)
+    public CheckAtsHandler(
+        IAtsDbContext db,
+        IApplicationContract applications,
+        IPostingContract postings,
+        IResumeContract resumes,
+        ISkillCatalog skills,
+        IChatClient chat,
+        ModelOptions model)
     {
         _db = db;
+        _applications = applications;
+        _postings = postings;
+        _resumes = resumes;
+        _skills = skills;
         _chat = chat;
         _model = model;
     }
@@ -132,10 +186,7 @@ public class CheckAtsHandler
         // ---------------------------------------------------------------
         // Stage 1 — resolve
         // ---------------------------------------------------------------
-        var application = await _db.JobApplications
-            .Where(a => a.Id == applicationId)
-            .Select(a => new { a.PostingId, a.ResumeId })
-            .FirstOrDefaultAsync(ct);
+        var application = await _applications.GetRefAsync(applicationId, ct);
 
         if (application is null)
             return SliceResult<AtsCheckResponse>.NotFound($"Application {applicationId} not found.");
@@ -150,13 +201,7 @@ public class CheckAtsHandler
                 "This application is not linked to a resume, and no resumeId was supplied. "
               + "Link one to the application or pass ?resumeId= to check against a specific resume.");
 
-        var resume = await _db.Resumes
-            .Where(r => r.Id == wantedResumeId.Value)
-            .Select(r => new ResumeFacts(
-                r.Id, r.Label, r.FullName, r.Email, r.Location,
-                r.SourceFormat, r.SourceText,
-                r.Experiences.Count))
-            .FirstOrDefaultAsync(ct);
+        var resume = await _resumes.GetContentAsync(wantedResumeId.Value, ct);
 
         // Invalid, not NotFound: the application in the route exists, so what is
         // wrong is the id the caller supplied. Mirrors the check the Phase 4.5
@@ -165,25 +210,32 @@ public class CheckAtsHandler
             return SliceResult<AtsCheckResponse>.Invalid($"Resume {wantedResumeId} not found.");
 
         // ---------------------------------------------------------------
-        // Stage 2 — the skill gap. One query, deterministic, free.
+        // Stage 2 — the skill gap. Three calls, deterministic, free.
         // ---------------------------------------------------------------
-        // A flat projection, not an Include: this needs the skill's name and
-        // nothing else about it (architecture.md decision 11 / A1). The EXISTS is
-        // the set difference, evaluated by Postgres — the rows that come back are
-        // already labelled, and the C# below only sorts them into buckets.
-        // The OrderBy has to come BEFORE the Select, and that is not a style
-        // choice: ordering by a property of the projected record makes EF try to
-        // translate `ORDER BY new SkillMatch(...)`, which it cannot, and the whole
-        // query fails at runtime with a translation error rather than at compile
-        // time. Ordering by the column instead is the same SQL and translates.
-        var matches = await _db.PostingSkills
-            .Where(ps => ps.PostingId == application.PostingId)
-            .OrderBy(ps => ps.Skill.Name)
+        // See the set difference section at the top of this file for why this is
+        // not one query any more, and what that costs.
+        var postingSkills = await _postings.GetSkillsAsync(application.PostingId, ct);
+        var onResume = (await _resumes.GetSkillIdsAsync(resume.Id, ct)).ToHashSet();
+
+        // Ids to names, in ONE batched call. The per-id version would be a query
+        // per skill on a page that already knows every id it needs, which is the
+        // shape ISkillCatalog.GetAsync exists to make impossible.
+        var names = await _skills.GetAsync(
+            postingSkills.Select(ps => ps.SkillId).Distinct().ToList(), ct);
+
+        // The sort moved out of Postgres with the query, so it is explicit about
+        // its comparer now rather than inheriting the database collation.
+        // OrdinalIgnoreCase matches what GetResume and ListApplications already do
+        // for the same list of names, which is what stops the same skills coming
+        // back in a different order on different screens.
+        var matches = postingSkills
+            .Where(ps => names.ContainsKey(ps.SkillId))
             .Select(ps => new SkillMatch(
-                ps.Skill.Name,
+                names[ps.SkillId].Name,
                 ps.IsRequired,
-                _db.ResumeSkills.Any(rs => rs.ResumeId == resume.Id && rs.SkillId == ps.SkillId)))
-            .ToListAsync(ct);
+                onResume.Contains(ps.SkillId)))
+            .OrderBy(m => m.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
 
         var matched = matches.Where(m => m.OnResume).Select(m => m.Name).ToList();
         var missingMustHave = matches.Where(m => !m.OnResume && m.IsRequired).Select(m => m.Name).ToList();
@@ -192,13 +244,13 @@ public class CheckAtsHandler
         // ---------------------------------------------------------------
         // Stage 3 — free-text requirements. The one model call.
         // ---------------------------------------------------------------
-        var requirements = await _db.JobRequirements
-            .Where(r => r.PostingId == application.PostingId)
-            .OrderBy(r => r.IsMustHave ? 0 : 1)
-            .ThenBy(r => r.Text)
+        // The contract returns them must-haves-first and already ordered, so the
+        // truncation below drops nice-to-haves before must-haves. The Take stays
+        // on this side because MaxRequirements is a model-context budget, which is
+        // this slice's business and not a fact about a posting.
+        var requirements = (await _postings.GetRequirementsAsync(application.PostingId, ct))
             .Take(MaxRequirements)
-            .Select(r => new { r.Text, r.IsMustHave })
-            .ToListAsync(ct);
+            .ToList();
 
         var unmet = new List<string>();
         string? warning = null;
@@ -243,6 +295,20 @@ public class CheckAtsHandler
         // Store. 1:1 with the application — re-checking overwrites, latest wins,
         // the shape ai_analyses already uses. ResumeId is what records which
         // resume the surviving row judged.
+        // ---------------------------------------------------------------
+        // 13.2e — the partial-write question CommitImport had to answer does NOT
+        // arise here, and the ordering above is what makes that true rather than
+        // luck. Every contract call in this slice is a READ, and all of them
+        // happen before the first row is added to the change tracker. So a
+        // contract that fails leaves nothing half-written: the check simply does
+        // not produce a result, and the previous stored one — if any — is
+        // untouched. The one contract method in this project that SAVES,
+        // ISkillCatalog.FindOrCreateAsync, is not called here; Ats never invents a
+        // skill, it only resolves ids a link row already guarantees exist.
+        //
+        // Keep it that way. Moving a contract call below this line would put a
+        // foreign SaveChanges between building this row and committing it, which
+        // is exactly the flush CommitImport.CommitResumeAsync is written to avoid.
         // ---------------------------------------------------------------
         var stored = await _db.AtsResults.FirstOrDefaultAsync(r => r.ApplicationId == applicationId, ct);
         if (stored is null)
@@ -344,11 +410,11 @@ public class CheckAtsHandler
     // Static formatting rules. Every one of these fires on something the real-CV
     // test on 2026-08-28 actually observed, which is the difference between this
     // and the generic "avoid tables and columns" advice on every careers blog.
-    private static List<string> BuildFormatNotes(ResumeFacts resume)
+    private static List<string> BuildFormatNotes(ResumeContent resume)
     {
         var notes = new List<string>();
 
-        if (resume.SourceFormat == Models.SourceFormat.Pdf)
+        if (resume.SourceFormat == ResumeSourceFormat.Pdf)
             notes.Add(
                 "This resume was imported from a PDF. Tested on this project's own CV, the same "
               + "document as a designed PDF lost the candidate's name, location and every listed "

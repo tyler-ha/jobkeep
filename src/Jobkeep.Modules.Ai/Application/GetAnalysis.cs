@@ -54,16 +54,18 @@ public class GetAnalysisHandler
         // decision 17 described, where a cross-module READ was ordinary and only a
         // write needed guarding; Phase 13 reverses that, because a read across a
         // boundary is exactly what stops being possible when the module is a
-        // separate deployable. And IApplicationContract.GetPostingIdAsync is the
-        // narrow method the old comment wanted and could not have.
+        // separate deployable. And IApplicationContract.GetRefAsync is the narrow
+        // method the old comment wanted and could not have -- 13.2e widened it
+        // from GetPostingIdAsync to carry the resume id as well, for Ats. This
+        // caller ignores that field; two nullable ids is still not an ad.
         //
         // The cost is one extra round trip, and it is worth naming rather than
         // hiding: two indexed primary-key lookups instead of one join. At 13.3
         // this stops being a choice at all — `job_applications` will be in another
         // schema and the join will not translate.
-        var postingId = await _applications.GetPostingIdAsync(applicationId, ct);
+        var application = await _applications.GetRefAsync(applicationId, ct);
 
-        if (postingId is null)
+        if (application is null)
             // Distinguished from "no analysis yet" now, which the old single-query
             // shape could not do — it saw one null and had to guess. The comment
             // it replaces said splitting these "would cost a second query"; the
@@ -74,7 +76,7 @@ public class GetAnalysisHandler
 
         var found = await _db.AiAnalyses
             .AsNoTracking()
-            .Where(a => a.PostingId == postingId.Value)
+            .Where(a => a.PostingId == application.PostingId)
             .Select(a => new AnalysisSummaryResponse(
                 a.PostingId, a.Seniority, a.Summary, a.ModelUsed, a.AnalyzedAtUtc))
             .FirstOrDefaultAsync(ct);

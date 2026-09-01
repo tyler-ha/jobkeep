@@ -98,11 +98,10 @@ builder.Services.AddModelClient(builder.Configuration);
 // both in Jobkeep.Contracts, and its csproj carries no module reference at all.
 builder.Services.AddDocumentsModule(builder.Configuration);
 
-// Phase 5. Owns `ats_results` and reads five tables it does not own — posting
-// skills, skills and requirements from Applications, resumes and resume skills
-// from Documents. No contract, and no IConfiguration: architecture.md decision 17
-// makes a cross-module *read* ordinary, and the two limits this module imposes on
-// its one model call are constants rather than settings (AtsModule.cs).
+// Phase 5. Owns `ats_results` and, since 13.2e, names nothing else. It used to
+// read five tables it did not own; all five are now contract calls, which is what
+// AtsModule.cs argues at length. Still no IConfiguration: the two limits this
+// module imposes on its one model call are constants rather than settings.
 builder.Services.AddAtsModule();
 
 // ---------------------------------------------------------------------------

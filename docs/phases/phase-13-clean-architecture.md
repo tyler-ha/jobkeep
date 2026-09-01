@@ -1,8 +1,8 @@
 # Phase 13 — module-owned Clean Architecture, on the road to services
 
-**Status: In progress. Steps 13.1 and 13.2a–d done 2026-09-01** (branch
-`phase-13/module-boundaries`, suite 239 → 244 → 246 → 249 → 253 green). 13.2e and
-13.3–13.6 remain.
+**Status: In progress. Steps 13.1 and 13.2 (a–e) done 2026-09-01** (branch
+`phase-13/module-boundaries`, suite 239 → 244 → 246 → 249 → 253 → 253 green).
+**13.2 is complete: no module names another module's table.** 13.3–13.6 remain.
 
 **This doc was rewritten on 2026-09-01.** The version before it (written the same
 day, commit `bf968a0`) planned a **layer-first** migration: one `Domain`, one
@@ -176,8 +176,8 @@ no module can name another module's tables, but nothing has moved in Postgres �
 it is fully reversible and every test still passes.
 
 **Split into five sub-steps**, each ending green and runnable, because the whole of
-it is several sessions' work at the context budget this project runs to. **13.2a and
-13.2b–d landed 2026-09-01; only 13.2e remains.**
+it is several sessions' work at the context budget this project runs to. **All five
+landed 2026-09-01. 13.2 is DONE.**
 
 | | Module | State |
 |---|---|---|
@@ -185,7 +185,11 @@ it is several sessions' work at the context budget this project runs to. **13.2a
 | **13.2b** | Ai, Analytics | **Done** |
 | **13.2c** | Documents | **Done** |
 | **13.2d** | Applications | **Done** |
-| 13.2e | Ats | Not started |
+| **13.2e** | Ats | **Done** |
+
+**No module names another module's table any more.** `AppDbContext` is resolved in
+exactly one file in `src/` — `Program.cs`, where the six interfaces are bound to it —
+and nothing in Postgres moved, which is what 13.3 now gets to change on its own.
 
 #### Scope correction taken 2026-09-01, before any code moved
 
@@ -398,38 +402,117 @@ see: four of the six were navigation properties rather than `DbSet` references.
 was not: the filter was always an exact case-insensitive match, which is what
 `FindByNameAsync` already does. Three verbs, unchanged.
 
-#### What remains, and what each sub-step has to answer
+#### What landed in 13.2e
 
-The cross-module reads still to convert, counted:
+The module with the most crossings — five tables across two owners, plus two
+navigation traversals — and the only one that was a pure *reader*.
 
-- **Ats (13.2e)** — `Resumes`, `ResumeSkills` (Documents) plus `PostingSkills`,
-  `JobRequirements`, `JobApplications` (Applications), and the `ps.Skill.Name` and
-  `r.Resume.Label` traversals. The largest job.
-- ~~**Applications (13.2d)**~~ — done, see above.
-- ~~**Documents (13.2c)**~~ — done, see above.
+- **Six reads became six contract calls**, and Ats now names one table.
+  `IApplicationContract.GetRefAsync`, `IPostingContract.GetSkillsAsync` /
+  `GetRequirementsAsync`, `IResumeContract.GetContentAsync` / `GetSkillIdsAsync`,
+  `ISkillCatalog.GetAsync`. `CheckAtsHandler`'s context field went from
+  `AppDbContext` to `IAtsDbContext`, which holds exactly `AtsResults`.
+- **`IPostingContract`'s two-method cap was lifted and its reasoning rewritten in
+  place**, along with `AtsModule.cs`'s "this is why it stays at two" paragraph.
+  Both argued from decision 17 — cross-module *reads* are ordinary, so the only
+  methods a contract needs are its writes — and both were correct under it. Phase 13
+  reverses decision 17, so the number stopped bounding anything. The replacement is
+  the test `ISkillCatalog` already carried: **does a method name a fact about a
+  posting, or a question the caller has about its own feature?** "Which of this ad's
+  skills is my CV missing" is the second kind, and it stayed in Ats — which is why
+  the skill gap did not become a fifth method on `IPostingContract`.
+- **`IApplicationContract.GetPostingIdAsync` widened to `GetRefAsync`**, returning
+  `ApplicationRef(PostingId, ResumeId)`. Ai wants the posting; Ats wants the posting
+  *and* the résumé the user actually sent. Same row, same primary-key lookup, so a
+  second method would have been one method per caller's question — the shape
+  `IJobApplicationRepository` died of, and the one `IResumeContract.GetAsync` had
+  already refused. Two nullable ids are not the over-fetch A1 is about; a whole job
+  ad would have been.
+- **`IResumeContract` grew from one method to three, and the "a third method would
+  be worth stopping over" comment was the thing that had to be rewritten.** That
+  comment counted METHODS when what it meant was that a contract must not grow one
+  method per caller's question. `ResumeContent` is a second DTO beside `ResumeRef`
+  rather than a widening of it, and the split is the point: Applications asks whether
+  an id exists and still gets two fields, while Ats — whose entire feature is reading
+  the CV — gets the text. **Nobody gets `SourceText` by accident.** Recorded with it:
+  at 13.3 this DTO becomes a network payload, which is a real change in exposure and
+  the security audit's business at that point.
+- **The `SourceFormat` enum got a Contracts-side copy**, `ResumeSourceFormat`, with
+  an explicit switch in `ResumeContract` — the same call `PostingRequirementKind`
+  made in 13.2c, for the same reason: Contracts may reference no Jobkeep assembly, so
+  it cannot name the entity enum, and a cast would keep compiling after someone
+  reordered either list.
 
-Then:
+##### The skill gap left SQL, which breaks a standing rule on purpose
 
-- **Ats's skill gap changes shape, and it must be written down.** Today it is a SQL set
-  difference over `posting_skills` vs `resume_skills`. Those land in two schemas Ats
-  owns neither of, so it becomes two contract calls returning `Guid[]` and an in-memory
-  `Except`. That knowingly breaks CLAUDE.md's *"aggregate in SQL, not in memory"* —
-  justified because the sets are tens of items and bounded, and because the alternative
-  is a join that will not exist across a service boundary.
-- **`IPostingContract`'s two-method cap is lifted at 13.2e, deliberately.** Its cap
-  comment and `AtsModule.cs`'s "this is why it stays at two" paragraph both argue from
-  decision 17, which this phase reverses. Rewrite both rather than growing past them
-  quietly. `ISkillCatalog` already carries the replacement test: does a proposed method
-  name a *skill operation*, or a question the caller has about its own feature?
-- **`CommitImport` stops being a transaction.** It currently opens one spanning
-  Documents writes and calls into Applications' handlers. It becomes: commit locally,
-  then call Applications through a contract; on failure mark the import `CommitFailed`
-  and leave it re-runnable — the idempotency guard it already has
-  (`CommittedEntityId`) is what makes that safe. **Accepted cost:** a partial commit
-  becomes possible, and is recovered by re-running rather than rolled back. Read the
-  25-line comment above the `BeginTransactionAsync` call before deleting it: it names
-  the duplicate-application failure the transaction was protecting against, and the
-  replacement has to answer it.
+It was one query: `posting_skills` with a correlated `EXISTS` over `resume_skills`
+and `skills` joined in for the name. Three tables, none owned by Ats. It is now two
+contract calls returning ids, a `HashSet` lookup, and a third call to resolve names.
+
+That breaks CLAUDE.md's **"aggregate in SQL, not in memory"**, and the justification
+has to be exact rather than a shrug. The rule exists to stop a *table* being loaded
+so C# can count it — an unbounded scan standing in for a `GROUP BY`. Neither set here
+is unbounded: an ad lists tens of skills and a CV lists tens of skills, both capped by
+what a human wrote. Nothing is aggregated; a `HashSet` lookup replaces an `EXISTS`.
+And the alternative is not "keep the fast version", it is "keep a join that will not
+exist" — trading a real future rewrite for microseconds.
+
+Three consequences, written down rather than discovered later:
+
+- **The reads are no longer one snapshot.** A concurrent edit between calls can
+  produce a check that judged a state no single moment had. Accepted: an ATS result
+  is already a stored judgement about a moment, which is `GetAtsResult.cs`'s whole
+  argument for storing it.
+- **A posting skill whose catalog row is missing is dropped, not rendered blank.**
+  Impossible today — the FK guarantees it — and a gap to report at 13.3. Same call
+  `GetResume.cs` made in 13.2c.
+- **The name sort moved out of the database collation**, so the comparer is now a
+  decision this code makes. It is `OrdinalIgnoreCase`, matching `GetResume` and
+  `ListApplications`, and a new test pins it with names that ordinal ordering would
+  answer differently. That is the only test 13.2e added: everything else it changed
+  was meant to be invisible, and the existing fifteen say whether it was.
+
+##### The partial-write question does not arise here, and the ordering is why
+
+13.2c's rule was that a contract which writes must report a **partial** write rather
+than throw. Ats writes `ats_results` and nothing else, and every contract call in the
+slice is a **read** that happens before the first row reaches the change tracker — so
+a contract failure leaves nothing half-written and the previously stored result
+untouched. `ISkillCatalog.FindOrCreateAsync`, the one contract method that saves, is
+never called: **Ats does not invent skills, it resolves ids a link row already
+guarantees exist.** The comment above the store block says to keep it that way, since
+moving a call below that line would put a foreign `SaveChanges` between building the
+row and committing it.
+
+##### The allowlist emptied and was deleted, canary included
+
+`ModulesStillOnAppDbContext` held one entry. Removing Ats emptied it, so the list, the
+conditional in `No_module_takes_the_shared_context` that read it, and the canary
+`The_shared_context_allowlist_still_names_real_work` all went — which is what the
+list's own comment instructed. Suite 253 → 252 on the deletion, then back to **253**
+with the sort test. Green.
+
+##### What Ats cost that it did not before
+
+Stated because it is the other side of the trade the old `AtsModule.cs` comment
+described:
+
+| | Before | After |
+|---|---|---|
+| Round trips per check | 3 queries | 6 calls |
+| Skill gap | one `EXISTS` in Postgres | two reads + in-memory `Except` |
+| Tables named | 6 | 1 |
+
+In-process the round trips are negligible. At 13.3 they are six network hops for one
+check, and that is when batching becomes a real question rather than a premature one.
+
+##### Everything that did NOT change
+
+No migration, no wire contract, no front-end file. `AtsCheckResponse` is byte-for-byte
+what it was, both surfaces included, which is why fifteen existing tests passed
+unedited. `ResumeSourceFormat` is never serialized — it exists only between two
+in-process modules.
+
 - ~~Dropping the Documents-to-Applications project reference at 13.2c~~ — done. The
   `AllowedEdges` entry and the canary went with it, as designed.
 

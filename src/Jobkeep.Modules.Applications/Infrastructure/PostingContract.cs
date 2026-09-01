@@ -31,6 +31,34 @@ public class PostingContract : IPostingContract
             .Select(a => new PostingContent(a.PostingId, a.Posting.Description))
             .FirstOrDefaultAsync(ct);
 
+    public async Task<IReadOnlyList<PostingSkillRef>> GetSkillsAsync(
+        Guid postingId, CancellationToken ct = default)
+        // No OrderBy. The caller needs these sorted by NAME, and the name is not
+        // in this module's hands any more — it is resolved through ISkillCatalog
+        // after the ids arrive, so ordering here would sort by the wrong thing
+        // and read as if it had done the caller's job.
+        => await _db.PostingSkills
+            .AsNoTracking()
+            .Where(ps => ps.PostingId == postingId)
+            .Select(ps => new PostingSkillRef(ps.SkillId, ps.IsRequired))
+            .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<PostingRequirementText>> GetRequirementsAsync(
+        Guid postingId, CancellationToken ct = default)
+        // Must-haves first, then alphabetical within each group — the order the
+        // interface promises, and a stable one, which matters because the caller
+        // numbers this list for a model and stores answers against those numbers.
+        // Ordering by the column rather than by a property of the projected record
+        // is not a style choice: EF cannot translate `ORDER BY new Requirement(...)`
+        // and fails at runtime rather than at compile time.
+        => await _db.JobRequirements
+            .AsNoTracking()
+            .Where(r => r.PostingId == postingId)
+            .OrderBy(r => r.IsMustHave ? 0 : 1)
+            .ThenBy(r => r.Text)
+            .Select(r => new PostingRequirementText(r.Text, r.IsMustHave))
+            .ToListAsync(ct);
+
     public async Task<int> AddExtractedSkillsAsync(
         Guid postingId, IReadOnlyList<ExtractedSkill> skills, CancellationToken ct = default)
     {

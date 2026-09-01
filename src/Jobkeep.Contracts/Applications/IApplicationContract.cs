@@ -16,7 +16,7 @@ namespace Jobkeep.Modules.Applications;
 // existence".
 public interface IApplicationContract
 {
-    // Resolves an application id to the posting it points at. Null when the
+    // Resolves an application id to the two rows it points at. Null when the
     // application does not exist, so the caller writes its own NotFound message
     // -- the same convention IPostingContract.GetContentAsync uses, and for the
     // same reason: which id was wrong is the caller's sentence to write.
@@ -25,7 +25,16 @@ public interface IApplicationContract
     // AND its whole description. A caller that only needs to resolve an id
     // should not pull a 20,000-character job ad over to discard it -- that is
     // finding A1, applied at a module boundary instead of at the API edge.
-    Task<Guid?> GetPostingIdAsync(Guid applicationId, CancellationToken ct = default);
+    //
+    // 13.2e widened this from GetPostingIdAsync, which returned the posting id
+    // alone, and the widening rather than a second method is the point. Ai wants
+    // the posting; Ats wants the posting AND the résumé the user actually sent.
+    // Same row, same primary-key lookup, so splitting them would be one method
+    // per caller's question -- the shape IJobApplicationRepository died of
+    // (decision 5), and the shape IResumeContract.GetAsync already refused for
+    // the identical reason. Two nullable ids are not an over-fetch; a whole ad
+    // would have been.
+    Task<ApplicationRef?> GetRefAsync(Guid applicationId, CancellationToken ct = default);
 
     // Creates an application, its posting, its skills and its requirements, in
     // one call.
@@ -62,6 +71,15 @@ public interface IApplicationContract
     Task<PostingCommitResult> CommitPostingAsync(
         PostingCommitRequest request, CancellationToken ct = default);
 }
+
+// What an application points at, and nothing else about it. No status, no dates,
+// no notes: this answers "which ad, and which CV did I send", which is the only
+// question another module has been able to justify asking. A status belongs to
+// whoever is rendering the application, and that is Applications.
+//
+// ResumeId is nullable because an application need not have one -- linking a CV
+// is optional, and the caller that cares has its own sentence to write about it.
+public record ApplicationRef(Guid PostingId, Guid? ResumeId);
 
 // A job ad the caller has confirmed and wants logged.
 //

@@ -589,48 +589,67 @@ about that date — verify it before relying on it.
 
 ## When asked to move to the next phase
 
-**Currently up next: Phase 13.2e — Ats, the last sub-step of 13.2.** Read
+**Currently up next: Phase 13.3 — the physical split (one schema per module).** Read
 `docs/phases/phase-13-clean-architecture.md`; it is the live plan, and it was
 rewritten on 2026-09-01 when the user confirmed **microservices is the destination**.
-The short version: `src/` is now ten projects, one per module, and 13.2 puts every
-cross-module read behind a contract *while the tables stay put*, so 13.3 can split
-the schema without also being the step that changes behaviour.
 
-**13.2 is split into five sub-steps and four of them have landed** (2026-09-01, suite
-244 → 246 → 249 → 253). Six things from them change how 13.2e is written:
+**13.2 IS DONE** (2026-09-01, all five sub-steps, suite 244 → 246 → 249 → 253 → 253).
+The property it bought, and the one 13.3 depends on: **no module names another
+module's table.** `AppDbContext` is resolved in exactly one file in `src/` —
+`Program.cs`, where the six `I<X>DbContext` interfaces are bound to it — and nothing
+moved in Postgres, so 13.3 gets to be a schema change and nothing else.
+
+Seven things from 13.2 change how 13.3 is written:
 
 - **A module takes its own `I<X>DbContext`, never `AppDbContext`.** Six interfaces
   live in `src/Jobkeep.Infrastructure.Data/Contexts/`, each exposing only one
-  module's `DbSet`s; the shared context implements all six and is named only in
-  `Program.cs`. `ModuleBoundaryTests.No_module_takes_the_shared_context` enforces it,
-  with an allowlist now naming only **Ats** — **delete that entry as you convert it**,
-  or its canary fails, and then delete the list and its conditional too.
-- **`Jobkeep.Modules.Skills` owns `skills`**, and `ISkillCatalog` is finished at three
-  verbs: `GetAsync` (ids → names, batched), `FindByNameAsync` (one name → row, on the
-  natural key), `FindOrCreateAsync` (batched, keyed by the name you passed in). Since
-  13.2c, `NaturalKey.Of` is called in exactly ONE file in `src/`. Do not reach for it
-  near a skill name; that is the bug.
+  module's `DbSet`s. `ModuleBoundaryTests.No_module_takes_the_shared_context`
+  enforces it, and its allowlist, the conditional that read it and the canary that
+  guarded it were all **deleted in 13.2e** when the list emptied — as the list's own
+  comment instructed. Don't reintroduce one. At 13.3 these six interfaces are
+  replaced by real per-module `DbContext`s and the files go with `Jobkeep.Infrastructure.Data`.
+- **Every cross-module crossing is a contract call, in `src/Jobkeep.Contracts/`.**
+  Four interfaces: `IApplicationContract` (2 methods), `IPostingContract` (4),
+  `IResumeContract` (3), `ISkillCatalog` (3). Implementations sit in
+  `<OwningModule>/Infrastructure/`.
+- **`IPostingContract`'s two-method cap was LIFTED in 13.2e and its reasoning
+  rewritten in place.** The cap argued from decision 17 — cross-module reads are
+  ordinary, so only writes need a contract — which Phase 13 reverses. **The rule that
+  replaced the number is the test `ISkillCatalog` already carried: does a method name
+  a fact about the thing, or a question the caller has about its own feature?** The
+  second kind stays with the caller. That is why the ATS skill gap did not become a
+  fifth method on `IPostingContract`.
+- **`ISkillCatalog` is finished at three verbs** — `GetAsync` (ids → names, batched),
+  `FindByNameAsync` (one name → row, on the natural key), `FindOrCreateAsync`
+  (batched, keyed by the name you passed in). Since 13.2c, `NaturalKey.Of` is called
+  in exactly ONE file in `src/`. Do not reach for it near a skill name; that is the bug.
 - **`FindOrCreateAsync` SAVES — call it before adding anything of your own to the
   change tracker.** All six interfaces still resolve the same scoped `AppDbContext`,
   so a save in the catalog flushes your pending changes too, in a different
   transaction from the rest of your unit of work. `CommitImport.CommitResumeAsync`
   gets the order right and says why at length. The accepted cost is an orphan skill
   row when a link fails; it is harmless and is written down, not to be re-discovered.
-- **Cross-module *navigation traversals* count as crossings** — `ps.Skill.Name`,
-  `a.Resume.Label`. The phase doc's original count missed them; they are in scope,
-  and the correction is recorded there.
-- **A contract that writes must report a PARTIAL write, not throw.** 13.2c's
+- **A contract that writes must report a PARTIAL write, not throw.**
   `IApplicationContract.CommitPostingAsync` returns the ids alongside the error
   (`PostingCommitResult.Incomplete`) because the one thing a caller needs after a
-  half-finished write is what an exception cannot carry: what got created. Documents
-  stores that id as its idempotency guard, which is what makes `ImportStatus.CommitFailed`
-  re-runnable instead of a duplicate waiting to happen. Expect the same question in
-  13.2e, where Ats writes.
-- **`IResumeContract` already exists** (13.2d, owned by Documents, one method:
-  `GetAsync(id)` → `ResumeRef(Id, Label)` or null). Ats needs a résumé label in
-  `GetAtsResult` and résumé skills in the gap check — the label is already served;
-  the skills are not, and that is 13.2e's call to make. Do not add a second
-  résumé contract.
+  half-finished write is what an exception cannot carry: what got created. **13.2e
+  showed the other half of the rule** — Ats writes only its own table and every
+  contract call it makes is a read that happens *before* the first row reaches the
+  change tracker, so no partial write is possible. Ordering is what buys that, and
+  `CheckAts.cs` says so above the store block.
+- **Two rules in this file were knowingly broken, both argued in code.** The ATS
+  skill gap is an in-memory `Except` over two contract calls rather than a SQL set
+  difference ("aggregate in SQL, not in memory") — justified because both sets are
+  tens of items bounded by what a human typed, and because the alternative is a join
+  that will not exist. And skill-name sorting left the database collation for
+  `StringComparer.OrdinalIgnoreCase`, matching `GetResume` and `ListApplications`;
+  a test pins it.
+
+**Two things 13.3 inherits as known gaps, both currently impossible:** a skill id with
+no catalog row is dropped rather than rendered blank, and an `ats_results.ResumeId`
+pointing at a deleted résumé leaves the label null. Both are held shut by foreign keys
+today. 13.3 drops those keys, so both become reachable and want reporting rather than
+silence.
 
 **Phase 6.5 group 4 (paste text) is parked**, by decision, until the 13.3 boundary.
 
@@ -702,12 +721,17 @@ Phase 5 is done (2026-08-28): `Modules/Ats/`, two slices, both surfaces. Four
 things from it are worth carrying forward, and the first two change how new work
 should be written:
 
-- **Decision 17 narrowed rule 2: the boundary is about writes, not reads.** A
-  module may read another module's tables; only a write needs a contract. This
-  supersedes rule 2's old wording and generalises decision 13, so a new
-  cross-module *reader* needs no exception and no contract. Do not add a third
-  method to `IPostingContract` for posting skills — decision 17 exists so that
-  you do not have to.
+- **Decision 17 narrowed rule 2 to writes — and Phase 13 REVERSES it. Do not
+  follow it for new code.** Decision 17 said a module may read another module's
+  tables and only a write needs a contract, which is why Ats read five tables it did
+  not own for five phases. It answers *"is this safe?"*, and it still answers it
+  correctly: a reader cannot leave anyone's data in a state they did not choose.
+  Phase 13 asks a different question — *"can this module be lifted out?"* — and
+  against that one read-only buys nothing, because a `SELECT` across a boundary is
+  precisely what stops working when the boundary becomes a network. **Every crossing
+  needs a contract now, reads included.** 13.2e duly added the `GetPostingSkills`
+  method this bullet used to say was unnecessary. Decision 17 is superseded in
+  `architecture.md` at 13.6, along with 6, 7 and 13.
 - **Use a model only where a query cannot answer.** The plan said to prompt the
   model for the keyword match; it shipped as a SQL set difference over the shared
   `skills` table, which is exact, instant and free. The model now answers only

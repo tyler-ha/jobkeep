@@ -6,47 +6,77 @@ namespace Jobkeep.Modules.Ats;
 // Module wiring for Ats: DI plus its two routes.
 //
 // ---------------------------------------------------------------------------
-// This module reads five tables it does not own, and that is now legal
+// This module used to read five tables it did not own. 13.2e ended that.
 // ---------------------------------------------------------------------------
-// CheckAts reads `posting_skills`, `skills` and `job_requirements` (owned by
-// Applications) and `resumes` and `resume_skills` (owned by Documents). It writes
-// exactly one table, `ats_results`, which it owns.
+// Until Phase 13.2e this file carried a long argument for why reading
+// `posting_skills`, `skills` and `job_requirements` (owned by Applications) plus
+// `resumes` and `resume_skills` (owned by Documents) was legitimate. It is
+// rewritten rather than deleted, because the argument was right and is now
+// answering a question nobody is asking.
 //
-// Under architecture.md rule 2 as originally written — "a module only queries the
-// tables it owns; cross-module reads go through a public contract" — that is five
-// violations, and the fix would have been a contract method per question. This
-// project has already watched that shape grow and then deleted it twice: once as
-// IJobApplicationRepository (decision 5), once as the contract AnalyticsModule
-// refused to build (decision 13).
+// What it said: architecture.md **decision 17** narrowed rule 2 so the boundary
+// was about *writes*, not reads. That was not a loophole — it was what decisions
+// 13, 14 and 15 had each been saying about their own case. A reader can never
+// leave another module's data in a state that module did not choose, so the
+// coupling is to a shape, not to a lifecycle. Ats read and did not write, so
+// nothing here needed a contract, and IPostingContract could stay at two methods
+// because a GetPostingSkills method would have been guarding nothing.
 //
-// **Decision 17** narrowed the rule instead: the boundary is about *writes*, not
-// reads. The argument is not new — it is what decisions 13, 14 and 15 were each
-// saying about their own case. Decision 13's whole justification for Analytics is
-// that being read-only means it "can never leave another module's data in a state
-// that module did not choose, so the coupling is to a shape, not to a lifecycle".
-// Decision 14 built IPostingContract for the Ai module *because Ai writes*
-// posting_skills, and said in as many words that the read-only exception did not
-// cover a writer. Ats reads and does not write, so nothing here needs a contract.
+// What changed: Phase 13 asks a different question. Decision 17 answers *"is
+// this safe?"* — and it still does, correctly. Phase 13 asks *"can this be lifted
+// out and deployed on its own?"*, and against that question read-only buys
+// nothing at all, because a SELECT across a boundary is precisely what stops
+// working when the boundary becomes a network. Five safe reads are still five
+// joins that will not exist.
 //
-// This is also why IPostingContract stays at two methods. Its cap comment says a
-// third method means the boundary is in the wrong place; a `GetPostingSkills`
-// method would have been that third. The boundary was never wrong — the read
-// simply did not need guarding.
+// So the reads are now contract calls:
 //
-// The cost, stated rather than discovered later: Ats couples to another module's
-// *schema*, so renaming `posting_skills.IsRequired` breaks a module that did not
-// change. The compiler says so at build time, which is the cheap kind of failure.
-// Extracting Ats into its own service later stops being a pure code-move and
-// needs those five reads served another way — a view, a read replica, or an API
-// call. That is a bounded migration on one module, and much cheaper than the
-// contract-per-question alternative, which is unbounded by construction.
+//     IApplicationContract.GetRefAsync       which posting, which resume
+//     IPostingContract.GetSkillsAsync        the ad's skill ids + IsRequired
+//     IPostingContract.GetRequirementsAsync  the ad's free-text requirements
+//     IResumeContract.GetContentAsync        the CV, for stages 3 and 4
+//     IResumeContract.GetSkillIdsAsync       the CV's skill ids
+//     ISkillCatalog.GetAsync                 ids to names
+//
+// and IPostingContract's two-method cap was lifted in the same step, with its own
+// reasoning rewritten in place for exactly this reason. This module's csproj
+// carries no reference to another module; everything above is in Jobkeep.Contracts.
+//
+// ---------------------------------------------------------------------------
+// The cost, stated rather than discovered later
+// ---------------------------------------------------------------------------
+// The old comment named the cost of NOT doing this: extracting Ats would stop
+// being a code-move. The cost of doing it is the other side of that trade, and it
+// is real:
+//
+//   * The skill gap left SQL. It was one query with a correlated EXISTS; it is
+//     now two calls and an in-memory set difference, which breaks CLAUDE.md's
+//     "aggregate in SQL, not in memory". CheckAts.cs argues that in full — the
+//     short version is that both sets are tens of items and bounded by what a
+//     human typed, and the alternative is a join that will not exist.
+//   * Round trips went from three queries to six calls. In-process today, so the
+//     difference is negligible; at 13.3 it is six network hops for one check, and
+//     that is when batching becomes a real question rather than a premature one.
+//   * A read is no longer a snapshot. Concurrent edits between calls can produce
+//     a check that judged a résumé state no single moment ever had. Accepted,
+//     because an ATS result is already a stored judgement about a moment.
+//
+// What it buys is the thing the phase is for: this module now names one table,
+// `ats_results`, and it owns it. Lifting it out is a code-move again.
 public static class AtsModule
 {
     public static IServiceCollection AddAtsModule(this IServiceCollection services)
     {
-        // Scoped, matching AppDbContext — both handlers hold one.
+        // Scoped, matching the contracts and the context interface behind them —
+        // every dependency of these two handlers lives for one request.
         services.AddScoped<CheckAtsHandler>();
         services.AddScoped<GetAtsResultHandler>();
+
+        // No contract of its own registered here, and that asymmetry is worth
+        // noticing: Ats is the only module that is purely a CONSUMER. Nothing
+        // reads `ats_results` except the routes below, so there is nothing for
+        // this module to expose. A contract with no caller would be wire schema
+        // nobody can safely remove.
 
         // No options class. The two limits CheckAts imposes on the model call are
         // constants in that file with the measurement beside them, for the reason

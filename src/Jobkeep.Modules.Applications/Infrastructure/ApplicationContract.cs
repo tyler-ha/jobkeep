@@ -32,16 +32,16 @@ public class ApplicationContract : IApplicationContract
         _postings = postings;
     }
 
-    public async Task<Guid?> GetPostingIdAsync(Guid applicationId, CancellationToken ct = default)
-        // Nullable-projected rather than selecting Guid and comparing to
-        // default: a row whose PostingId happened to be Guid.Empty would be
-        // indistinguishable from "no such application" otherwise. FirstOrDefault
-        // over Guid? gives null for the missing row and a real value for the
-        // found one, which is the distinction the caller is asking about.
+    public async Task<ApplicationRef?> GetRefAsync(Guid applicationId, CancellationToken ct = default)
+        // A reference type projected out of the query, so FirstOrDefault's null
+        // is "no such application" and cannot be confused with a row whose ids
+        // happened to be empty. The old GetPostingIdAsync had to cast to Guid?
+        // to buy the same distinction over a value type; a record gets it for
+        // free, which is one reason the widening cost nothing.
         => await _db.JobApplications
             .AsNoTracking()
             .Where(a => a.Id == applicationId)
-            .Select(a => (Guid?)a.PostingId)
+            .Select(a => new ApplicationRef(a.PostingId, a.ResumeId))
             .FirstOrDefaultAsync(ct);
 
     // The contract delegates to this module's own use cases rather than writing
