@@ -1,5 +1,6 @@
 using Jobkeep.Data;
 using Jobkeep.Models;
+using Jobkeep.Modules.Skills;
 using Jobkeep.Shared;
 using Microsoft.EntityFrameworkCore;
 
@@ -27,12 +28,21 @@ public record PostingSkillResponse(string SkillName, string? Category, bool IsRe
 
 public class AddSkillToPostingHandler
 {
-    private readonly AppDbContext _db;
+    private readonly IApplicationsDbContext _db;
+    private readonly ISkillCatalog _skills;
 
-    // The handler takes AppDbContext directly: EF's DbContext is already a
+    // The handler takes a DbContext directly: EF's DbContext is already a
     // unit-of-work plus a repository, so a hand-written repository over it would
     // be a layer that mostly forwards calls (architecture.md §2, rule 1).
-    public AddSkillToPostingHandler(AppDbContext db) => _db = db;
+    //
+    // Phase 13.2d narrowed it from AppDbContext to IApplicationsDbContext, which
+    // exposes this module's five DbSets and nothing else. `skills` is not among
+    // them, which is why the catalog is here too.
+    public AddSkillToPostingHandler(IApplicationsDbContext db, ISkillCatalog skills)
+    {
+        _db = db;
+        _skills = skills;
+    }
 
     public async Task<SliceResult<PostingSkillResponse>> HandleAsync(
         Guid applicationId, AddSkillToPostingRequest request, CancellationToken ct = default)
@@ -57,19 +67,18 @@ public class AddSkillToPostingHandler
         // Reuse the shared skill row if it exists — this is the dedup that makes
         // "top skills across all my tracked jobs" a single GROUP BY over `skills`,
         // and the reason Postgres was chosen over DynamoDB (decision 1).
-        // Phase 7 — resolve on the case-insensitive natural key, so adding
-        // "c#" to a posting finds the existing "C#" row instead of tripping the
-        // unique index.
-        var key = NaturalKey.Of(skillName);
-        var skill = await _db.Skills.FirstOrDefaultAsync(s => s.NameNormalized == key, ct);
-        if (skill is null)
-        {
-            // Add explicitly: Skill.Id is client-generated (Guid.NewGuid() in the
-            // property initializer), so EF would otherwise read the set key as
-            // "already exists", skip the INSERT, and break the posting_skills FK.
-            skill = new Skill { Name = skillName, Category = request.Category };
-            _db.Skills.Add(skill);
-        }
+        //
+        // Phase 13.2d — through ISkillCatalog, which owns the natural key Phase 7
+        // introduced. This slice no longer knows the key exists, which is the
+        // point: it was one of four places that each had to remember, and
+        // forgetting turned an ordinary name into a 500.
+        //
+        // The catalog SAVES, and it is called before the link row is built for
+        // that reason (ISkillCatalog.FindOrCreateAsync says why at length). All
+        // six context interfaces still resolve one scoped AppDbContext, so a save
+        // in there flushes anything pending here.
+        var resolved = await _skills.FindOrCreateAsync([new SkillRequest(skillName, request.Category)], ct);
+        var skill = resolved[skillName];
 
         var link = await _db.PostingSkills
             .FirstOrDefaultAsync(ps => ps.PostingId == postingId && ps.SkillId == skill.Id, ct);

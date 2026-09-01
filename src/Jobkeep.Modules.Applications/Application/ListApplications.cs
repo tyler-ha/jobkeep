@@ -1,5 +1,6 @@
 using Jobkeep.Data;
 using Jobkeep.Models;
+using Jobkeep.Modules.Skills;
 using Jobkeep.Shared;
 using Microsoft.EntityFrameworkCore;
 
@@ -84,9 +85,26 @@ public class ListApplicationsHandler
     // Declared to Postgres as the ILIKE escape character; see Escape().
     private const string EscapeChar = @"\";
 
-    private readonly AppDbContext _db;
+    private readonly IApplicationsDbContext _db;
+    private readonly ISkillCatalog _skills;
 
-    public ListApplicationsHandler(AppDbContext db) => _db = db;
+    public ListApplicationsHandler(IApplicationsDbContext db, ISkillCatalog skills)
+    {
+        _db = db;
+        _skills = skills;
+    }
+
+    // The page shape SQL can produce. Its skills are ids, because `skills` is
+    // another module's table since 13.2d — see ApplicationDetail.cs, which makes
+    // the same split for the same reason.
+    private record ListRow(
+        Guid Id,
+        string Company,
+        string Title,
+        string? Location,
+        ApplicationStatus Status,
+        DateOnly DateApplied,
+        List<Guid> SkillIds);
 
     public async Task<SliceResult<ApplicationPage>> HandleAsync(
         ApplicationQuery query, CancellationToken ct = default)
@@ -133,15 +151,37 @@ public class ListApplicationsHandler
                 EF.Functions.ILike(a.Posting.Title, title, EscapeChar));
 
         // The JOIN that justifies the whole storage decision. Any() over the
-        // join collection becomes an EXISTS against posting_skills -> skills;
-        // in a denormalized store the same question means reading every
-        // document. Matched case-insensitively but *exactly* — no surrounding
-        // wildcards — because asking for "C" should not return every C# and
-        // C++ posting.
-        var skill = Escape(query.Skill);
-        if (skill is not null)
-            applications = applications.Where(a => a.Posting.PostingSkills
-                .Any(ps => EF.Functions.ILike(ps.Skill.Name, skill, EscapeChar)));
+        // join collection becomes an EXISTS against posting_skills; in a
+        // denormalized store the same question means reading every document.
+        //
+        // ------------------------------------------------------------------
+        // PHASE 13.2d — a name lookup, then an EXISTS on the id
+        // ------------------------------------------------------------------
+        // This used to be `ILike(ps.Skill.Name, skill, EscapeChar)` inside the
+        // EXISTS, which reached through posting_skills into `skills` — a join
+        // across a future service boundary that named no DbSet, so nothing
+        // flagged it. Resolving the name first costs one extra query and turns
+        // the EXISTS into a plain id comparison, which is what still works when
+        // the taxonomy lives somewhere else.
+        //
+        // The semantics do not move. The old filter was already matched
+        // case-insensitively but *exactly* — no surrounding wildcards, because
+        // asking for "C" should not return every C# and C++ posting — and the
+        // catalog's natural key is the same comparison, so the escaping this
+        // needed for ILIKE simply stops being necessary.
+        //
+        // A skill nobody has ever recorded yields no rows rather than every row,
+        // which is the answer a user filtering by it expects. Written as an
+        // impossible predicate rather than an early return so that TotalCount and
+        // the empty page below are produced by the same code path as every other
+        // filter.
+        if (!string.IsNullOrWhiteSpace(query.Skill))
+        {
+            var match = await _skills.FindByNameAsync(query.Skill, ct);
+            applications = match is null
+                ? applications.Where(a => false)
+                : applications.Where(a => a.Posting.PostingSkills.Any(ps => ps.SkillId == match.Id));
+        }
 
         if (query.AppliedFrom is not null)
             applications = applications.Where(a => a.DateApplied >= query.AppliedFrom);
@@ -156,18 +196,45 @@ public class ListApplicationsHandler
         var page = await Sort(applications, query)
             .Skip((pageNumber - 1) * pageSize)
             .Take(pageSize)
-            .Select(a => new ApplicationListItem(
+            .Select(a => new ListRow(
                 a.Id,
                 a.Posting.Company.Name,
                 a.Posting.Title,
                 a.Posting.Location,
                 a.Status,
                 a.DateApplied,
-                a.Posting.PostingSkills.Select(ps => ps.Skill.Name).ToList()))
+                a.Posting.PostingSkills.Select(ps => ps.SkillId).ToList()))
             .ToListAsync(ct);
 
+        // ONE call for the whole page's skills, across every row — which is why
+        // ISkillCatalog.GetAsync is batched and de-duplicates its input. Twenty
+        // applications naming the same handful of skills is one query with a
+        // short parameter list, not twenty.
+        var names = await _skills.GetAsync(
+            page.SelectMany(r => r.SkillIds).ToList(), ct);
+
+        var items = page
+            .Select(r => new ApplicationListItem(
+                r.Id,
+                r.Company,
+                r.Title,
+                r.Location,
+                r.Status,
+                r.DateApplied,
+                // Ordered, which the SQL version was not — Postgres returned the
+                // join rows in whatever order suited it, so a card's chips could
+                // reshuffle between requests. Sorting here costs nothing on a
+                // handful of already-materialised strings and makes the list
+                // stable, which a list of cards should be.
+                r.SkillIds
+                    .Where(names.ContainsKey)
+                    .Select(id => names[id].Name)
+                    .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+                    .ToList()))
+            .ToList();
+
         return SliceResult<ApplicationPage>.Ok(new ApplicationPage(
-            page,
+            items,
             totalCount,
             pageNumber,
             pageSize,

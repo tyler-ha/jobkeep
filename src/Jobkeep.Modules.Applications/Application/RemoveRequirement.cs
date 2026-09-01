@@ -14,9 +14,9 @@ namespace Jobkeep.Modules.Applications;
 // route's parent is the cheap habit that prevents it.
 public class RemoveRequirementHandler
 {
-    private readonly AppDbContext _db;
+    private readonly IApplicationsDbContext _db;
 
-    public RemoveRequirementHandler(AppDbContext db) => _db = db;
+    public RemoveRequirementHandler(IApplicationsDbContext db) => _db = db;
 
     public async Task<SliceResult<bool>> HandleAsync(
         Guid applicationId, Guid requirementId, CancellationToken ct = default)

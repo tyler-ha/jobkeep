@@ -39,7 +39,6 @@ public class ModuleBoundaryTests
     // conditional in No_module_takes_the_shared_context along with it.
     private static readonly HashSet<string> ModulesStillOnAppDbContext =
     [
-        "Jobkeep.Modules.Applications",
         "Jobkeep.Modules.Ats",
     ];
 

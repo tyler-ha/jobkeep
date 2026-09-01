@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Jobkeep.Models;
 using Jobkeep.Tests.Infrastructure;
 
 namespace Jobkeep.Tests.Rest;
@@ -105,6 +106,49 @@ public sealed class ApplicationsCrudTests(PostgresFixture fixture) : Integration
         // untrimmed "Canva " would be a second employer that never dedups against the
         // first, and every company-level rollup would split in two.
         Assert.Equal(1, await WithDbAsync(db => db.Companies.CountAsync(Ct)));
+    }
+
+    /// <summary>
+    /// Phase 13.2d. <c>resumeLabel</c> used to come from <c>a.Resume.Label</c> inside the
+    /// EF projection — a LEFT JOIN into another module's table that named no DbSet, so
+    /// nothing flagged it as a crossing. It now arrives from
+    /// <c>IResumeContract</c> after the query, and this pins that the response did not
+    /// change: the id and the label together, so a client can render "backend-focused"
+    /// beside a job without a second round trip.
+    ///
+    /// <para>
+    /// The null case is asserted in the same test because it is the half most likely to
+    /// break: the old ternary was written explicitly so it became the join's null case,
+    /// and its replacement is an ordinary <c>?.</c> on a contract that returned nothing.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task GetById_NamesTheAttachedResume_AndSaysNothingWhenThereIsNone()
+    {
+        var resumeId = await WithDbAsync(async db =>
+        {
+            var resume = new Resume
+            {
+                Label = "backend-focused",
+                SourceFormat = SourceFormat.Docx,
+                SourceText = new string('x', 1200),
+            };
+            db.Resumes.Add(resume);
+            await db.SaveChangesAsync(Ct);
+            return resume.Id;
+        });
+
+        var withResume = await Client.CreateApplicationAsync("Canva", "Backend Engineer", Ct, resumeId: resumeId);
+        var without = await Client.CreateApplicationAsync("Atlassian", "Platform Engineer", Ct);
+
+        using var linked = await Client.GetApplicationAsync(withResume, Ct);
+        using var bare = await Client.GetApplicationAsync(without, Ct);
+
+        Assert.Equal(resumeId, linked.RootElement.GetProperty("resumeId").GetGuid());
+        Assert.Equal("backend-focused", linked.RootElement.GetProperty("resumeLabel").GetString());
+
+        Assert.Equal(JsonValueKind.Null, bare.RootElement.GetProperty("resumeId").ValueKind);
+        Assert.Equal(JsonValueKind.Null, bare.RootElement.GetProperty("resumeLabel").ValueKind);
     }
 
     [Fact]

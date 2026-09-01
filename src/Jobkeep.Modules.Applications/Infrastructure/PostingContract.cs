@@ -1,5 +1,6 @@
 using Jobkeep.Data;
 using Jobkeep.Models;
+using Jobkeep.Modules.Skills;
 using Jobkeep.Shared;
 using Microsoft.EntityFrameworkCore;
 
@@ -13,9 +14,14 @@ namespace Jobkeep.Modules.Applications;
 
 public class PostingContract : IPostingContract
 {
-    private readonly AppDbContext _db;
+    private readonly IApplicationsDbContext _db;
+    private readonly ISkillCatalog _skills;
 
-    public PostingContract(AppDbContext db) => _db = db;
+    public PostingContract(IApplicationsDbContext db, ISkillCatalog skills)
+    {
+        _db = db;
+        _skills = skills;
+    }
 
     public async Task<PostingContent?> GetContentAsync(Guid applicationId, CancellationToken ct = default)
         // Flat projection, not Include: the caller wants two columns, and pulling
@@ -36,36 +42,27 @@ public class PostingContract : IPostingContract
         // First occurrence wins, so an early "required" is not downgraded by a
         // later "nice to have".
         //
-        // KNOWN GAP, matching the rest of the codebase rather than fixing it
-        // here: this dedup is case-sensitive, so "C#" and "c#" survive as two
-        // rows. That is the same defect the human-entry path has, it is recorded
-        // in CLAUDE.md and pinned by a test, and its fix is a migration to a
-        // case-insensitive natural key (Phase 7). Fixing it only on the AI path
-        // would make the two entry points disagree, which is worse than one
-        // consistent known bug.
+        // Phase 13.2d — this dedup is on the RAW name and it is now only half the
+        // job. The other half, collapsing "C#" and "c#" onto one row, moved into
+        // ISkillCatalog with the natural key it needs. What is left here is the
+        // part that is genuinely this method's business: which IsRequired wins
+        // when a model says a skill twice. The catalog cannot answer that, because
+        // IsRequired is a fact about a posting and not about a skill.
         var deduped = skills
             .Where(s => !string.IsNullOrWhiteSpace(s.Name))
             .GroupBy(s => s.Name.Trim())
             .Select(g => new ExtractedSkill(g.Key, g.First().IsRequired))
             .ToList();
 
-        var names = deduped.Select(s => s.Name).ToList();
+        // One call for the whole batch. The catalog collapses spellings, so two
+        // entries here can come back pointing at the same row — which is exactly
+        // the duplicate-key case the `linked` set below already handles.
+        var resolved = await _skills.FindOrCreateAsync(
+            deduped.Select(s => new SkillRequest(s.Name)).ToList(), ct);
 
-        // Two round trips for the whole batch, not two per skill: load every
-        // shared skill row and every existing link that could collide, then
-        // decide in memory. The in-memory part is a set difference over a handful
-        // of rows, not an aggregate — "aggregate in SQL" is about GROUP BY, and
-        // this isn't one.
-        // Phase 7 — batch-resolve on the natural key, not the raw name. Before
-        // this the dictionary was keyed on Name, so an extracted "c#" missed the
-        // stored "C#" and inserted a second row. That used to be a silent
-        // duplicate; with the unique index on NameNormalized it would be a
-        // failed INSERT, so this is a correctness fix and not a tidy-up.
-        var keys = names.Select(NaturalKey.Of).ToList();
-        var existingSkills = await _db.Skills
-            .Where(s => keys.Contains(s.NameNormalized))
-            .ToDictionaryAsync(s => s.NameNormalized, ct);
-
+        // Every link that could collide, in one query. The in-memory part is a set
+        // difference over a handful of rows, not an aggregate — "aggregate in SQL"
+        // is about GROUP BY, and this isn't one.
         var existingLinks = await _db.PostingSkills
             .Where(ps => ps.PostingId == postingId)
             .Select(ps => ps.SkillId)
@@ -75,15 +72,8 @@ public class PostingContract : IPostingContract
         var created = 0;
         foreach (var extracted in deduped)
         {
-            if (!existingSkills.TryGetValue(NaturalKey.Of(extracted.Name), out var skill))
-            {
-                // Added explicitly for the same reason AddSkillToPosting does it:
-                // Skill.Id is client-generated, so EF reads the set key as
-                // "already exists" and skips the INSERT unless told otherwise.
-                skill = new Skill { Name = extracted.Name };
-                _db.Skills.Add(skill);
-                existingSkills[NaturalKey.Of(extracted.Name)] = skill;
-            }
+            // Absent only if the name was blank, which the filter above removed.
+            if (!resolved.TryGetValue(extracted.Name, out var skill)) continue;
 
             // Already linked — skip, and note what that means: if a human added
             // "C#" with Source = Parsed, re-analyzing leaves their row alone

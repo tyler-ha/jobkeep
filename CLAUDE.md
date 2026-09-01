@@ -589,22 +589,22 @@ about that date — verify it before relying on it.
 
 ## When asked to move to the next phase
 
-**Currently up next: Phase 13.2d — Applications.** Read
+**Currently up next: Phase 13.2e — Ats, the last sub-step of 13.2.** Read
 `docs/phases/phase-13-clean-architecture.md`; it is the live plan, and it was
 rewritten on 2026-09-01 when the user confirmed **microservices is the destination**.
 The short version: `src/` is now ten projects, one per module, and 13.2 puts every
 cross-module read behind a contract *while the tables stay put*, so 13.3 can split
 the schema without also being the step that changes behaviour.
 
-**13.2 is split into five sub-steps and three of them have landed** (2026-09-01, suite
-244 → 246 → 249). Five things from them change how the remaining two are written:
+**13.2 is split into five sub-steps and four of them have landed** (2026-09-01, suite
+244 → 246 → 249 → 253). Six things from them change how 13.2e is written:
 
 - **A module takes its own `I<X>DbContext`, never `AppDbContext`.** Six interfaces
   live in `src/Jobkeep.Infrastructure.Data/Contexts/`, each exposing only one
   module's `DbSet`s; the shared context implements all six and is named only in
   `Program.cs`. `ModuleBoundaryTests.No_module_takes_the_shared_context` enforces it,
-  with an allowlist now naming only **Applications and Ats** — **delete your module's
-  entry as you convert it**, or its canary fails.
+  with an allowlist now naming only **Ats** — **delete that entry as you convert it**,
+  or its canary fails, and then delete the list and its conditional too.
 - **`Jobkeep.Modules.Skills` owns `skills`**, and `ISkillCatalog` is finished at three
   verbs: `GetAsync` (ids → names, batched), `FindByNameAsync` (one name → row, on the
   natural key), `FindOrCreateAsync` (batched, keyed by the name you passed in). Since
@@ -626,6 +626,11 @@ the schema without also being the step that changes behaviour.
   stores that id as its idempotency guard, which is what makes `ImportStatus.CommitFailed`
   re-runnable instead of a duplicate waiting to happen. Expect the same question in
   13.2e, where Ats writes.
+- **`IResumeContract` already exists** (13.2d, owned by Documents, one method:
+  `GetAsync(id)` → `ResumeRef(Id, Label)` or null). Ats needs a résumé label in
+  `GetAtsResult` and résumé skills in the gap check — the label is already served;
+  the skills are not, and that is 13.2e's call to make. Do not add a second
+  résumé contract.
 
 **Phase 6.5 group 4 (paste text) is parked**, by decision, until the 13.3 boundary.
 

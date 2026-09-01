@@ -91,6 +91,34 @@ public sealed class SubResourceTests(PostgresFixture fixture) : IntegrationTestB
             await second.Content.ReadAsStringAsync(Ct));
     }
 
+    /// <summary>
+    /// Phase 13.2d, and the same deliberate change RemoveSkillFromResume got in 13.2c.
+    ///
+    /// <para>
+    /// The delete used to match <c>ps.Skill.Name == name</c> exactly. Routing the lookup
+    /// through <c>ISkillCatalog</c>, which owns Phase 7's natural key, made it
+    /// case-insensitive — and that is a fix rather than drift: exact matching guarded
+    /// against deleting a row the caller did not name, which stopped being possible the
+    /// moment a unique index on <c>lower("Name")</c> meant at most one row per key.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task RemoveSkill_MatchesTheNaturalKey_SoCaseDoesNotDecideWhetherItWorks()
+    {
+        var id = await Client.CreateApplicationAsync("Seek", "Engineer", Ct);
+        (await Client.AddSkillAsync(id, "C#", Ct)).EnsureSuccessStatusCode();
+
+        var response = await Client.DeleteAsync($"/applications/{id}/skills/c%23", Ct);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        await WithDbAsync(async db =>
+        {
+            Assert.Equal(0, await db.PostingSkills.CountAsync(Ct));
+            // The shared row stays, with the spelling it was stored under.
+            Assert.Equal(1, await db.Skills.CountAsync(s => s.Name == "C#", Ct));
+        });
+    }
+
     [Theory]
     [InlineData("C#", "C%23")]
     [InlineData("C++", "C%2B%2B")]

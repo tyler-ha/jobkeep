@@ -22,9 +22,9 @@ public record RequirementResponse(Guid Id, string Text, RequirementKind Kind, bo
 
 public class AddRequirementToPostingHandler
 {
-    private readonly AppDbContext _db;
+    private readonly IApplicationsDbContext _db;
 
-    public AddRequirementToPostingHandler(AppDbContext db) => _db = db;
+    public AddRequirementToPostingHandler(IApplicationsDbContext db) => _db = db;
 
     public async Task<SliceResult<RequirementResponse>> HandleAsync(
         Guid applicationId, AddRequirementToPostingRequest request, CancellationToken ct = default)

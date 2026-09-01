@@ -1,5 +1,7 @@
 using Jobkeep.Data;
 using Jobkeep.Models;
+using Jobkeep.Modules.Documents;
+using Jobkeep.Modules.Skills;
 using Jobkeep.Shared;
 using Microsoft.EntityFrameworkCore;
 
@@ -29,9 +31,22 @@ public record UpdateApplicationRequest(
 
 public class UpdateApplicationHandler
 {
-    private readonly AppDbContext _db;
+    private readonly IApplicationsDbContext _db;
+    private readonly ISkillCatalog _skills;
+    private readonly IResumeContract _resumes;
 
-    public UpdateApplicationHandler(AppDbContext db) => _db = db;
+    // Phase 13.2d. IApplicationsDbContext exposes this module's five DbSets and
+    // nothing else, so the two columns this slice needs from other modules —
+    // a résumé's label, a skill's name — arrive through contracts instead of
+    // through a navigation property. ApplicationDetailProjection.HydrateAsync is
+    // where they are joined back on.
+    public UpdateApplicationHandler(
+        IApplicationsDbContext db, ISkillCatalog skills, IResumeContract resumes)
+    {
+        _db = db;
+        _skills = skills;
+        _resumes = resumes;
+    }
 
     public async Task<SliceResult<ApplicationDetail>> HandleAsync(
         Guid id, UpdateApplicationRequest request, CancellationToken ct = default)
@@ -78,7 +93,7 @@ public class UpdateApplicationHandler
         // mutated, so a bad id leaves the whole update unapplied — the same
         // property the status check above is written for.
         if (request.ResumeId is not null
-            && !await _db.Resumes.AnyAsync(r => r.Id == request.ResumeId.Value, ct))
+            && await _resumes.GetAsync(request.ResumeId.Value, ct) is null)
             return SliceResult<ApplicationDetail>.Invalid($"Resume {request.ResumeId} not found.");
 
         // Application-level fields.
@@ -127,6 +142,7 @@ public class UpdateApplicationHandler
             .Select(ApplicationDetailProjection.Expression)
             .FirstAsync(ct);
 
-        return SliceResult<ApplicationDetail>.Ok(updated);
+        return SliceResult<ApplicationDetail>.Ok(
+            await ApplicationDetailProjection.HydrateAsync(updated, _skills, _resumes, ct));
     }
 }

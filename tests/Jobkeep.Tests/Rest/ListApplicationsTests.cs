@@ -98,6 +98,51 @@ public sealed class ListApplicationsTests(PostgresFixture fixture) : Integration
         Assert.Single((await ListAsync("skill=c%23")).Items);
     }
 
+    /// <summary>
+    /// Phase 13.2d. The skill filter stopped being a join into <c>skills</c> and became
+    /// a name lookup through <c>ISkillCatalog</c> followed by an EXISTS on the id — the
+    /// shape that still works when the taxonomy is another service.
+    ///
+    /// <para>
+    /// This is the branch that only exists because of that change: a name no row has
+    /// ever carried resolves to nothing, and the filter has to mean "no results" rather
+    /// than "no filter". Getting it wrong returns every application, which looks like a
+    /// working page and is the opposite of what was asked.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Filter_ByASkillNobodyHasRecorded_ReturnsNothing_NotEverything()
+    {
+        var id = await Client.CreateApplicationAsync("Canva", "Backend Engineer", Ct);
+        (await Client.AddSkillAsync(id, "C#", Ct)).EnsureSuccessStatusCode();
+        await Client.CreateApplicationAsync("Atlassian", "Platform Engineer", Ct);
+
+        var page = await ListAsync("skill=COBOL");
+
+        Assert.Empty(page.Items);
+        Assert.Equal(0, page.TotalCount);
+    }
+
+    /// <summary>
+    /// Phase 13.2d. A card's skill chips are resolved from ids after the page comes
+    /// back, so their order is this handler's decision rather than whatever order
+    /// Postgres returned the join rows in. Alphabetical, and stable between requests —
+    /// which a list of cards should be, and which the SQL version was not.
+    /// </summary>
+    [Fact]
+    public async Task ListItems_NameTheirSkills_InAStableAlphabeticalOrder()
+    {
+        var id = await Client.CreateApplicationAsync("Canva", "Backend Engineer", Ct);
+        foreach (var name in new[] { "Rust", "AWS", "postgresql" })
+            (await Client.AddSkillAsync(id, name, Ct)).EnsureSuccessStatusCode();
+
+        var page = await ListAsync("company=Canva");
+
+        Assert.Equal(
+            ["AWS", "postgresql", "Rust"],
+            Assert.Single(page.Items).GetProperty("skills").EnumerateArray().Select(x => x.GetString()));
+    }
+
     [Fact]
     public async Task Filter_ByCompany_TreatsUnderscoreAsALiteral_NotAWildcard()
     {

@@ -1,7 +1,7 @@
 # Phase 13 — module-owned Clean Architecture, on the road to services
 
-**Status: In progress. Steps 13.1 and 13.2a–c done 2026-09-01** (branch
-`phase-13/module-boundaries`, suite 239 → 244 → 246 → 249 green). 13.2d–e and
+**Status: In progress. Steps 13.1 and 13.2a–d done 2026-09-01** (branch
+`phase-13/module-boundaries`, suite 239 → 244 → 246 → 249 → 253 green). 13.2e and
 13.3–13.6 remain.
 
 **This doc was rewritten on 2026-09-01.** The version before it (written the same
@@ -177,14 +177,14 @@ it is fully reversible and every test still passes.
 
 **Split into five sub-steps**, each ending green and runnable, because the whole of
 it is several sessions' work at the context budget this project runs to. **13.2a and
-13.2b and 13.2c landed 2026-09-01; 13.2d–e remain.**
+13.2b–d landed 2026-09-01; only 13.2e remains.**
 
 | | Module | State |
 |---|---|---|
 | **13.2a** | the seam: six `I<X>DbContext`, DI, `Jobkeep.Modules.Skills` | **Done** |
 | **13.2b** | Ai, Analytics | **Done** |
 | **13.2c** | Documents | **Done** |
-| 13.2d | Applications | Not started |
+| **13.2d** | Applications | **Done** |
 | 13.2e | Ats | Not started |
 
 #### Scope correction taken 2026-09-01, before any code moved
@@ -357,6 +357,47 @@ refuses the retry. The accepted cost that remains is an **orphan taxonomy row** 
 skill created, its link not — which is harmless because every count in Analytics is
 over link rows, and find-or-create reuses the orphan next time.
 
+#### What landed in 13.2d
+
+The module with the most crossings, and the one where a crossing was hardest to
+see: four of the six were navigation properties rather than `DbSet` references.
+
+- **`IResumeContract`, owned by Documents, with ONE method.** `GetAsync(id)`
+  returns `ResumeRef(Id, Label)` or null. Two callers wanted different things —
+  create/update want existence, `ApplicationDetail` wants the label — and both are
+  the same primary-key lookup, so splitting them would have been one method per
+  caller's question, which is what killed `IJobApplicationRepository`. The DTO's
+  omissions are the point: no `SourceText`, no email, no phone. A contract handing
+  over the entity would have shipped a person's CV to satisfy a foreign-key check.
+- **`ApplicationDetail` split into a row plus a hydration step.** Two of its
+  fields live elsewhere — `a.Resume.Label` and `ps.Skill.Name`/`.Category` — and
+  both arrived through navigation properties, so the projection named no foreign
+  `DbSet` and the boundary test passed while the query crossed. The public record
+  is unchanged; `ApplicationDetailProjection.HydrateAsync` finishes it from the two
+  contracts, and the three slices that share the projection each call it. At most
+  two extra round trips, both skipped when they would be empty.
+- **The skill filter in `ListApplications` is now a lookup then an EXISTS on the
+  id.** Semantics did not move — it was already exact and case-insensitive, and the
+  natural key is the same comparison, so the ILIKE escaping simply stopped being
+  necessary. The branch that only exists because of the change is **a skill nobody
+  has recorded**: it must mean "no results", not "no filter", and returning every
+  application would look like a working page. Written as an impossible predicate
+  rather than an early return, so `TotalCount` and the empty page come out of the
+  same code path as every other filter.
+- **`PostingContract.AddExtractedSkillsAsync` lost half its body.** The natural-key
+  batch resolve went into the catalog; what stayed is the part that is genuinely
+  its business — which `IsRequired` wins when a model names a skill twice — because
+  that is a fact about a posting, not about a skill.
+- **`RemoveSkillFromPosting` became case-insensitive**, the same fix
+  `RemoveSkillFromResume` got in 13.2c and for the same expired reason.
+- **`ListApplications` cards now sort their skill chips.** The SQL version did not,
+  so a card's chips could reshuffle between requests; the names are resolved in
+  memory now, so ordering them costs nothing and a list of cards should be stable.
+
+**`ISkillCatalog` did not grow.** The pattern filter looked like a fourth verb and
+was not: the filter was always an exact case-insensitive match, which is what
+`FindByNameAsync` already does. Three verbs, unchanged.
+
 #### What remains, and what each sub-step has to answer
 
 The cross-module reads still to convert, counted:
@@ -364,9 +405,7 @@ The cross-module reads still to convert, counted:
 - **Ats (13.2e)** — `Resumes`, `ResumeSkills` (Documents) plus `PostingSkills`,
   `JobRequirements`, `JobApplications` (Applications), and the `ps.Skill.Name` and
   `r.Resume.Label` traversals. The largest job.
-- **Applications (13.2d)** — `Resumes` ×2 (Documents), `Skills` ×4, plus the
-  traversals in `ApplicationDetail`, `ListApplications` and `RemoveSkillFromPosting`.
-  The `ILike` skill filter becomes `ISkillCatalog` resolving the pattern to ids.
+- ~~**Applications (13.2d)**~~ — done, see above.
 - ~~**Documents (13.2c)**~~ — done, see above.
 
 Then:

@@ -95,6 +95,13 @@ public static class DocumentsModule
         services.AddScoped<IDocumentTextExtractor, DocumentTextExtractor>();
         services.AddScoped<IDocumentStructurer, DocumentStructurer>();
 
+        // Phase 13.2d. The contract Applications uses to check a résumé id and
+        // render its label. Registered by the owning module rather than by its
+        // caller, for the reason ApplicationsModule gives about IPostingContract:
+        // a contract registered by whichever consumer happens to be wired first
+        // is a dependency nothing in Program.cs shows.
+        services.AddScoped<IResumeContract, ResumeContract>();
+
         services.AddScoped<ImportDocumentHandler>();
         services.AddScoped<GetImportHandler>();
         services.AddScoped<ListImportsHandler>();

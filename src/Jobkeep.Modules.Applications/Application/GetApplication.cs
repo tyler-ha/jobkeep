@@ -1,4 +1,6 @@
 using Jobkeep.Data;
+using Jobkeep.Modules.Documents;
+using Jobkeep.Modules.Skills;
 using Jobkeep.Shared;
 using Microsoft.EntityFrameworkCore;
 
@@ -14,14 +16,27 @@ namespace Jobkeep.Modules.Applications;
 
 public class GetApplicationHandler
 {
-    private readonly AppDbContext _db;
+    private readonly IApplicationsDbContext _db;
+    private readonly ISkillCatalog _skills;
+    private readonly IResumeContract _resumes;
 
-    public GetApplicationHandler(AppDbContext db) => _db = db;
+    // Phase 13.2d. IApplicationsDbContext exposes this module's five DbSets and
+    // nothing else, so the two columns this slice needs from other modules —
+    // a résumé's label, a skill's name — arrive through contracts instead of
+    // through a navigation property. ApplicationDetailProjection.HydrateAsync is
+    // where they are joined back on.
+    public GetApplicationHandler(
+        IApplicationsDbContext db, ISkillCatalog skills, IResumeContract resumes)
+    {
+        _db = db;
+        _skills = skills;
+        _resumes = resumes;
+    }
 
     public async Task<SliceResult<ApplicationDetail>> HandleAsync(
         Guid id, CancellationToken ct = default)
     {
-        var application = await _db.JobApplications
+        var row = await _db.JobApplications
             .AsNoTracking()
             .Where(a => a.Id == id)
             .Select(ApplicationDetailProjection.Expression)
@@ -29,8 +44,10 @@ public class GetApplicationHandler
 
         // Same message shape as every other slice, so the two surfaces render
         // one sentence in two forms rather than inventing their own.
-        return application is null
-            ? SliceResult<ApplicationDetail>.NotFound($"Application {id} not found.")
-            : SliceResult<ApplicationDetail>.Ok(application);
+        if (row is null)
+            return SliceResult<ApplicationDetail>.NotFound($"Application {id} not found.");
+
+        return SliceResult<ApplicationDetail>.Ok(
+            await ApplicationDetailProjection.HydrateAsync(row, _skills, _resumes, ct));
     }
 }
