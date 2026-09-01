@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatDateOnly, formatSalary, humanise, isoDaysAgo } from './format';
+import { formatBytes, formatDateOnly, formatSalary, humanise, isoDaysAgo } from './format';
 
 /* These are the front end's pure functions, and they exist because two of them
  * encode a bug that has already been paid for once.
@@ -111,5 +111,28 @@ describe('isoDaysAgo', () => {
       now.getDate(),
     ).padStart(2, '0')}`;
     expect(isoDaysAgo(0)).toBe(today);
+  });
+});
+
+describe('formatBytes', () => {
+  /* kB, not KiB. The number sits beside a filename the user just picked out of
+   * their own file browser, and every desktop file browser counts in powers of
+   * ten — so 1024 here would disagree with the number they saw a second ago. */
+  it('counts in powers of ten, the way a file browser does', () => {
+    expect(formatBytes(1000)).toBe('1 kB');
+    expect(formatBytes(412_000)).toBe('412 kB');
+    expect(formatBytes(1_800_000)).toBe('1.8 MB');
+  });
+
+  /* A tiny file is a mistake worth seeing, not a "0 kB" that looks like a bug
+   * in this function. The import refuses it anyway — MinTextChars is 40. */
+  it('keeps a very small file in bytes', () => {
+    expect(formatBytes(12)).toBe('12 bytes');
+    expect(formatBytes(0)).toBe('0 bytes');
+  });
+
+  it('returns nothing for a size that is not one', () => {
+    expect(formatBytes(Number.NaN)).toBe('');
+    expect(formatBytes(-1)).toBe('');
   });
 });

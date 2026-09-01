@@ -11,6 +11,7 @@ front end and leaves the 7–12 build order undisturbed.
 | 3 | The progress indicator | **Done** (2026-09-01) |
 | 5 | Spacing and layout, upload screens only | **Done** (2026-09-01) |
 | 4 | Paste text — the only group with a backend half | **Not started** |
+| | Front-end suite | **46 green**, up from 35. `src/` untouched, so the backend suite was not run |
 
 Group 4 is deliberately last and in its own session. It is the only group that
 touches `src/` — a new slice, a GraphQL field and five tests — and the token
@@ -394,6 +395,21 @@ The only group with a backend half. Plan, for the session that picks it up:
   cost more as a separate visit.
 - **The held moment was added**, which is not in the original five asks. It came
   out of the `impeccable` pass and was confirmed with the user before building.
+- **`formatBytes` was added to `lib/format.ts`**, with tests. The drop zone shows
+  the chosen file's size, and every other screen was writing
+  `Math.round(byteCount / 1024)` inline. It counts in powers of ten, not 1024 —
+  the number sits beside a filename the user just picked out of a file browser,
+  and every desktop file browser counts the same way.
+- **The uploader got its first two tests.** It was completely untested, which is
+  how it kept the `required` attribute that defect 5 is about. They pin the label
+  default (the extension is stripped, typing wins, a later file swap does not
+  overwrite) and the fact that submit is gated by `disabled`, not by `required`.
+- **The progress fill is `scaleX`, not `width`.** The first build animated
+  `width`; the `impeccable` detector flagged it, and the repo had already made
+  the same call twice with the reasoning written down (`.stage-rule::after`,
+  `.demand-fill`). It matters more here than there — this bar updates eight
+  times a second for as long as the model takes, which is the worst case an
+  animated `width` has.
 
 ## What is still outstanding
 
@@ -401,4 +417,10 @@ The only group with a backend half. Plan, for the session that picks it up:
 - **The Phase 6 visual pass on the other seven screens.** Still blocked on the
   user's eyes: the Chrome extension has been disconnected for five sessions, so
   nothing in this phase has been *seen*, only reasoned about from the CSS.
+- **Four things about this phase only the user can confirm**, for the same
+  reason: whether the spacing actually reads better, whether the drag-over state
+  is obvious in the hand, whether the progress bar feels honest on a slow parse,
+  and whether the character count is the right held moment. The build is verified
+  — 46 tests, a clean `tsc` and a clean detector run — but *verified* and *seen*
+  are not the same word, and this doc should not imply they are.
 - **Step 6.4**, the root README.

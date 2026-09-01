@@ -2,12 +2,12 @@ import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
 
 import Applications from './routes/Applications';
 import AtsCheck from './routes/AtsCheck';
-import Import from './routes/Import';
 import Insights from './routes/Insights';
 import JobPost from './routes/JobPost';
 import Pipeline from './routes/Pipeline';
 import Resumes from './routes/Resumes';
 import Today from './routes/Today';
+import Upload from './routes/Upload';
 
 /* Seven destinations, not eight: "Job post" is the detail view of an
  * application and is reached by opening a row, so it has a route but no nav
@@ -17,7 +17,7 @@ const NAV = [
   { to: '/applications', label: 'Applications' },
   { to: '/pipeline', label: 'Pipeline' },
   { to: '/resumes', label: 'Résumés' },
-  { to: '/import', label: 'Import' },
+  { to: '/upload', label: 'Upload' },
   { to: '/ats-check', label: 'ATS check' },
   { to: '/insights', label: 'Insights' },
 ];
@@ -58,10 +58,11 @@ export default function App() {
               when the bare path is opened, so this is the address the app
               actually links to — and it makes one CV shareable as a link. */}
           <Route path="/resumes/:id" element={<Resumes />} />
-          <Route path="/import" element={<Import />} />
-          {/* The queue and the review are one screen: /import is the queue plus
-              the uploader, /import/:id is the draft beside the document. */}
-          <Route path="/import/:id" element={<Import />} />
+          <Route path="/upload" element={<Upload />} />
+          {/* The queue and the review are one screen: /upload is the queue plus
+              the uploader, /upload/:id is the draft beside the document. The
+              wire is unmoved — the API is still /imports. See lib/api.ts. */}
+          <Route path="/upload/:id" element={<Upload />} />
           <Route path="/ats-check" element={<AtsCheck />} />
           {/* The board needs a job. The bare /ats-check above is the picker;
               this is what every link on the app actually points at. */}

@@ -245,7 +245,7 @@ export default function Applications() {
           <p>
             {debounced || status
               ? 'Clear the filters to see everything you have recorded.'
-              : 'The first job you add shows up here. Import an ad, or add one by hand.'}
+              : 'The first job you add shows up here. Upload an ad, or add one by hand.'}
           </p>
         </div>
       )}

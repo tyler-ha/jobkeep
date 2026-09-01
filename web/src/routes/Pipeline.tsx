@@ -197,7 +197,7 @@ export default function Pipeline() {
           <h2>Nothing on the board yet</h2>
           <p>
             The board shows the applications you have recorded.{' '}
-            <Link to="/applications">Add one</Link> or <Link to="/import">import an ad</Link>, and
+            <Link to="/applications">Add one</Link> or <Link to="/upload">upload an ad</Link>, and
             it appears in Applied.
           </p>
         </div>

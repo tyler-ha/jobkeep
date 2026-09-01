@@ -83,7 +83,7 @@ export default function Insights() {
           <p>
             These figures are aggregates over the jobs you have recorded, so they arrive
             with the first one. <Link to="/applications">Add an application</Link> or{' '}
-            <Link to="/import">import an ad</Link>.
+            <Link to="/upload">upload an ad</Link>.
           </p>
         </div>
       )}

@@ -1,6 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ChevronRight, RefreshCw, Trash2, Upload } from 'lucide-react';
+import {
+  Briefcase,
+  Check,
+  ChevronRight,
+  FileCheck2,
+  FileDown,
+  FileText,
+  FileUp,
+  RefreshCw,
+  Save,
+  Trash2,
+  Upload as UploadIcon,
+  X,
+} from 'lucide-react';
 
 import { Failure } from '../components/Failure';
 import { Screen } from '../components/Screen';
@@ -23,9 +36,16 @@ import {
   type RequirementKind,
   type ResumeDraft,
 } from '../lib/api';
-import { formatInstant, humanise } from '../lib/format';
+import { formatBytes, formatInstant, humanise } from '../lib/format';
+import { estimateProgress } from '../lib/progress';
 
-/* Import & confirm — the gate.
+/* Upload & confirm — the gate.
+ *
+ * THE NAME IS SPLIT ON PURPOSE. The UI says upload; the wire still says import
+ * — `/imports`, `ImportStatus`, `ImportDraft`, `confirmImport`. Renaming the
+ * screen was a Phase 6.5 ask (the screen already called itself three different
+ * things); renaming the API to follow a word would have been a breaking change
+ * bought for nothing. `lib/api.ts` carries the same note.
  *
  * This is the one feature in the app where a model's output does not become
  * data until a human has looked at it. Uploading writes one row in one table
@@ -45,7 +65,7 @@ import { formatInstant, humanise } from '../lib/format';
  * that is not an oversight.
  */
 
-export default function Import() {
+export default function Upload() {
   const { id } = useParams();
   return id ? <Review id={id} /> : <Queue />;
 }
@@ -67,7 +87,7 @@ function Queue() {
 
   return (
     <Screen
-      title="Import"
+      title="Upload"
       lede="Upload a CV or a job ad. Nothing it produces becomes data until you say so."
     >
       <Uploader
@@ -144,7 +164,7 @@ function QueueList({ view }: { view: ImportStatus }) {
         <ul className="queue">
           {items.map((d) => (
             <li key={d.id}>
-              <Link to={`/import/${d.id}`} className="queue-item">
+              <Link to={`/upload/${d.id}`} className="queue-item">
                 <span className="queue-kind" data-kind={d.kind}>
                   {d.kind === 'Resume' ? 'CV' : 'Job ad'}
                 </span>
@@ -171,6 +191,14 @@ function QueueList({ view }: { view: ImportStatus }) {
 
 /* ---- The uploader -------------------------------------------------------- */
 
+/* The extension is stripped because that is what the server does too:
+ * ImportDocument.cs falls back to Path.GetFileNameWithoutExtension(...) clipped
+ * to 100. Showing anything else would put a different default on screen from
+ * the one that actually gets stored. */
+function labelFromFile(name: string): string {
+  return name.replace(/\.[^./\\]+$/, '').slice(0, 100);
+}
+
 function Uploader({
   onUploaded,
   onSwitchView,
@@ -182,10 +210,43 @@ function Uploader({
   const [kind, setKind] = useState<DocumentKind>('Resume');
   const [file, setFile] = useState<File | null>(null);
   const [label, setLabel] = useState('');
+  /* Whether the user has touched the label box. Without it, choosing a second
+   * file would silently overwrite a name they had already typed. */
+  const [labelTouched, setLabelTouched] = useState(false);
   const [sourceUrl, setSourceUrl] = useState('');
+  const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
   const input = useRef<HTMLInputElement>(null);
+
+  /* The value the box SHOWS. The value it SENDS is still `label`, so an
+   * untouched box sends nothing and the server's own fallback stays the single
+   * source of truth. This makes an existing default visible; it does not move
+   * the decision into the client. */
+  const shownLabel = labelTouched ? label : file ? labelFromFile(file.name) : '';
+
+  function clearFile() {
+    setFile(null);
+    if (input.current) input.current.value = '';
+  }
+
+  function onDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setDragging(false);
+    const dropped = e.dataTransfer.files?.[0];
+    if (!dropped) return;
+    setFile(dropped);
+    setError(null);
+    /* The native input is the one the keyboard uses, so it is kept in step with
+     * what was dropped rather than left holding a stale filename. `DataTransfer`
+     * is the only way to build a FileList, and Safari < 14.1 does not have it —
+     * hence the guard, not a cast. */
+    if (input.current && typeof DataTransfer === 'function') {
+      const dt = new DataTransfer();
+      dt.items.add(dropped);
+      input.current.files = dt.files;
+    }
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -199,16 +260,16 @@ function Uploader({
         label.trim() || undefined,
         sourceUrl.trim() || undefined,
       );
-      setFile(null);
+      clearFile();
       setLabel('');
+      setLabelTouched(false);
       setSourceUrl('');
-      if (input.current) input.current.value = '';
       onSwitchView();
       onUploaded();
       /* Straight to the review. The upload is not the thing the user came to
        * do — confirming what was read is — and a queue with one new row on it
        * is a screen asking them to click the row they just created. */
-      navigate(`/import/${created.id}`);
+      navigate(`/upload/${created.id}`);
     } catch (err) {
       setError(asApiError(err));
     } finally {
@@ -216,14 +277,83 @@ function Uploader({
     }
   }
 
+  /* Three cues, not one. --pop is 1.45 on the ground, under WCAG's 3.0 non-text
+   * threshold, so the amber ground CANNOT carry this state by itself: the zone
+   * also changes its outline and its wording, and every cue survives colour
+   * being removed. Same construction as .board-cv on the ATS check. */
+  const Icon = dragging ? FileDown : file ? FileCheck2 : FileUp;
+  const headline = dragging
+    ? 'Drop it here'
+    : file
+      ? file.name
+      : 'Drop a file here, or choose one';
+
   return (
     <form className="panel uploader" onSubmit={submit}>
       <div className="panel-head">
         <h2>Upload a document</h2>
-        <span className="quiet">PDF, Word or plain text</span>
+        <span className="quiet">PDF, Word or plain text · up to 5 MB</span>
       </div>
 
       <div className="upload-grid">
+        <div className="dropzone-wrap">
+          {/* A label wrapping the real input, not a div with a click handler.
+              The native control keeps its own keyboard path, its file picker and
+              its place in the accessibility tree; only its appearance is
+              replaced, and :focus-within puts the ring on the zone. */}
+          <label
+            className={`dropzone${dragging ? ' is-hot' : ''}${file ? ' is-chosen' : ''}`}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragging(true);
+            }}
+            onDragLeave={(e) => {
+              /* Dragging across a child fires dragleave on the parent, so the
+                 state has to survive it or the zone flickers on every internal
+                 boundary. */
+              if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false);
+            }}
+            onDrop={onDrop}
+          >
+            {/* No `accept` beyond the formats the extractor actually handles —
+                offering a filter wider than DocumentTextExtractor supports moves
+                the failure from the file picker to a 400.
+
+                And NO `required`. It is redundant (the submit button is disabled
+                without a file) and, on a control this rule hides, actively
+                harmful: Chrome refuses to submit a form containing an invalid
+                control it cannot scroll to, with "An invalid form control with
+                name='' is not focusable" — and says it only in the console. */}
+            <input
+              ref={input}
+              type="file"
+              className="sr-only"
+              accept=".pdf,.docx,.txt,.md,text/plain,text/markdown,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              onChange={(e) => {
+                setFile(e.target.files?.[0] ?? null);
+                setError(null);
+              }}
+            />
+            <Icon className="dropzone-icon" size={22} aria-hidden />
+            <span className="dropzone-line">{headline}</span>
+            <span className="dropzone-sub quiet">
+              {file ? formatBytes(file.size) : 'PDF, DOCX, TXT or Markdown'}
+            </span>
+          </label>
+
+          {/* Outside the label, or clicking it would reopen the file picker. */}
+          {file && !busy && (
+            <button
+              type="button"
+              className="dropzone-clear"
+              aria-label="Remove the chosen file"
+              onClick={clearFile}
+            >
+              <X size={14} aria-hidden />
+            </button>
+          )}
+        </div>
+
         <fieldset className="field">
           <legend>What is it?</legend>
           <div className="segmented">
@@ -236,32 +366,24 @@ function Uploader({
                   checked={kind === k}
                   onChange={() => setKind(k)}
                 />
-                <span>{k === 'Resume' ? 'A CV' : 'A job ad'}</span>
+                <span>
+                  {k === 'Resume' ? <FileText size={14} aria-hidden /> : <Briefcase size={14} aria-hidden />}
+                  {k === 'Resume' ? 'A CV' : 'A job ad'}
+                </span>
               </label>
             ))}
           </div>
         </fieldset>
 
-        <label className="field">
-          <span>File</span>
-          {/* No `accept` beyond the formats the extractor actually handles —
-              offering a filter wider than DocumentTextExtractor supports moves
-              the failure from the file picker to a 400. */}
-          <input
-            ref={input}
-            type="file"
-            accept=".pdf,.docx,.txt,.md,text/plain,text/markdown,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            required
-          />
-        </label>
-
         {kind === 'Resume' ? (
           <label className="field">
             <span>Call this version</span>
             <input
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
+              value={shownLabel}
+              onChange={(e) => {
+                setLabelTouched(true);
+                setLabel(e.target.value);
+              }}
               placeholder="backend-focused"
             />
             {/* The model is not asked for this: the document contains no
@@ -279,17 +401,66 @@ function Uploader({
 
       <div className="add-actions">
         <button type="submit" className="btn btn-primary" disabled={busy || !file}>
-          <Upload size={15} aria-hidden />
+          <UploadIcon size={15} aria-hidden />
           {busy ? 'Reading the document…' : 'Upload and read'}
         </button>
-        {busy && (
-          <span className="quiet" aria-live="polite">
-            The text is extracted here, then a local model structures it. Nothing is written
-            to your data yet.
-          </span>
-        )}
+        {busy && <Parsing />}
       </div>
     </form>
+  );
+}
+
+/* The wait, drawn. It stays in this file rather than components/: the house rule
+ * is that a component moves out once a SECOND screen needs it, and nothing else
+ * in the app waits on the model from the browser. If the paste path or a future
+ * re-parse grows its own bar, that is the moment to promote it.
+ *
+ * The curve, and the argument for showing an estimate at all, are in
+ * lib/progress.ts. What matters here is the accessibility shape:
+ *
+ * - The bar is a `progressbar`, and it is NOT inside a live region. Politely
+ *   announcing a percentage that changes eight times a second is a screen-reader
+ *   denial of service. `aria-valuetext` says "estimated" so the number is not
+ *   mistaken for a measurement.
+ * - The sentence beside it IS live, and it is static, so it is announced exactly
+ *   once when the wait begins.
+ * - Reduced motion is already honoured globally (tokens.css zeroes every
+ *   duration), which makes the width change instant — so the tick rate drops to
+ *   a second as well, or the element twitches instead of gliding.
+ */
+function Parsing() {
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+    const started = Date.now();
+    const id = window.setInterval(() => setElapsed(Date.now() - started), reduced ? 1000 : 120);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const pct = Math.round(estimateProgress(elapsed) * 100);
+
+  return (
+    <div className="parsing">
+      <div
+        className="progress"
+        role="progressbar"
+        aria-label="Reading the document"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={pct}
+        aria-valuetext={`About ${pct} per cent, estimated`}
+      >
+        <div className="progress-bar" style={{ '--fill': pct / 100 } as React.CSSProperties} />
+      </div>
+      {/* One honest line. Not a staged "Extracting… / Structuring…" transition
+          on a timer: the client cannot observe either stage, and a fake one is
+          the part a reviewer would catch. */}
+      <p className="quiet" aria-live="polite">
+        Extracting the text, then a local model structures it. Usually 5–30 seconds — longer
+        for a long ad. Nothing is written to your data yet.
+      </p>
+    </div>
   );
 }
 
@@ -384,7 +555,7 @@ function Review({ id }: { id: string }) {
     setError(null);
     try {
       await discardImport(id);
-      navigate('/import');
+      navigate('/upload');
     } catch (e) {
       setError(asApiError(e));
     }
@@ -393,7 +564,7 @@ function Review({ id }: { id: string }) {
   return (
     <div className="screen-detail">
       <nav className="crumbs" aria-label="Breadcrumb">
-        <Link to="/import">Import</Link>
+        <Link to="/upload">Upload</Link>
         <ChevronRight size={14} aria-hidden />
         <span>{imported.fileName}</span>
       </nav>
@@ -476,8 +647,24 @@ function Review({ id }: { id: string }) {
           <div className="panel">
             <div className="panel-head">
               <h2>What was extracted</h2>
-              <span className="quiet num">{imported.extractedText.length}</span>
             </div>
+            {/* This screen's one held moment, and the only amber it spends.
+                Every other screen has one — Today's backlog count, Insights'
+                top skill, the ATS match percentage — and the rule from
+                PRODUCT.md is one per screen, in the display face, under the
+                marker stroke.
+
+                It is this number because it is the question the screen is
+                actually asking: did the machine read your document at all? A
+                CV that extracts to 40 characters is a scanned picture, and
+                seeing that here is the difference between "the model is bad"
+                and "there was nothing to read". */}
+            <p className="upload-figure">
+              <span className="marked">
+                {imported.extractedText.length.toLocaleString('en-AU')}
+              </span>
+              <span className="upload-figure-label">characters read</span>
+            </p>
             <pre className="source-body">{imported.extractedText}</pre>
           </div>
         </aside>
@@ -491,9 +678,11 @@ function Review({ id }: { id: string }) {
             onClick={() => void confirm()}
             disabled={busy !== null}
           >
+            <Check size={15} aria-hidden />
             {busy === 'confirming' ? 'Confirming…' : 'Confirm — create it'}
           </button>
           <button type="button" className="btn" onClick={() => void save()} disabled={busy !== null}>
+            <Save size={15} aria-hidden />
             {busy === 'saving' ? 'Saving…' : 'Save corrections'}
           </button>
           <button
@@ -507,7 +696,12 @@ function Review({ id }: { id: string }) {
           </button>
 
           {/* Two-step rather than a browser confirm dialog: the same protection,
-              in the page, and it does not seize focus from the screen. */}
+              in the page, and it does not seize focus from the screen.
+
+              And pushed to the far end of the row (the margin is in the CSS),
+              because "Discard" sitting shoulder to shoulder with "Confirm —
+              create it" put the destructive action one pointer-slip from the
+              primary one. Distance is the cheapest guard there is. */}
           {confirming ? (
             <span className="discard-confirm">
               <button type="button" className="btn btn-danger" onClick={() => void discard()}>
@@ -524,7 +718,7 @@ function Review({ id }: { id: string }) {
             </button>
           )}
 
-          <span className="quiet" role="status">
+          <span className="quiet review-note" role="status">
             {saved
               ? 'Corrections saved. Nothing has been created yet.'
               : 'Confirming saves your corrections first, then creates the rows.'}

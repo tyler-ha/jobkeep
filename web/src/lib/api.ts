@@ -543,6 +543,21 @@ export const removeResumeSkill = (id: string, skillName: string) =>
 
 /* ---- Imports ------------------------------------------------------------ */
 
+/* THE SCREEN IS CALLED UPLOAD; EVERYTHING BELOW IS STILL CALLED IMPORT, AND
+ * THAT SPLIT IS DELIBERATE (Phase 6.5).
+ *
+ * The route renamed to /upload because the screen was calling itself three
+ * different things at once — "Import" in the nav, "Upload a CV or a job ad" in
+ * the lede, "Upload a document" on the panel. The wire did not follow it. These
+ * names — ImportResponse, ImportStatus, ImportDraft, uploadImport,
+ * confirmImport — mirror the backend records they deserialize (`/imports`,
+ * `DocumentImport`, `ImportStatus`), and a type that lies about the shape it
+ * came off the network as is worse than one that disagrees with a nav label.
+ *
+ * So: if you are renaming these, you are renaming the API too, and that is a
+ * different change. If you are adding a route, it goes under /imports.
+ */
+
 /** The queue: what is still waiting on you. Passing a status widens it; there
  *  is no "everything" option, because the committed rows are receipts and the
  *  interesting view of one is the row it created. Not paged — ListImports.cs

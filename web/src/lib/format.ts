@@ -60,6 +60,24 @@ export function formatSalary(
   return `${symbol}${short((min ?? max) as number)}${per}${min != null ? '+' : ' max'}`;
 }
 
+/** A file size the way a file manager writes it. "412 kB", "1.8 MB".
+ *
+ *  kB not KB, and 1000 not 1024: this number sits beside a filename the user
+ *  just picked out of their own file browser, and every desktop file browser
+ *  they could have picked it from counts in powers of ten. Matching the OS
+ *  matters more here than matching `DocumentOptions.MaxBytes`, which is the
+ *  only place the 1024 reading is the true one.
+ *
+ *  Anything under a kilobyte stays in bytes rather than rounding to "0 kB" —
+ *  a 12-byte file is a mistake worth seeing, and the import refuses it anyway
+ *  (`MinTextChars` is 40). */
+export function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes < 0) return '';
+  if (bytes < 1000) return `${Math.round(bytes)} bytes`;
+  if (bytes < 1_000_000) return `${Math.round(bytes / 1000)} kB`;
+  return `${(bytes / 1_000_000).toFixed(1)} MB`;
+}
+
 /** Enum names arrive in PascalCase. "FullTime" → "Full time". */
 export function humanise(value: string): string {
   const spaced = value.replace(/([a-z])([A-Z])/g, '$1 $2');

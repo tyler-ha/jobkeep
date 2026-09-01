@@ -280,9 +280,15 @@
   grid-column: 1 / -1;
 }
 
+/* Wraps, because this row holds a button AND an explanation. Without the wrap
+   the sentence is a flex sibling competing for the same line, and the first
+   thing to lose width is the button. The row gap is the larger one: a wrapped
+   sentence is a new row, not a neighbour. */
 .add-actions {
   display: flex;
-  gap: var(--s-2);
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3) var(--s-2);
 }
 
 /* =========================================================================
@@ -1419,19 +1425,181 @@
 }
 
 /* =========================================================================
-   Import & confirm
+   Upload & confirm
    ========================================================================= */
 
 .uploader {
   width: 100%;
 }
 
+/* Two explicit columns, not auto-fit. The form always has exactly three
+   children — the drop zone, the kind, and either the label or the link — and
+   auto-fit laid them out as three equal columns on a wide screen, then left a
+   ragged orphan on the last row through the whole band around 660–880px. It
+   also gave the file control the same 1fr as a text input, which is backwards:
+   choosing the document is the job, the other two are notes about it. */
 .upload-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: var(--s-3) var(--s-4);
+  grid-template-columns: 1fr;
+  gap: var(--s-4);
   width: 100%;
   align-items: start;
+}
+
+@media (min-width: 720px) {
+  .upload-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--s-4) var(--s-5);
+  }
+}
+
+/* ---- The drop zone ------------------------------------------------------- */
+
+.dropzone-wrap {
+  position: relative;
+  grid-column: 1 / -1;
+}
+
+/* A real <label> around a real <input type="file">, so the keyboard path, the
+   file picker and the accessibility tree all come free and only the appearance
+   is replaced. It also removes the one place in the app where OS chrome showed
+   through: the browser's own grey "Choose File" button cannot be styled, and a
+   Windows control in the middle of this palette was the tell. */
+.dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  min-height: 8.5rem;
+  padding: var(--s-5) var(--s-4);
+  text-align: center;
+  cursor: pointer;
+  background: var(--ground);
+  border: 2px dashed var(--rule-strong);
+  border-radius: var(--r-md);
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    outline-color var(--dur-fast) var(--ease-out);
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+}
+
+/* The ring belongs to the zone, not to the input hidden inside it — an outline
+   on a 1px clipped element is invisible, which would silently cost the keyboard
+   user their focus indicator. */
+.dropzone:focus-within {
+  outline-color: var(--pri);
+}
+
+.dropzone:hover {
+  border-color: var(--pri);
+  background: var(--pri-tint);
+}
+
+.dropzone.is-chosen {
+  border-style: solid;
+  border-color: var(--sec);
+  background: var(--sec-tint);
+}
+
+/* THREE cues, and this is not decoration: --pop is 1.45 on the ground, well
+   under WCAG's 3.0 for a non-text boundary, so amber is not allowed to carry
+   this state alone. The ground changes, the border goes solid and dark, and the
+   label text changes to "Drop it here" — the last one works with colour removed
+   entirely. Same construction as .board-cv above. */
+.dropzone.is-hot {
+  border-style: solid;
+  border-color: var(--pop-dark);
+  background: var(--pop-tint);
+}
+
+.dropzone-icon {
+  color: var(--muted);
+}
+
+.dropzone:hover .dropzone-icon,
+.dropzone:focus-within .dropzone-icon {
+  color: var(--pri);
+}
+
+.dropzone.is-chosen .dropzone-icon {
+  color: var(--sec-dark);
+}
+
+.dropzone.is-hot .dropzone-icon {
+  color: var(--pop-dark);
+}
+
+.dropzone-line {
+  font-weight: 600;
+  font-size: var(--t-base);
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.dropzone-sub {
+  font-size: var(--t-xs);
+}
+
+/* Outside the label in the markup, or clicking it would reopen the picker. */
+.dropzone-clear {
+  position: absolute;
+  top: var(--s-2);
+  right: var(--s-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--rule-strong);
+  background: var(--card);
+  color: var(--muted);
+}
+
+.dropzone-clear:hover {
+  color: var(--ink);
+  border-color: var(--ink);
+}
+
+/* ---- The wait ------------------------------------------------------------ */
+
+/* Takes the whole row inside .add-actions rather than sitting beside the
+   button, because it is a paragraph and a bar, not a second control. */
+.parsing {
+  flex-basis: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  max-width: var(--measure);
+}
+
+/* Blue on blue-tint. Blue may take a whole surface and --pri is 5.92 on white,
+   so the fill clears the 3.0 non-text threshold against its own track — which
+   amber would not have done. */
+.progress {
+  height: 6px;
+  width: 100%;
+  border-radius: var(--r-pill);
+  background: var(--pri-tint);
+  overflow: hidden;
+}
+
+/* scaleX rather than width, the same call .stage-rule::after made and for the
+   same reason — the fill runs on the compositor instead of relaying out the
+   track. It matters more here: this one updates eight times a second for as
+   long as the model takes, which is the worst case a width transition has.
+   --fill is a 0–1 ratio because scaleX cannot be handed a percentage. */
+.progress-bar {
+  height: 100%;
+  width: 100%;
+  border-radius: inherit;
+  background: var(--pri);
+  transform: scaleX(var(--fill, 0));
+  transform-origin: left;
+  transition: transform var(--dur) linear;
 }
 
 /* Two choices that change what the rest of the form asks for, so both stay
@@ -1454,6 +1622,17 @@
   border-radius: var(--r-sm);
   font-size: var(--t-sm);
   cursor: pointer;
+}
+
+/* The icon and its word are one label, spaced like a .btn's are. */
+.segment > span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.segment:has(input:checked) > span {
+  color: var(--pri-dark);
 }
 
 /* The radio stays in the accessibility tree and keeps a real radio group's
@@ -1602,15 +1781,57 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--s-2) var(--s-3);
+  gap: var(--s-3);
   margin-top: var(--s-4);
   padding-top: var(--s-4);
   border-top: 1px solid var(--rule);
 }
 
+/* Distance, as the guard. Discard used to sit immediately beside "Confirm —
+   create it", which put the irreversible action one pointer-slip from the
+   primary one; the two-step confirm was carrying that on its own. */
+.review-discard,
+.discard-confirm {
+  margin-left: auto;
+}
+
 .discard-confirm {
   display: inline-flex;
   gap: var(--s-2);
+}
+
+/* Its own row. It explains the buttons above it, so it is not one of them. */
+.review-note {
+  flex-basis: 100%;
+}
+
+/* ---- The held moment ----------------------------------------------------- */
+
+/* One per screen, in the display face, under the marker — the same shape as
+   .today-figure and .insight-figure. It is the extracted character count
+   because that is the question this screen exists to ask: did the machine read
+   your document at all? A CV that extracts to 40 characters is a scanned
+   picture, and knowing that here is the difference between "the model is bad"
+   and "there was nothing to read". */
+.upload-figure {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.upload-figure .marked {
+  font-family: var(--font-display);
+  font-variation-settings: 'wdth' var(--display-wdth);
+  font-size: var(--t-2xl);
+  line-height: 1;
+  letter-spacing: var(--track-display);
+}
+
+.upload-figure-label {
+  font-size: var(--t-md);
+  color: var(--muted);
 }
 
 /* ---- Draft entries ------------------------------------------------------- */
@@ -1952,5 +2173,33 @@
   }
   .gap-kind {
     grid-column: 2;
+  }
+
+  /* The queue row was the one list in the app with no narrow treatment. Its
+     four columns put the filename, the meta line and the timestamp in
+     competition on a phone, and the filename — the only part you navigate by
+     — was the one that ellipsed. So the timestamp joins the meta line, the
+     chevron goes (the whole row is the link, and it is the only thing there),
+     and the name gets the width. */
+  .queue-item {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      'kind name'
+      'kind meta'
+      'kind when'
+      'kind warn';
+    align-items: start;
+    gap: var(--s-1) var(--s-3);
+  }
+  .queue-kind {
+    align-self: start;
+  }
+  .queue-name {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+  }
+  .queue-go {
+    display: none;
   }
 }
