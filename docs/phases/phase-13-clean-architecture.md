@@ -864,10 +864,24 @@ clean.
 33 requests → `IRequest<T>`, 53 call sites (27 REST + 26 GraphQL) → `Send(...)`, and
 the cross-module writes become `INotification` — the seam that later becomes a queue.
 
-**Decide the library at this step, not before.** MediatR went commercial (free band
-below a revenue threshold; a personal portfolio sits under it, but *confirm and
-record the finding here*). `martinothamar/Mediator` is MIT and source-generated.
-Either needs approval before it is added.
+**Decided 2026-09-03, with the user: `martinothamar/Mediator`.** The finding this
+step was told to confirm and record:
+
+- **MediatR went commercial in mid-2025**, under Lucky Penny Software. The Community
+  edition is free below **$5M USD annual gross revenue**, with a second condition —
+  the entity must never have taken more than **$10M** in outside capital. A personal
+  portfolio sits far under both. **But the free tier still requires registering a
+  license key**, which is the part that decided it: a portfolio project would then
+  depend on someone else's revenue band and a key registration, and "why does your
+  side project need a license key" is a worse interview answer than the alternative.
+- **`martinothamar/Mediator` is MIT**, no key, no threshold. It is **source-generated**,
+  so `Send(...)` compiles to a direct call rather than a reflection lookup — which also
+  keeps the Lambda trimming/AOT option open at Phase 10. The API is near-identical, so
+  the thing being demonstrated (a mediator, and why one) is unchanged.
+
+The third option — hand-rolling the sender the way 13.3c hand-rolled the publisher —
+was on the table and refused: ~20 lines is cheap, but this seam is the one a reader
+of the repo is meant to recognise, and a bespoke `ISender` makes them read it instead.
 
 ### 13.5 — controllers
 
