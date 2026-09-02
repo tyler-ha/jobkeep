@@ -35,6 +35,18 @@ public class Mutation
         Guid id, [Service] DeleteApplicationHandler handler, CancellationToken ct)
         => (await handler.HandleAsync(id, ct)).ValueOrThrow();
 
+    // PHASE 13.3c — the first way to delete a job ad, and the publisher behind
+    // the delete notification that replaced `ai_analyses.PostingId`'s cascade.
+    //
+    // Takes a posting id rather than an application id, which is the odd one out
+    // among these mutations and is correct: the ad outlives every application
+    // logged against it, so addressing it through one of them would be naming a
+    // row that has to be gone before this can succeed. The id is on every
+    // application detail response as `posting.id`.
+    public async Task<bool> DeletePosting(
+        Guid id, [Service] DeletePostingHandler handler, CancellationToken ct)
+        => (await handler.HandleAsync(id, ct)).ValueOrThrow();
+
     // Exercises the shared-skills join: reuses an existing Skill row by name or
     // creates it, then links it to the application's posting.
     //
@@ -109,6 +121,14 @@ public class Mutation
     public async Task<bool> DiscardImport(
         Guid id,
         [Service] DiscardImportHandler handler, CancellationToken ct)
+        => (await handler.HandleAsync(id, ct)).ValueOrThrow();
+
+    // PHASE 13.3c — delete a resume version. Errors carrying INVALID_INPUT when
+    // an application or a stored ATS check still points at it, which is the same
+    // refusal REST answers 400 to; the rule is in DeleteResumeHandler, so the two
+    // surfaces have nowhere to disagree about it.
+    public async Task<bool> DeleteResume(
+        Guid id, [Service] DeleteResumeHandler handler, CancellationToken ct)
         => (await handler.HandleAsync(id, ct)).ValueOrThrow();
 
     // The resume-side mirror of addSkillToPosting, and the first write to

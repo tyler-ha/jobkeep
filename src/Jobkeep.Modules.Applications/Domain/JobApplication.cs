@@ -34,11 +34,19 @@ public class JobApplication : IAuditable
     // resume you had applied with is gone, so nothing at the database level now
     // prevents this column pointing at a row that no longer exists.
     //
-    // What replaces it: a contract check at write, through
-    // IResumeContract.GetAsync, which CreateApplication and UpdateApplication
-    // already do — they were validating the id before this FK was dropped, and
-    // that is why dropping it changes no behaviour on the write path. The DELETE
-    // side is 13.3c's work.
+    // What replaces it, in two halves. On the WRITE path, a contract check
+    // through IResumeContract.GetAsync, which CreateApplication and
+    // UpdateApplication already did before this FK was dropped — which is why
+    // dropping it changed no behaviour going in. On the DELETE path, 13.3c:
+    // DeleteResume asks IApplicationContract.CountApplicationsForResumeAsync and
+    // refuses while the answer is not zero.
+    //
+    // Together they are weaker than the RESTRICT was, and DeleteResume.cs names
+    // the gap rather than implying parity: two statements with a gap between
+    // them cannot refuse a row created inside that gap, where a foreign key
+    // refused inside the transaction. The read path is built for it — the label
+    // below comes back null when the résumé is gone, and the id is still
+    // returned so a client can tell "no résumé" from "résumé missing".
     public Guid? ResumeId { get; set; }
 
     // Deliberately no AtsResult navigation since 13.3b. The result is Ats' table

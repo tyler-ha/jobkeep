@@ -43,6 +43,13 @@ public class ApplicationContract : IApplicationContract
             .Select(a => new ApplicationRef(a.PostingId, a.ResumeId))
             .FirstOrDefaultAsync(ct);
 
+    // PHASE 13.3c. Counted in SQL, not by loading and counting in C# — the same
+    // rule the Analytics slices follow, and the reason it matters here is that
+    // the answer is usually 0 and the rows are never wanted.
+    public async Task<int> CountApplicationsForResumeAsync(
+        Guid resumeId, CancellationToken ct = default)
+        => await _db.JobApplications.CountAsync(a => a.ResumeId == resumeId, ct);
+
     // The contract delegates to this module's own use cases rather than writing
     // the tables itself, which is the same call CommitImport.cs used to make
     // directly — the difference is only WHO makes it. Documents no longer names

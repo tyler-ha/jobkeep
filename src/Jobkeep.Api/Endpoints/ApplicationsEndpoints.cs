@@ -98,6 +98,26 @@ public static class ApplicationsEndpoints
             CancellationToken ct) =>
             (await handler.HandleAsync(id, requirementId, ct)).ToHttpResult(_ => Results.NoContent()));
 
+        // PHASE 13.3c — a second group, under a second prefix, in the same
+        // module. The URL follows the resource a caller is thinking about ("this
+        // job ad") while the code follows the module that owns `job_postings`,
+        // which is the same split AiEndpoints makes when it maps /applications
+        // routes and DocumentsEndpoints makes when it maps /resumes.
+        //
+        // DELETE and nothing else, on purpose. A posting is still created
+        // implicitly by logging an application and read through it, so a GET here
+        // would be a second way to fetch something /applications/{id} already
+        // returns. DeletePosting.cs says why the delete alone had to exist.
+        var postings = app.MapGroup("/postings").WithTags("Applications");
+
+        // DELETE /postings/{id} — 400 while any application still names it.
+        postings.MapDelete("/{id:guid}", async (
+            Guid id,
+            DeletePostingHandler handler,
+            CancellationToken ct) =>
+            (await handler.HandleAsync(id, ct)).ToHttpResult(_ => Results.NoContent()))
+            .WithSummary("Delete a job ad, once no application is logged against it.");
+
         return app;
     }
 }

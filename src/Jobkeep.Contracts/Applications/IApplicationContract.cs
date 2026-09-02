@@ -70,6 +70,26 @@ public interface IApplicationContract
     // error text comes back through the result rather than being written twice.
     Task<PostingCommitResult> CommitPostingAsync(
         PostingCommitRequest request, CancellationToken ct = default);
+
+    // PHASE 13.3c — how many applications were sent with this résumé.
+    //
+    // This is the delete side of `job_applications.ResumeId`, which was a
+    // RESTRICT until 13.3b dropped it. The WRITE side was already covered:
+    // CreateApplication and UpdateApplication both resolve the id through
+    // IResumeContract.GetAsync, which is why dropping the key changed no
+    // behaviour on the way in. What a write-time check cannot do is stop the row
+    // disappearing afterwards, and that is the two thirds of RESTRICT a contract
+    // does not replace -- so Documents asks this before it deletes.
+    //
+    // It passes the same test as the other two methods here: it is a fact about
+    // APPLICATIONS. Documents cannot see `job_applications` and gains nothing
+    // about applying for jobs by asking; it is asking whether its own row is
+    // still spoken for, and only this module can answer.
+    //
+    // A count, not a bool, for the reason IAtsContract.CountResultsForResumeAsync
+    // gives: it is the number the refusal message wants to say out loud, and it
+    // costs the same query.
+    Task<int> CountApplicationsForResumeAsync(Guid resumeId, CancellationToken ct = default);
 }
 
 // What an application points at, and nothing else about it. No status, no dates,

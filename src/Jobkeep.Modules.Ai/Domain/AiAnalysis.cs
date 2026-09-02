@@ -14,8 +14,14 @@ public class AiAnalysis
 
     // 13.3b CUT THE NAVIGATION AND THE FOREIGN KEY. `job_postings` is
     // Applications' table in its own schema, so the CASCADE that used to delete
-    // this row with its posting is gone, and deleting a posting now leaves an
-    // orphan until 13.3c adds the delete notification that replaces it.
+    // this row with its posting is gone.
+    //
+    // 13.3c REPLACED IT with a delete notification: Applications publishes
+    // PostingDeleted and this module's OnPostingDeleted removes the row. The
+    // outcome is identical and the enforcement is not — an orphan is now
+    // prevented by a subscriber that ran, rather than by a constraint that
+    // could not have been skipped. Between the two steps the orphan was real,
+    // and DeleteBehaviourTests asserted it on purpose.
     //
     // The 1:1 itself is unaffected and still enforced here, by a unique index on
     // this column — it was previously a side effect of HasForeignKey<AiAnalysis>,

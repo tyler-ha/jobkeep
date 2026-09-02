@@ -1,3 +1,4 @@
+using Jobkeep.Modules.Applications;
 using Jobkeep.Shared;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -72,11 +73,25 @@ public static class AtsModule
         services.AddScoped<CheckAtsHandler>();
         services.AddScoped<GetAtsResultHandler>();
 
-        // No contract of its own registered here, and that asymmetry is worth
-        // noticing: Ats is the only module that is purely a CONSUMER. Nothing
-        // reads `ats_results` except the routes below, so there is nothing for
-        // this module to expose. A contract with no caller would be wire schema
-        // nobody can safely remove.
+        // PHASE 13.3c ENDED THE PURE-CONSUMER ASYMMETRY, on the condition the
+        // old comment named. It said: "Ats is the only module that is purely a
+        // CONSUMER — nothing reads `ats_results` except the routes below, so
+        // there is nothing for this module to expose. A contract with no caller
+        // would be wire schema nobody can safely remove."
+        //
+        // A caller arrived. 13.3b dropped `ats_results.ResumeId` -> `resumes`,
+        // and replacing that RESTRICT means Documents must ask this module
+        // whether a résumé is spoken for before deleting it. One method, one
+        // caller, and the condition for adding it was met rather than argued
+        // around — which is what that comment was for.
+        services.AddScoped<IAtsContract, AtsContract>();
+
+        // The other half of the same drop: `ats_results.ApplicationId` was a
+        // CASCADE. Registered as a handler rather than called by name, so
+        // Applications announces its delete and never learns this module exists
+        // — see SharedKernel/DomainEvents.cs for why that direction was chosen
+        // over a fifth contract method.
+        services.AddScoped<IDomainEventHandler<ApplicationDeleted>, OnApplicationDeleted>();
 
         // No options class. The two limits CheckAts imposes on the model call are
         // constants in that file with the measurement beside them, for the reason

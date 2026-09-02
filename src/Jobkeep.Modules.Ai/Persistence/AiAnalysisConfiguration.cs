@@ -19,8 +19,10 @@ public class AiAnalysisConfiguration : IEntityTypeConfiguration<AiAnalysis>
         // 1:1 — one analysis per posting.
         //
         // 13.3b DROPPED THE FK to `job_postings`: it is Applications' table in
-        // Applications' schema, and the CASCADE it carried is replaced by a
-        // notification on posting delete in 13.3c.
+        // Applications' schema. 13.3c replaced the CASCADE it carried with a
+        // delete notification — see Application/OnPostingDeleted.cs, and
+        // DeletePosting.cs for why the route that publishes it had to be built
+        // in the same step.
         //
         // The unique index is what the FK was also silently doing.
         // HasForeignKey<AiAnalysis> declares a one-to-ONE, and EF implements the

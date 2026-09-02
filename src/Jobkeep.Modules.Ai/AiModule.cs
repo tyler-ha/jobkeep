@@ -1,3 +1,4 @@
+using Jobkeep.Modules.Applications;
 using Jobkeep.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -66,6 +67,13 @@ public static class AiModule
         // Scoped, matching AppDbContext — both handlers hold one.
         services.AddScoped<AnalyzePostingHandler>();
         services.AddScoped<GetAnalysisHandler>();
+
+        // PHASE 13.3c. What replaces `ai_analyses.PostingId ON DELETE CASCADE`,
+        // dropped in 13.3b when the two tables landed in two schemas. Registered
+        // as a subscriber, so Applications announces a deleted posting and does
+        // not learn that this module exists — SharedKernel/DomainEvents.cs argues
+        // that direction against the simpler contract call.
+        services.AddScoped<IDomainEventHandler<PostingDeleted>, OnPostingDeleted>();
 
         // IPostingContract used to be registered here, on the argument that Ai
         // was its only consumer. Phase 4.5 made Documents a second one, which is

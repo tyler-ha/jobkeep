@@ -23,6 +23,9 @@ public static class ApplicationsModule
         services.AddScoped<CreateApplicationHandler>();
         services.AddScoped<UpdateApplicationHandler>();
         services.AddScoped<DeleteApplicationHandler>();
+        // PHASE 13.3c. The first way to remove a job ad; DeletePosting.cs says
+        // why it arrived with the delete notifications rather than before them.
+        services.AddScoped<DeletePostingHandler>();
         services.AddScoped<AddSkillToPostingHandler>();
         services.AddScoped<RemoveSkillFromPostingHandler>();
         services.AddScoped<AddRequirementToPostingHandler>();

@@ -1,17 +1,29 @@
 ---
 name: schema-diagram
-description: Redraw the JobKeep database ERD and architecture diagram as committed SVG files in docs/diagrams/. Use when the schema changes (a new entity, a new migration, a changed delete rule or index), when a module boundary moves, or when the user asks to visualise/diagram/redraw the database, schema, ERD, or architecture. Derives the schema from EF Core rather than by reading model classes.
+description: Redraw the JobKeep database ERD and architecture diagram as committed SVG files in docs/diagrams/. FROZEN until 1.0 ships on master (2026-09-02) - a schema change or a module-boundary move is NO LONGER a trigger. Invoke ONLY when the user explicitly asks to redraw or visualise the schema, ERD or architecture. Derives the schema from the applied database rather than by reading model classes.
 allowed-tools: Bash, Read, Write, Edit, Grep, Glob
 ---
 
 # Schema & architecture diagrams
 
+> ## STOP — frozen until 1.0 ships on master
+>
+> **Adopted 2026-09-02 at the user's instruction.** Redrawing these SVGs is not
+> cheap, and until 1.0 is merged to master the project is shipping, not
+> illustrating. **A schema change or a module-boundary move is no longer a reason
+> to run this skill.** If you got here from a phase doc, a migration, or your own
+> judgement that the picture is now wrong: stop, write one line in the phase doc
+> saying the diagrams were deliberately not redrawn, and carry on.
+>
+> Run this **only** when the user asks for it in so many words. See "Frozen until
+> 1.0" in `CLAUDE.md`.
+
 Redraws `docs/diagrams/schema-erd.svg` and `docs/diagrams/architecture.svg`.
 
 These are **committed artefacts referenced from README.md and
-`docs/architecture.md`.** They go stale silently — nothing fails a build when
-the schema moves and the picture doesn't. Redraw them in the same change that
-moves the schema, not later.
+`docs/architecture.md`.** They go stale silently — nothing fails a build when the
+schema moves and the picture doesn't. **That staleness is now accepted on purpose**
+and gets paid off in one pass after 1.0.
 
 ## The rule that makes this skill worth having
 

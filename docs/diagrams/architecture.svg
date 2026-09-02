@@ -1,8 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 880" width="980" height="880" role="img" aria-labelledby="t d">
-  <title id="t">JobKeep architecture — one deployable, two API surfaces, one code path</title>
-  <desc id="d">HTTP requests arrive at two API surfaces: REST minimal-API routes mapped per module, and a HotChocolate GraphQL endpoint. Each surface has its own thin translation of an outcome — ToHttpResult renders a status code, ValueOrThrow raises a GraphQL error — but both call the same vertical-slice handler underneath, so neither can enforce a different rule. The one exception is the Phase 4.5 file upload, which is REST-only because GraphQL has no file type. A slice holds its request, handler and response in one file, validates there, and returns a response DTO rather than an EF entity, which is why no entity type appears in the published GraphQL schema. Handlers use AppDbContext directly over a single PostgreSQL database. Modules own their own tables and do not read each other's; the skills table is shared by design.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1160 1010" width="1160" height="1010" role="img" aria-labelledby="t d">
+  <title id="t">JobKeep architecture — one deployable, ten projects, two API surfaces over one code path</title>
+  <desc id="d">HTTP requests arrive at two API surfaces, both inside the Jobkeep.Api composition root: REST minimal-API routes and a HotChocolate GraphQL endpoint. Each surface has its own thin translation of an outcome — ToHttpResult renders a status code, ValueOrThrow raises a GraphQL error — but both call the same vertical-slice handler underneath, so neither can enforce a different rule. The one exception is the file upload, which is REST-only because GraphQL has no file type. Since Phase 13.1 each of the six modules is its own class-library project, and since 13.3b each owns its own EF Core DbContext, its own entities and its own PostgreSQL schema: Applications, Documents, Ats, Ai and Skills own tables; Analytics owns none and reads three published views. A module may never reference another module. Every crossing goes through Jobkeep.Contracts, which holds five interfaces and, since 13.3c, two delete events published by Applications and subscribed to by Ats and Ai — the seam that replaced two foreign keys the schema split had to drop. Two foundation projects sit under everything: Jobkeep.SharedKernel holds primitives and the domain-event publisher, Jobkeep.Persistence holds model-wide EF conventions and the audit interceptor. All six contexts share one connection string to one PostgreSQL database.</desc>
 
-  <rect x="0" y="0" width="980" height="880" fill="#FBFCFB"/>
+  <rect x="0" y="0" width="1160" height="1010" fill="#FBFCFB"/>
 
   <defs>
     <marker id="an" viewBox="0 0 10 8" refX="9.5" refY="4" markerWidth="8" markerHeight="7" orient="auto">
@@ -11,131 +11,134 @@
     <marker id="ai" viewBox="0 0 10 8" refX="9.5" refY="4" markerWidth="8" markerHeight="7" orient="auto">
       <polygon points="0,0 10,4 0,8" fill="#16211F"/>
     </marker>
+    <marker id="ag" viewBox="0 0 10 8" refX="9.5" refY="4" markerWidth="8" markerHeight="7" orient="auto">
+      <polygon points="0,0 10,4 0,8" fill="#5B6C68"/>
+    </marker>
   </defs>
+
+  <style>
+    .box   { fill:#FFFFFF; stroke:#C9D2CE; stroke-width:1.4; }
+    .band  { fill:#F2F5F4; stroke:#C9D2CE; stroke-width:1; stroke-dasharray:4 4; }
+    .h1    { fill:#16211F; font-size:19px; font-weight:600; }
+    .sub   { fill:#5B6C68; font-size:12px; }
+    .ttl   { fill:#16211F; font-size:13px; font-weight:600; }
+    .txt   { fill:#16211F; font-size:11.5px; }
+    .mut   { fill:#5B6C68; font-size:11px; }
+    .acc   { fill:#0E5F58; font-size:11px; font-weight:600; }
+    .flow  { stroke:#16211F; stroke-width:1.4; fill:none; }
+    .soft  { stroke:#5B6C68; stroke-width:1.3; fill:none; stroke-dasharray:3 4; }
+  </style>
 
   <g font-family="ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace">
 
-    <!-- ============ HTTP entry ============ -->
-    <rect x="420" y="26" width="140" height="34" rx="17" fill="#FFFFFF" stroke="#C9D2CE"/>
-    <text x="490" y="48" font-size="12" fill="#16211F" text-anchor="middle">HTTP</text>
+    <text class="h1" x="40" y="40" font-family="'Segoe UI', Arial, sans-serif">JobKeep — architecture</text>
+    <text class="sub" x="40" y="62" font-family="'Segoe UI', Arial, sans-serif">One deployable. Ten projects in src/. Two API surfaces, one code path. As of Phase 13.3c.</text>
 
-    <path d="M490,60 V84 H300 V104" fill="none" stroke="#16211F" stroke-width="1.4" marker-end="url(#ai)"/>
-    <path d="M490,60 V84 H680 V104" fill="none" stroke="#16211F" stroke-width="1.4" marker-end="url(#ai)"/>
+    <!-- ============ HTTP entry ============ -->
+    <rect class="box" x="510" y="86" width="140" height="32" rx="16"/>
+    <text class="txt" x="580" y="107" text-anchor="middle">HTTP</text>
+
+    <path class="flow" d="M580,118 V138 H330 V152" marker-end="url(#ai)"/>
+    <path class="flow" d="M580,118 V138 H830 V152" marker-end="url(#ai)"/>
 
     <!-- ============ the two surfaces ============ -->
-    <rect x="170" y="104" width="260" height="66" rx="3" fill="#FFFFFF"/>
-    <rect x="170" y="104" width="260" height="24" fill="#E8EEEB"/>
-    <rect x="170" y="104" width="260" height="66" rx="3" fill="none" stroke="#C9D2CE"/>
-    <text x="300" y="121" font-size="11" font-weight="600" fill="#16211F" text-anchor="middle">REST · minimal API</text>
-    <text x="300" y="143" font-size="9.5" fill="#16211F" text-anchor="middle">each module maps its own routes</text>
-    <text x="300" y="159" font-size="10" fill="#5B6C68" text-anchor="middle">/applications · /stats · /imports</text>
+    <rect class="box" x="140" y="154" width="380" height="82" rx="5"/>
+    <text class="ttl" x="156" y="176">REST — Api/Endpoints/</text>
+    <text class="mut" x="156" y="196">27 minimal-API routes, mapped per module</text>
+    <text class="mut" x="156" y="213">ToHttpResult →  200 · 204 · 400 · 404</text>
+    <text class="acc" x="156" y="230">temporary shape: 13.5 replaces it with controllers</text>
 
-    <rect x="550" y="104" width="260" height="66" rx="3" fill="#FFFFFF"/>
-    <rect x="550" y="104" width="260" height="24" fill="#E8EEEB"/>
-    <rect x="550" y="104" width="260" height="66" rx="3" fill="none" stroke="#C9D2CE"/>
-    <text x="680" y="121" font-size="11" font-weight="600" fill="#16211F" text-anchor="middle">GraphQL · HotChocolate</text>
-    <text x="680" y="143" font-size="9.5" fill="#16211F" text-anchor="middle">GraphQL/Query.cs · Mutation.cs</text>
-    <text x="680" y="159" font-size="10" fill="#5B6C68" text-anchor="middle">POST /graphql</text>
+    <rect class="box" x="640" y="154" width="380" height="82" rx="5"/>
+    <text class="ttl" x="656" y="176">GraphQL — Api/GraphQL/</text>
+    <text class="mut" x="656" y="196">HotChocolate at /graphql · Query + Mutation</text>
+    <text class="mut" x="656" y="213">ValueOrThrow →  NOT_FOUND · INVALID_INPUT</text>
+    <text class="acc" x="656" y="230">no EF entity is reachable from the schema</text>
 
-    <!-- the one deliberate asymmetry -->
-    <text x="300" y="184" font-size="9" fill="#8A9793" text-anchor="middle">POST /imports (multipart) is REST-only — GraphQL has no file type</text>
+    <path class="flow" d="M330,236 V266 H560" marker-end="url(#ai)"/>
+    <path class="flow" d="M830,236 V266 H600" marker-end="url(#ai)"/>
 
-    <!-- ============ per-surface edge translation ============ -->
-    <line x1="300" y1="190" x2="300" y2="200" stroke="#C9D2CE" stroke-width="1.2"/>
-    <line x1="680" y1="170" x2="680" y2="200" stroke="#C9D2CE" stroke-width="1.2"/>
+    <!-- ============ the shared code path ============ -->
+    <rect class="box" x="140" y="268" width="880" height="66" rx="5"/>
+    <text class="ttl" x="156" y="291">one slice handler per use case  —  request + handler + response, in one file</text>
+    <text class="mut" x="156" y="311">Validation and business rules live HERE, so the two surfaces cannot enforce different things.</text>
+    <text class="mut" x="156" y="327">Returns SliceResult&lt;T&gt;; each surface translates it at its own edge. The upload is REST-only — GraphQL has no file type.</text>
 
-    <rect x="170" y="200" width="260" height="46" rx="3" fill="#FFFFFF" stroke="#C9D2CE"/>
-    <text x="300" y="218" font-size="9.5" fill="#16211F" text-anchor="middle">Shared/ResultHttpExtensions.cs</text>
-    <text x="300" y="234" font-size="9.5" fill="#5B6C68" text-anchor="middle">ToHttpResult → 200 · 201 · 204 · 400 · 404</text>
+    <path class="flow" d="M580,334 V368" marker-end="url(#ai)"/>
+    <text class="mut" x="596" y="357">a use case belongs to exactly one module</text>
 
-    <rect x="550" y="200" width="260" height="46" rx="3" fill="#FFFFFF" stroke="#C9D2CE"/>
-    <text x="680" y="218" font-size="9.5" fill="#16211F" text-anchor="middle">GraphQL/ResultExtensions.cs</text>
-    <text x="680" y="234" font-size="9.5" fill="#5B6C68" text-anchor="middle">ValueOrThrow → INVALID_INPUT · NOT_FOUND</text>
+    <!-- ============ the six modules ============ -->
+    <rect class="band" x="60" y="378" width="1040" height="292" rx="8"/>
+    <text class="mut" x="76" y="398" font-weight="600">SIX MODULE PROJECTS  —  a module may never reference another module (ModuleBoundaryTests)</text>
 
-    <text x="490" y="224" font-size="9.5" fill="#8A9793" text-anchor="middle">one outcome,</text>
-    <text x="490" y="238" font-size="9.5" fill="#8A9793" text-anchor="middle">two renderings</text>
+    <rect class="box" x="80" y="410" width="320" height="112" rx="5"/>
+    <text class="ttl" x="94" y="432">Applications</text>
+    <text class="mut" x="94" y="452">ApplicationsDbContext</text>
+    <text class="txt" x="94" y="470">schema  applications</text>
+    <text class="mut" x="94" y="487">5 tables + the 3 published views</text>
+    <text class="acc" x="94" y="507">publishes ApplicationDeleted · PostingDeleted</text>
 
-    <!-- ============ converge: one code path under both ============ -->
-    <path d="M300,246 V274" fill="none" stroke="#0E5F58" stroke-width="1.6"/>
-    <path d="M680,246 V274" fill="none" stroke="#0E5F58" stroke-width="1.6"/>
-    <line x1="300" y1="274" x2="680" y2="274" stroke="#0E5F58" stroke-width="1.6"/>
-    <text x="490" y="267" font-size="10" fill="#5B6C68" text-anchor="middle">one code path — neither surface can enforce a different rule</text>
+    <rect class="box" x="420" y="410" width="320" height="112" rx="5"/>
+    <text class="ttl" x="434" y="432">Documents</text>
+    <text class="mut" x="434" y="452">DocumentsDbContext</text>
+    <text class="txt" x="434" y="470">schema  documents</text>
+    <text class="mut" x="434" y="487">5 tables · imports, résumés, parsed records</text>
+    <text class="acc" x="434" y="507">owns IResumeContract</text>
 
-    <path d="M490,274 V304" fill="none" stroke="#0E5F58" stroke-width="1.6" marker-end="url(#an)"/>
+    <rect class="box" x="760" y="410" width="320" height="112" rx="5"/>
+    <text class="ttl" x="774" y="432">Ats</text>
+    <text class="mut" x="774" y="452">AtsDbContext</text>
+    <text class="txt" x="774" y="470">schema  ats</text>
+    <text class="mut" x="774" y="487">1 table · reads 5 it does not own, by contract</text>
+    <text class="acc" x="774" y="507">subscribes ApplicationDeleted</text>
 
-    <!-- ============ the slice ============ -->
-    <rect x="250" y="304" width="480" height="100" rx="3" fill="#FFFFFF"/>
-    <rect x="250" y="304" width="480" height="24" fill="#E8EEEB"/>
-    <rect x="250" y="304" width="480" height="100" rx="3" fill="none" stroke="#0E5F58"/>
-    <text x="490" y="321" font-size="11" font-weight="600" fill="#16211F" text-anchor="middle">Modules/&lt;Module&gt;/&lt;UseCase&gt;.cs</text>
-    <text x="490" y="345" font-size="10" fill="#16211F" text-anchor="middle">request + handler + response, in one file · validates here</text>
-    <text x="490" y="363" font-size="10" fill="#5B6C68" text-anchor="middle">returns SliceResult&lt;T&gt;, translated at each surface's own edge</text>
-    <text x="490" y="381" font-size="10" fill="#5B6C68" text-anchor="middle">and a response DTO — never an EF entity, so no entity type</text>
-    <text x="490" y="397" font-size="10" fill="#5B6C68" text-anchor="middle">reaches the published GraphQL schema</text>
+    <rect class="box" x="80" y="542" width="320" height="112" rx="5"/>
+    <text class="ttl" x="94" y="564">Ai</text>
+    <text class="mut" x="94" y="584">AiDbContext</text>
+    <text class="txt" x="94" y="602">schema  ai</text>
+    <text class="mut" x="94" y="619">1 table · IChatClient is shared, not owned</text>
+    <text class="acc" x="94" y="639">subscribes PostingDeleted</text>
 
-    <path d="M490,404 V430" fill="none" stroke="#0E5F58" stroke-width="1.6" marker-end="url(#an)"/>
+    <rect class="box" x="420" y="542" width="320" height="112" rx="5"/>
+    <text class="ttl" x="434" y="564">Skills</text>
+    <text class="mut" x="434" y="584">SkillsDbContext</text>
+    <text class="txt" x="434" y="602">schema  skills</text>
+    <text class="mut" x="434" y="619">1 table · the shared vocabulary, no routes</text>
+    <text class="acc" x="434" y="639">owns ISkillCatalog</text>
 
-    <!-- ============ module ownership ============ -->
-    <rect x="250" y="430" width="480" height="212" rx="3" fill="#FFFFFF"/>
-    <rect x="250" y="430" width="480" height="212" rx="3" fill="none" stroke="#0E5F58"/>
+    <rect class="box" x="760" y="542" width="320" height="112" rx="5"/>
+    <text class="ttl" x="774" y="564">Analytics</text>
+    <text class="mut" x="774" y="584">AnalyticsDbContext</text>
+    <text class="txt" x="774" y="602">no schema, no migrations</text>
+    <text class="mut" x="774" y="619">read-only · 3 views owned by Applications</text>
+    <text class="acc" x="774" y="639">GROUP BY runs in Postgres, never in C#</text>
 
-    <text x="270" y="452" font-size="10.5" fill="#16211F">Applications</text>
-    <text x="710" y="452" font-size="9.5" fill="#5B6C68" text-anchor="end">applications · postings · companies · requirements</text>
-    <line x1="270" y1="461" x2="710" y2="461" stroke="#E8EEEB"/>
+    <!-- ============ contracts ============ -->
+    <path class="soft" d="M580,670 V700" marker-end="url(#ag)"/>
 
-    <text x="270" y="478" font-size="10.5" fill="#16211F">Analytics</text>
-    <text x="710" y="478" font-size="9.5" fill="#5B6C68" text-anchor="end">read-only · aggregates in SQL · phase 2.4</text>
-    <line x1="270" y1="487" x2="710" y2="487" stroke="#E8EEEB"/>
+    <rect class="box" x="60" y="702" width="1040" height="94" rx="5"/>
+    <text class="ttl" x="76" y="724">Jobkeep.Contracts  —  the only path between modules, and the wire schema when one is extracted</text>
+    <text class="mut" x="76" y="746">IApplicationContract   IPostingContract   IResumeContract   ISkillCatalog   IAtsContract</text>
+    <text class="mut" x="76" y="765">ApplicationDeleted   PostingDeleted        events, published after commit, delivered in process</text>
+    <text class="acc" x="76" y="786">References no other Jobkeep assembly. An interface is implemented by the module that owns the table.</text>
 
-    <text x="270" y="504" font-size="10.5" fill="#16211F">Ai</text>
-    <text x="710" y="504" font-size="9.5" fill="#5B6C68" text-anchor="end">ai_analyses · phase 4</text>
-    <line x1="270" y1="513" x2="710" y2="513" stroke="#E8EEEB"/>
+    <!-- ============ database ============ -->
+    <rect class="box" x="60" y="818" width="700" height="88" rx="5"/>
+    <text class="ttl" x="76" y="840">PostgreSQL  —  one database, one connection string</text>
+    <text class="mut" x="76" y="860">six DbContexts · five schemas · five __EFMigrationsHistory tables</text>
+    <text class="mut" x="76" y="878">applications   skills   documents   ai   ats</text>
+    <text class="acc" x="76" y="897">7 foreign keys left, all intra-schema. The 6 that crossed are enforced in code.</text>
 
-    <text x="270" y="530" font-size="10.5" fill="#16211F">Documents</text>
-    <text x="710" y="530" font-size="9.5" fill="#5B6C68" text-anchor="end">document_imports · resumes + 3 children · phase 4.5</text>
-    <line x1="270" y1="539" x2="710" y2="539" stroke="#E8EEEB"/>
+    <!-- ============ foundations ============ -->
+    <rect class="box" x="780" y="818" width="320" height="88" rx="5"/>
+    <text class="ttl" x="796" y="840">Foundations</text>
+    <text class="mut" x="796" y="860">SharedKernel — SliceResult, NaturalKey,</text>
+    <text class="mut" x="796" y="877">IAuditable, the domain-event publisher</text>
+    <text class="mut" x="796" y="894">Persistence — EF conventions, audit interceptor</text>
 
-    <text x="270" y="556" font-size="10.5" fill="#16211F">Ats</text>
-    <text x="710" y="556" font-size="9.5" fill="#5B6C68" text-anchor="end">ats_results · reads 5 tables it does not own · phase 5</text>
-    <line x1="270" y1="565" x2="710" y2="565" stroke="#E8EEEB"/>
-
-    <text x="270" y="582" font-size="10.5" fill="#0E5F58">skills</text>
-    <text x="710" y="582" font-size="9.5" fill="#0E5F58" text-anchor="end">shared — owned by no module, joined from both sides</text>
-    <line x1="270" y1="591" x2="710" y2="591" stroke="#C9D2CE"/>
-
-    <text x="490" y="606" font-size="9.5" fill="#8A9793" text-anchor="middle">the boundary is about writes, not reads (decision 17). A module may read another</text>
-    <text x="490" y="619" font-size="9.5" fill="#8A9793" text-anchor="middle">module's tables; to write them it needs a contract (decision 14) or that module's</text>
-    <text x="490" y="632" font-size="9.5" fill="#8A9793" text-anchor="middle">own use case (decision 15). Analytics (13) and Ats are readers, so neither needs one.</text>
-
-    <path d="M490,642 V672" fill="none" stroke="#0E5F58" stroke-width="1.6" marker-end="url(#an)"/>
-
-    <!-- ============ the shared model client ============ -->
-    <rect x="740" y="470" width="216" height="72" rx="3" fill="#FFFFFF" stroke="#C9D2CE" stroke-dasharray="4 3"/>
-    <text x="848" y="490" font-size="10" font-weight="600" fill="#16211F" text-anchor="middle">Shared/ModelClient.cs</text>
-    <text x="848" y="506" font-size="9" fill="#5B6C68" text-anchor="middle">IChatClient → Ollama, local</text>
-    <text x="848" y="521" font-size="9" fill="#8A9793" text-anchor="middle">injected by Ai, Documents and Ats:</text>
-    <text x="848" y="534" font-size="9" fill="#8A9793" text-anchor="middle">a dependency, not a module's property</text>
-    <line x1="730" y1="506" x2="740" y2="506" stroke="#C9D2CE" stroke-width="1.2"/>
-
-    <!-- ============ data layer ============ -->
-    <rect x="340" y="672" width="300" height="62" rx="3" fill="#FFFFFF"/>
-    <rect x="340" y="672" width="300" height="22" fill="#E8EEEB"/>
-    <rect x="340" y="672" width="300" height="62" rx="3" fill="none" stroke="#C9D2CE"/>
-    <text x="490" y="687" font-size="11" font-weight="600" fill="#16211F" text-anchor="middle">Data/AppDbContext.cs</text>
-    <text x="490" y="710" font-size="10" fill="#5B6C68" text-anchor="middle">Fluent API in one place · enums as strings</text>
-    <text x="490" y="726" font-size="10" fill="#5B6C68" text-anchor="middle">delete behaviour chosen per relationship</text>
-
-    <path d="M490,734 V766" fill="none" stroke="#16211F" stroke-width="1.4" marker-end="url(#ai)"/>
-
-    <rect x="380" y="766" width="220" height="46" rx="3" fill="#FFFFFF" stroke="#C9D2CE"/>
-    <text x="490" y="785" font-size="11.5" font-weight="600" fill="#16211F" text-anchor="middle">PostgreSQL</text>
-    <text x="490" y="801" font-size="9.5" fill="#5B6C68" text-anchor="middle">Docker local · Neon free tier when deployed</text>
-
-    <!-- ============ footer ============ -->
-    <line x1="110" y1="838" x2="870" y2="838" stroke="#E8EEEB"/>
-    <text x="110" y="856" font-size="9.5" fill="#5B6C68">Earlier versions had a second, dashed lane: the Phase 2 routes going through IJobApplicationRepository. Phase 2.3 deleted it, so there is one lane.</text>
-    <text x="110" y="869" font-size="9.5" fill="#5B6C68">The deployment target stopped being RDS in Phase 3 — nothing in the deployed plan may bill per hour.</text>
-    <text x="870" y="869" font-size="9.5" fill="#8A9793" text-anchor="end">as-built end of Phase 5 · one deployable</text>
+    <!-- ============ composition root note ============ -->
+    <rect class="band" x="60" y="930" width="1040" height="54" rx="6"/>
+    <text class="mut" x="76" y="952" font-weight="600">Jobkeep.Api  —  the composition root. References everything; nothing references it.</text>
+    <text class="mut" x="76" y="971">Program.cs is wiring only: DI, middleware, six AddDbContext, five Migrate(), and the Add*/Map* call per module.</text>
 
   </g>
 </svg>

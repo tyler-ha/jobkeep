@@ -247,6 +247,20 @@ public static class DocumentsEndpoints
             (await handler.HandleAsync(id, ct)).ToHttpResult())
             .WithSummary("One resume: structured records plus the text they came from.");
 
+        // DELETE /resumes/{id} — the endpoint DiscardImport's error message has
+        // been naming since Phase 4.5. 400, not 409, when an application or a
+        // stored ATS check still points at it: every other refusal on both
+        // surfaces goes through SliceResult.Invalid, and one route inventing a
+        // third status code is the surface-specific behaviour the parity suite
+        // exists to stop. DeleteResume.cs carries the argument for the checks
+        // themselves.
+        resumes.MapDelete("/{id:guid}", async (
+            Guid id,
+            DeleteResumeHandler handler,
+            CancellationToken ct) =>
+            (await handler.HandleAsync(id, ct)).ToHttpResult(_ => Results.NoContent()))
+            .WithSummary("Delete a resume version, if nothing still points at it.");
+
         return app;
     }
 }

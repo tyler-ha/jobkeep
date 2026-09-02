@@ -180,9 +180,10 @@ Full reasoning, the extraction triggers, and the decision record are in
 
 ### Where new code goes
 
-> **PHASE 13 IS IN PROGRESS AND THIS SECTION IS OUT OF DATE.** As of 13.3b
-> (2026-09-02) `src/` is **nine projects**: one per module, plus SharedKernel,
-> Contracts, Persistence and Api. Each module now holds its own entities
+> **PHASE 13 IS IN PROGRESS AND THIS SECTION IS OUT OF DATE.** As of 13.3c
+> (2026-09-02) `src/` is **ten projects**: six modules, plus SharedKernel,
+> Contracts, Persistence and Api. (This said "nine" from 13.1 until 13.3c counted
+> the `.csproj` files — the Skills promotion was never added to the total.) Each module now holds its own entities
 > (`<Module>/Domain/`), its own EF configuration and `DbContext`
 > (`<Module>/Persistence/`) and its own migrations, in its own Postgres schema — see
 > `docs/phases/phase-13-clean-architecture.md` for the
@@ -325,6 +326,41 @@ The accepted cost, stated plainly: between sweeps the standing docs will lag wha
 the code does. That is tolerable because the ones that would be actively *wrong*
 get fixed immediately, and because a stale sentence is cheaper than the sweep
 that would have prevented it.
+
+### Frozen until 1.0 ships on master
+
+**Adopted 2026-09-02, at the user's instruction, after Phase 13.3c spent a
+meaningful slice of a session redrawing two SVGs.** Until **1.0 is merged to
+master**, do not spend tokens on regenerated or re-rendered artefacts. Then redraw
+once, deliberately, and only what is actually needed.
+
+Frozen — do NOT produce these mid-phase, even when a change makes them wrong, and
+even when a phase doc or a skill says to:
+
+- **`docs/diagrams/*.svg`.** Both of them. The `schema-diagram` skill is not to be
+  invoked; a migration or a module-boundary move is no longer a trigger.
+- **Any other picture, chart or rendering** — no ASCII diagrams "to illustrate", no
+  Mermaid, no artifacts, nothing generated to be looked at rather than run.
+- **Re-reading or re-syncing standing docs a change did not touch.** This was
+  already the rule (decision 12); it is restated here because it is the same money.
+
+Still done in the same change, unchanged — these are near-free and they are the
+evidence:
+
+- In-code comments explaining a tradeoff.
+- The phase doc's Status and its real deviations.
+- Tests.
+- A doc sentence that the change made **factually wrong** — a one-line fix, not a
+  sweep.
+
+**When a change would have triggered a redraw, write one line in the phase doc
+saying so** (e.g. *"schema moved; diagrams deliberately not redrawn — frozen until
+1.0"*). That keeps the debt visible and makes the eventual redraw a list rather than
+an investigation.
+
+**1.0 is the trigger, and it is a merge to master, not a phase number.** At that
+point the accumulated list gets redrawn in one fresh session — which is also the
+cheapest place to do it, per the cost table above.
 
 ## Commands
 
@@ -582,18 +618,16 @@ about that date — verify it before relying on it.
   with `python scripts/token-usage.py`; see "When asked to move to the next
   phase" below.
 - `docs/diagrams/` — `schema-erd.svg` and `architecture.svg`, embedded in
-  `README.md` and `docs/architecture.md`. **Committed artefacts that go stale
-  silently** — nothing fails a build when the schema moves and the picture
-  doesn't. Redraw them with the `schema-diagram` skill
-  (`.claude/skills/schema-diagram/`) in the same change that moves the schema.
-  This trigger stays per-change because it fires rarely — only on a migration or
-  a module-boundary move. Phase 2.3 had no migration and correctly left
-  `schema-erd.svg` untouched while redrawing `architecture.svg`.
-  That skill derives the schema from `dotnet ef migrations script`, not from
-  reading `Models/*.cs` — column types, precision, delete behaviour and index
-  uniqueness live in Fluent API config and the Npgsql provider, so inferring
-  them from the model classes produces a diagram that is wrong in exactly the
-  places an interviewer would probe.
+  `README.md` and `docs/architecture.md`. **DO NOT REDRAW THESE UNTIL 1.0 IS ON
+  MASTER** — see "Frozen until 1.0" below. The per-change trigger that used to live
+  here is suspended, deliberately; both files will lag the code and that is the
+  accepted cost.
+  When they are eventually redrawn, use the `schema-diagram` skill
+  (`.claude/skills/schema-diagram/`) and note the one method rule worth keeping:
+  derive the schema from `pg_dump --schema-only` against the migrated database, not
+  from `dotnet ef migrations script` (a sequence, not a final state) and never from
+  reading the entity classes — column types, precision, delete behaviour and index
+  uniqueness live in Fluent API config and the Npgsql provider.
 - `scripts/token-usage.py` — reads Claude Code's session transcripts and totals
   tokens per session, or per task within a session (`--task <prefix>`). The
   source for `docs/token-log.md`.
@@ -608,10 +642,58 @@ about that date — verify it before relying on it.
 
 ## When asked to move to the next phase
 
-**Currently up next: Phase 13.3c — the integrity replacements and the diagrams.**
-Read `docs/phases/phase-13-clean-architecture.md` §13.3; it is the live plan, rewritten
-on 2026-09-01 when the user confirmed **microservices is the destination**. 13.3 is
-three sub-steps there and **13.3a and 13.3b are both done**.
+**Currently up next: Phase 13.4 — dispatch.** Read
+`docs/phases/phase-13-clean-architecture.md` §13.4; it is the live plan, rewritten on
+2026-09-01 when the user confirmed **microservices is the destination**. **13.3 is
+DONE — all three sub-steps.**
+
+**13.4 needs a decision before any code:** 33 requests become `IRequest<T>` and 53
+call sites become `Send(...)`, and the mediator library is chosen *at that step*.
+MediatR went commercial (free below a revenue threshold; a personal portfolio sits
+under it — **confirm and record the finding**), `martinothamar/Mediator` is MIT and
+source-generated. **Either needs the user's approval before it is added.** 13.3c
+already built the notification half by hand — `Jobkeep.SharedKernel/DomainEvents.cs`,
+three types, ~30 lines — deliberately so that 13.4 swaps the types and leaves every
+call site alone.
+
+**13.3c LANDED 2026-09-02** (suite 256 → 266, no migration, no `web/` change). It is
+application code and diagrams only, and four things from it change how new code is
+written:
+
+- **A cross-module CASCADE is now a NOTIFICATION and a cross-module RESTRICT is a
+  CONTRACT CHECK.** That is the rule, and the asymmetry is the point: a cascade is a
+  consequence, announced after the publisher commits; a restrict is a question, asked
+  before. `Applications` publishes `ApplicationDeleted` and `PostingDeleted` and
+  names no subscriber; `Ats` and `Ai` subscribe. Do not add a contract method that
+  deletes another module's rows — that inverts the direction on purpose chosen here,
+  and `SharedKernel/DomainEvents.cs` argues why at length.
+- **Publish AFTER `SaveChangesAsync`, never before.** On failure that leaves an
+  invisible orphan rather than destroying work on a row that survived. Same call
+  `ISkillCatalog.FindOrCreateAsync` makes about its own save. There is **no outbox**,
+  so a crash between commit and publish loses the event; that is written down, not
+  forgotten, and it is Phase 14's.
+- **A delete-side contract check is WEAKER than the RESTRICT it replaced, and the
+  gap is a TOCTOU race** — a foreign key refuses inside the transaction, two counts
+  and a delete do not. Accepted with reasons in `DeleteResume.cs`; the read paths
+  already tolerate the residue (`ApplicationDetail` leaves `ResumeLabel` null,
+  `GetAtsResult` the same). Do not "fix" that tolerance — it is the safety net.
+- **Two routes now exist that never did: `DELETE /postings/{id}` and
+  `DELETE /resumes/{id}`.** Both were built because a replacement with no publisher
+  or no caller is a replacement nobody can verify. The posting refusal is still
+  enforced by a live FK (same schema) and the check only buys a 400 instead of a 500;
+  the résumé refusals are the whole protection.
+
+**Also corrected at 13.3c, having been wrong since 13.3b: SIX foreign keys were
+dropped, not five.** `posting_skills.SkillId → skills` was missed because it is a
+link table's second key that no module's *code* mentions. Counted out of
+`pg_dump --schema-only`: 13 before, **7 after** (5 CASCADE / 2 RESTRICT), all
+intra-schema. Both diagrams were redrawn from that dump and `schema-erd.svg` gained
+a dotted edge style meaning *"a relationship Postgres no longer knows about"*.
+
+Two questions from the 13.3b handoff are **closed, not built**: a skill id with no
+catalog row and an `ats_results.ResumeId` pointing at a deleted résumé are both now
+unreachable through the app (nothing deletes a skill; a résumé delete is refused
+while either table points at one), so they got no warning field. Don't re-open them.
 
 **13.3b LANDED 2026-09-02** (suite 254 → 256, five schemas, compose stack up from a
 dropped volume). It is the physical split, so most of what this file said about the
@@ -646,15 +728,8 @@ data layer changed with it:
   one-to-one "one". Four indexes had to be restated by hand; if you drop another
   relationship, check what went with it.
 
-**What 13.3c is:** the four replacements for the dropped keys — delete notifications for
-`ai_analyses.PostingId` and `ats_results.ApplicationId`, delete-side checks for
-`job_applications.ResumeId` and `ats_results.ResumeId` — then flipping the two inverted
-tests in `DeleteBehaviourTests` back, and redrawing **both** diagrams with the
-`schema-diagram` skill from `pg_dump --schema-only` (not `migrations script`).
-
-Two things 13.3b made reachable that were impossible before, and both want reporting
-rather than silence at 13.3c: a skill id with no catalog row (dropped, not rendered
-blank) and an `ats_results.ResumeId` pointing at a deleted résumé (label left null).
+**13.3c did all of the above and is done** — see its own section higher up. The one
+correction it made to this block: the FK count was **six**, not five.
 
 **The dev database was dropped at 13.3b**, as agreed. Asked and answered; do not re-ask.
 
@@ -714,7 +789,9 @@ Six things from 13.2 still change how new code is written:
   a test pins it.
 
 **Phase 6.5 group 4 (paste text) is parked**, by decision, until the 13.3 boundary —
-which 13.3b has now reached in every respect except 13.3c's clean-up.
+**which 13.3c reached on 2026-09-02.** It is unblocked; it is not scheduled. 13.4-13.6
+are the rest of Phase 13, and group 4 touches `src/`, so doing it mid-phase means
+writing a slice that 13.4 and 13.5 then rewrite twice.
 
 **13.2c is the one sub-step that touched the front end**, and only as a widened type:
 `ImportStatus` gained `CommitFailed` in `web/src/lib/api.ts`, plus a fourth queue tab
@@ -754,8 +831,11 @@ any of it; the user asked to be asked before any new dependency is added.
 **Phase 7 is DONE** (2026-09-01) — one migration, `DataIntegrityAndNaturalKeys`,
 suite 228 → 239 green. `docs/diagrams/schema-erd.svg` was redrawn on 2026-09-01,
 in the session after the one that moved the schema, so that trigger is discharged.
-Final state, if you need it without re-deriving: 13 tables, 13 FKs (7 CASCADE /
-6 RESTRICT), 5 unique indexes, 12 plain. One method note worth keeping — the
+Final state **as at Phase 7**, if you need it without re-deriving: 13 tables, 13 FKs
+(7 CASCADE / 6 RESTRICT), 5 unique indexes, 12 plain. **Phase 13.3b changed this and
+the numbers above are history, not the current schema** — it is now 13 tables in five
+schemas, **7** FKs (5 CASCADE / 2 RESTRICT), 5 unique and **10** plain, with the six
+dropped keys enforced in application code since 13.3c. One method note worth keeping — the
 redraw derived the schema from `pg_dump --schema-only` against the migrated
 database rather than from `dotnet ef migrations script`, because an *idempotent*
 script is a sequence of migrations and later `ALTER`s silently correct earlier

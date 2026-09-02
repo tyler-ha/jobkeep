@@ -113,6 +113,10 @@ public static class DocumentsModule
         services.AddScoped<ListResumesHandler>();
         services.AddScoped<GetResumeHandler>();
         services.AddScoped<RemoveSkillFromResumeHandler>();
+        // PHASE 13.3c. The endpoint DiscardImport's error message has been
+        // pointing at since Phase 4.5; DeleteResume.cs says why it is only
+        // now real, and what its two refusals cost.
+        services.AddScoped<DeleteResumeHandler>();
 
         return services;
     }

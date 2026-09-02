@@ -25,9 +25,25 @@ public class AtsResultConfiguration : IEntityTypeConfiguration<AtsResult>
         //
         // 13.3b DROPPED BOTH FKs. `job_applications` and `resumes` belong to two
         // other modules and two other schemas, so the CASCADE on application
-        // delete and the RESTRICT on resume delete are both gone; 13.3c replaces
-        // the first with a delete notification and leaves the second as the
-        // null-label case GetAtsResult.cs already describes.
+        // delete and the RESTRICT on resume delete both went.
+        //
+        // 13.3c REPLACED BOTH, and the two replacements are different in kind
+        // because the two keys were:
+        //
+        //   * the CASCADE became a notification. Applications publishes
+        //     ApplicationDeleted after it commits; Application/OnApplicationDeleted
+        //     deletes this row. An announcement after the fact, which is what a
+        //     cascade is.
+        //   * the RESTRICT became a question. Documents asks
+        //     IAtsContract.CountResultsForResumeAsync before deleting a résumé and
+        //     refuses while the answer is not zero. Asked before the fact, which
+        //     is what a restrict is.
+        //
+        // This comment used to say the second would be left as the null-label
+        // case GetAtsResult.cs describes. That handling STAYS — it is what makes
+        // the check's time-of-check-to-time-of-use race survivable, and the state
+        // is still reachable by editing the database directly — but it is no
+        // longer the whole answer. DeleteResume.cs argues the gap in full.
         //
         // This index is the piece that would otherwise vanish unannounced: the
         // "one result per application" rule was a side effect of

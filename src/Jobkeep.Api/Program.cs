@@ -94,6 +94,20 @@ AddModuleContext<AtsDbContext>("ats");
 builder.Services.AddDbContext<AnalyticsDbContext>((sp, options) => options
     .UseNpgsql(connectionString));
 
+// PHASE 13.3c. The in-process publisher behind the two delete notifications that
+// replaced the cascades 13.3b dropped. Registered in the composition root rather
+// than by a module, because it belongs to no module: Applications publishes, Ats
+// and Ai subscribe, and none of the three may know the others exist.
+//
+// Scoped, matching the contexts the handlers hold. A singleton would capture the
+// root provider and resolve a scoped DbContext from it, which is the captive-
+// dependency trap this project's DI comments keep naming.
+//
+// SharedKernel/DomainEvents.cs is where the interfaces live and where the choice
+// of a publisher over a fifth contract method is argued. 13.4 replaces all three
+// types with the chosen mediator's equivalents; the call sites do not move.
+builder.Services.AddScoped<IDomainEventPublisher, DomainEventPublisher>();
+
 // Every use case is a vertical slice under Modules/ (docs/architecture.md §2).
 // Each slice handler takes its module's own DbContext directly, so this
 // registers them and nothing else — as of Phase 2.3 there is no repository layer

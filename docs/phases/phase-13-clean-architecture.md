@@ -1,9 +1,11 @@
 # Phase 13 — module-owned Clean Architecture, on the road to services
 
-**Status: In progress. Steps 13.1, 13.2 (a–e) and 13.3a done 2026-09-01** (branch
-`phase-13/module-boundaries`, suite 239 → … → 253 → 254 green).
-**13.2 is complete: no module names another module's table.** 13.3b–c and
-13.4–13.6 remain.
+**Status: In progress. Steps 13.1, 13.2 (a–e) and 13.3 (a–c) done, 2026-09-01 to
+2026-09-02** (branch `phase-13/module-boundaries`, suite 239 → … → 254 → 256 → 266
+green).
+**13.2 is complete: no module names another module's table. 13.3 is complete: no
+module SHARES a table, a context or a schema with another, and the six foreign keys
+that used to cross a boundary are replaced in application code.** 13.4–13.6 remain.
 
 **This doc was rewritten on 2026-09-01.** The version before it (written the same
 day, commit `bf968a0`) planned a **layer-first** migration: one `Domain`, one
@@ -77,18 +79,36 @@ same row, and that shared row is what the Phase 7 natural-key work and the Phase
 skill gap both turn on. The two link tables stay with their owners and hold a bare
 `SkillId`.
 
-### The five FKs that get dropped (13.3)
+### The FKs that get dropped (13.3)
 
-Measured on 2026-09-01, not estimated. Five of the thirteen already cross a module
-boundary:
+Measured on 2026-09-01 — and **the count was wrong.** This table said five; the
+schema split dropped **six**. `posting_skills.SkillId → skills` is the one it
+missed, and it was missed for a legible reason: the four contract-based crossings
+were derived by reading module code, and this one is a link table's second key,
+which nothing in Applications' *code* mentions. It was caught at 13.3c by counting
+foreign keys out of `pg_dump --schema-only` — 13 before, 7 after — which is the
+whole argument for deriving the diagram from the applied schema rather than from
+what anyone believes is in it.
 
-| FK | Direction | Today | Replacement |
+The **Replacement** column is what 13.3c actually shipped, not what was planned;
+where the two differ the plan is noted.
+
+| FK | Direction | Was | Replacement |
 |---|---|---|---|
-| `ai_analyses.PostingId` → `job_postings` | Ai → Applications | CASCADE | notification on posting delete |
-| `ats_results.ApplicationId` → `job_applications` | Ats → Applications | CASCADE | notification on application delete |
-| `ats_results.ResumeId` → `resumes` | Ats → Documents | RESTRICT | contract check at write |
-| `job_applications.ResumeId` → `resumes` | Applications → Documents | RESTRICT | contract check at write |
-| `resume_skills.SkillId` → `skills` | Documents → Skills | RESTRICT | `ISkillCatalog.EnsureAsync` |
+| `ai_analyses.PostingId` → `job_postings` | Ai → Applications | CASCADE | `PostingDeleted` notification, `Ai/Application/OnPostingDeleted.cs` |
+| `ats_results.ApplicationId` → `job_applications` | Ats → Applications | CASCADE | `ApplicationDeleted` notification, `Ats/Application/OnApplicationDeleted.cs` |
+| `ats_results.ResumeId` → `resumes` | Ats → Documents | RESTRICT | `IAtsContract.CountResultsForResumeAsync`, asked at résumé delete |
+| `job_applications.ResumeId` → `resumes` | Applications → Documents | RESTRICT | `IApplicationContract.CountApplicationsForResumeAsync`, asked at résumé delete |
+| `resume_skills.SkillId` → `skills` | Documents → Skills | RESTRICT | `ISkillCatalog.FindOrCreateAsync` ordering (shipped in 13.2; the plan called it `EnsureAsync`) |
+| `posting_skills.SkillId` → `skills` | Applications → Skills | RESTRICT | the same `FindOrCreateAsync` ordering, from `AddSkillToPosting` |
+
+**The plan said "contract check at write" for the two RESTRICTs and that was half an
+answer.** The write-side check already existed before the key was dropped —
+`CreateApplication` and `UpdateApplication` resolve a résumé id through
+`IResumeContract.GetAsync` — which is exactly why dropping the key changed no
+behaviour going in, and exactly why it was not the replacement. A check at write
+cannot stop a row disappearing afterwards. The delete side is the two thirds of
+RESTRICT a contract has to replace, and it is what 13.3c built.
 
 **Cost, stated plainly:** referential integrity for these five moves out of the
 database and into application code, so a bug can now orphan a row Postgres used to
@@ -519,8 +539,12 @@ in-process modules.
 
 ### 13.3 — the physical split
 
-Six contexts, six schemas, six migration histories, five FKs dropped, `Skills`
+Six contexts, five schemas, five migration histories, **six** FKs dropped, `Skills`
 promoted to its own module, `Jobkeep.Infrastructure.Data` deleted.
+
+(Six schemas was the plan; Analytics turned out to need none, because it owns no
+tables. And the FK count was wrong here until 13.3c counted them out of
+`pg_dump` — see the table below.)
 
 **Split into three sub-steps**, decided with the user on 2026-09-01 after the scope
 corrections below. **13.3a landed the same day.**
@@ -529,7 +553,7 @@ corrections below. **13.3a landed the same day.**
 |---|---|---|
 | **13.3a** | the configuration seam: per-entity configs, `Jobkeep.Persistence` | **Done** |
 | **13.3b** | entities into modules, six contexts, six schemas, migration reset | **Done 2026-09-02** |
-| 13.3c | integrity replacements, delete notifications, the diagrams | Not started |
+| **13.3c** | integrity replacements, delete notifications, the diagrams | **Done 2026-09-02** |
 
 #### Scope correction taken 2026-09-01, before any code moved
 
@@ -555,6 +579,117 @@ corrections below. **13.3a landed the same day.**
 `pg_dump` carry-over); keep the 122 call sites compiling with per-module
 `IEntityTypeConfiguration<T>` plus a **test-only** aggregate context; split into three.
 
+#### What landed in 13.3c — 2026-09-02
+
+**The integrity replacements, and the two routes that had to exist for two of them
+to be reachable.** Suite **256 → 266**, build clean and warning-free, and
+`has-pending-model-changes` clean on all five contexts — **13.3c adds no migration.
+It is application code and diagrams only.** That is the check that it replaced the
+dropped keys rather than quietly re-adding any of them.
+
+**The mechanism: a publisher, not a fifth contract method.** Two of the six dropped
+keys were CASCADEs, and a cascade is not a question — it is a consequence. The
+obvious translation was `IAtsContract.DeleteForApplication`, called by
+`DeleteApplication`. It works today and it is the wrong direction: it makes the
+deleter hold the list of everyone who cares, so a sixth module means editing
+Applications, and at service scale it means N synchronous calls on the delete path,
+any of which can fail and none of which the caller can usefully retry. So
+Applications *announces* and the interested modules subscribe.
+`SharedKernel/DomainEvents.cs` is 3 types and ~30 lines and argues all of it.
+**13.4 replaces those three types with the chosen mediator's `INotification`; the
+call sites do not move**, which is the reason for writing it now rather than
+waiting one step.
+
+Three details worth keeping:
+
+- **There is no `IDomainEvent` marker interface**, and it is not an oversight. Event
+  types are module vocabulary, so they live in `Jobkeep.Contracts` — and Contracts
+  may reference no other Jobkeep assembly, SharedKernel included
+  (`Foundation_projects_depend_on_nothing_of_ours`). A marker would force exactly
+  that reference. `where TEvent : class` is what is left; it is weaker and the file
+  says so.
+- **SharedKernel still has zero package references.** The publisher resolves handlers
+  through `System.IServiceProvider.GetService(typeof(IEnumerable<...>))` rather than
+  the `GetServices<T>` extension, because that extension would drag
+  `Microsoft.Extensions.DependencyInjection.Abstractions` into every module at once
+  — which is precisely what that csproj's comment exists to prevent.
+- **Publish AFTER the commit, and the ordering is the decision.** Publishing first
+  would delete the ATS result of an application that then failed to delete: a live
+  row loses a stored judgement, and re-earning it costs a model call the user waits
+  three minutes for. Publishing after leaves, on failure, an orphan `ats_results` row
+  that nothing can read. Two failure modes — *invisible orphan* and *destroyed work
+  on a live row* — and this picks the first, which is the same call
+  `ISkillCatalog.FindOrCreateAsync` already makes about its own save ordering. The
+  honest gap: no outbox, so a crash between commit and publish loses the event.
+  Phase 14's problem, because an outbox is only worth its cost once the subscriber
+  is a separate process.
+
+**Two new routes, and both are the phase forcing a gap into the open.**
+
+- **`DELETE /postings/{id}`** — *nothing in the application had ever deleted a
+  posting.* Postings are created implicitly by logging an application, so the
+  `ai_analyses` cascade had been unreachable for the whole life of the table, and
+  deleting your last application for an ad left the ad behind forever with its
+  skills, requirements and analysis, reachable by nothing. Writing `OnPostingDeleted`
+  without this route would have shipped a subscriber nothing could trigger, verified
+  by a test that reached into the database — which is how a replacement gets believed
+  rather than checked.
+- **`DELETE /resumes/{id}`** — `DiscardImport` has been telling users *"Delete the
+  resume or application it created instead"* since Phase 4.5, against an endpoint
+  that did not exist. The application half was true; the résumé half was not.
+
+Both refuse rather than cascade, and the refusals are *different in kind* from the
+notifications, which is the shape worth carrying forward: **a CASCADE becomes an
+announcement made after the fact; a RESTRICT becomes a question asked before it.**
+
+**The cost, stated where it will be asked about.** A delete-side contract check is
+strictly weaker than the RESTRICT it replaces, and `DeleteResume.cs` names it rather
+than implying parity: a foreign key refuses inside the transaction that attempts the
+delete, while two counts and a delete are three statements with gaps between them, so
+an application created against a résumé after the count survives, pointing at a row
+that no longer exists. **That is a time-of-check-to-time-of-use race and it is the
+actual price of moving integrity out of the database.** Accepted, because the window
+is microseconds on a single-user local app, the residue is the case the read path
+already handles (`ApplicationDetail` leaves `ResumeLabel` null and says so;
+`GetAtsResult` does the same), and the real answer at service scale is a saga or a
+soft delete — which is Phase 8, and rewrites this path anyway.
+
+`DELETE /postings/{id}` is the contrast that makes the point: **its** refusal is
+still enforced by a live foreign key, because both tables are in Applications' own
+schema. The check there buys a 400 with a count in it instead of an unhandled
+`DbUpdateException` surfacing as a 500 — a status code, not an invariant.
+
+**Tests: 256 → 266.** The two inverted tests in `DeleteBehaviourTests` are flipped
+back, and the posting one now deletes **through the route** rather than through the
+test context — a context delete raises no event, so the old arrangement would still
+leave the analysis behind and the test would be asserting the absence of a route
+rather than the presence of a replacement. `Persistence/IntegrityReplacementTests.cs`
+is new (10 tests) and covers the machinery the row counts cannot see: the 400 that
+would otherwise be a 500, the counts inside the refusal messages, the refusal lifting
+once the blocking row is gone, and the GraphQL half of both new mutations.
+
+**Two gaps the 13.3b handoff flagged as "wanting reporting" are instead CLOSED, and
+that is the cheaper answer.** A skill id with no catalog row and an
+`ats_results.ResumeId` pointing at a deleted résumé were both reachable after 13.3b.
+Nothing in the application deletes a skill — there is no such route — and a résumé
+delete is now refused while either table points at one, so both states are
+unreachable through the app. The existing tolerant handling (drop the skill, leave
+the label null) stays as defence in depth against the TOCTOU race and against direct
+database edits. Building a warning field for a state no request can produce would
+have been wire contract nobody could exercise.
+
+**Both diagrams redrawn**, from `pg_dump --schema-only` against the migrated
+database. `schema-erd.svg` gained a third edge style — dotted grey for a
+relationship Postgres no longer knows about — which is the single most useful thing
+the picture now says. `architecture.svg` was redrawn for the ten-project shape: six
+modules with their own contexts and schemas, Contracts as the only path between them,
+and the event lane. **`src/` is TEN projects, not the nine `CLAUDE.md` claimed** —
+six modules plus SharedKernel, Contracts, Persistence and Api; the Skills promotion
+was never added to that count.
+
+**What 13.3c did NOT do:** no migration, no schema change, no `web/` change. The
+front-end suite is untouched at 49.
+
 #### What landed in 13.3b — 2026-09-02
 
 **The physical split. Suite 254 -> 256, build clean, five schemas in Postgres, the
@@ -570,7 +705,10 @@ compose stack up from a dropped volume.**
   reads three views that live in `applications`. `Program.cs` migrates five contexts
   and not the sixth, which turns "Analytics owns nothing" from a comment into a fact
   about the deployment.
-- **Five foreign keys dropped**, exactly the five 13.3a marked. Verified end to end
+- **Six foreign keys dropped** — *this bullet said five, and five was the number this
+  doc had carried since 13.3a.* 13.3c counted them out of `pg_dump --schema-only`
+  (13 before, 7 after) and found `posting_skills.SkillId` in the list nobody had
+  written down. Verified end to end
   afterwards: create an application, add a skill (Applications and Skills, two
   contexts, two transactions), read `/stats/skill-demand` (Analytics reads a published
   view in `applications`, then resolves ids through `ISkillCatalog` in `skills`).
@@ -712,7 +850,11 @@ clean.
   migration per module. **This drops the local dev database** — if `pgdata` holds
   real applications worth keeping, say so *before* this step and it gets a
   `pg_dump` + `ALTER TABLE … SET SCHEMA` carry-over instead of `down -v`.
-- Redraw `docs/diagrams/schema-erd.svg` with the `schema-diagram` skill, deriving
+- ~~Redraw `docs/diagrams/schema-erd.svg`~~ **— done at 13.3c, and it is the LAST
+  redraw before 1.0.** Diagrams are frozen from 2026-09-02 (CLAUDE.md, "Frozen until
+  1.0"): 13.4-13.6 must not redraw either SVG, and should note the debt in a line
+  here instead. Kept for the method, which still applies whenever they are next
+  drawn — derive
   from `pg_dump --schema-only` against the migrated database (the Phase 7 note: an
   idempotent migrations script is a sequence, and reading final state out of it is
   guesswork).
@@ -750,7 +892,9 @@ known traps:
 Namespaces renamed to match projects, **last**, when nothing else is moving. Then
 `architecture.md` sections 2 and 3 and decisions 5, 6, 7, 12, 13, 15, 17 superseded
 in place; CLAUDE.md's "Where new code goes" and "Migration state" rewritten (both
-currently carry a pointer to this doc instead); `architecture.svg` redrawn; the
+currently carry a pointer to this doc instead); **`architecture.svg` NOT redrawn —
+diagrams are frozen until 1.0 ships on master, so 13.6 records what moved and leaves
+the picture stale**; the
 inside-a-module layering rules added to the architecture suite.
 
 ---
