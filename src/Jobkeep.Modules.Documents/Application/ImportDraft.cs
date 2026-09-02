@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Text.Json;
 using Jobkeep.Models;
+using Jobkeep.Modules.Applications;
 
 namespace Jobkeep.Modules.Documents;
 
@@ -66,7 +67,18 @@ public record PostingDraft(
 
 public record DraftPostingSkill(string Name, bool Required);
 
-public record DraftRequirement(string Text, RequirementKind Kind, bool IsMustHave);
+// PHASE 13.3b — Kind is the CONTRACT enum, not the entity one.
+//
+// RequirementKind is Applications' entity enum and moved into Applications
+// with job_requirements; Documents may not reference it. A draft is not an
+// entity anyway, so this is the more honest type of the two: the draft's job
+// is to become an argument to IApplicationContract.CommitPostingAsync, and
+// that argument has always been PostingRequirementKind.
+//
+// Nothing on the wire moved. The member names are identical on both enums, so
+// the REST payload and the persisted DraftJson are byte-identical; only the
+// GraphQL *type name* for a draft requirement changed.
+public record DraftRequirement(string Text, PostingRequirementKind Kind, bool IsMustHave);
 
 // ---------------------------------------------------------------------------
 // The model-facing shapes
@@ -214,7 +226,7 @@ internal sealed class RequirementExtraction
     [Description("Qualification for something the candidate must have, "
                + "Responsibility for something they would do, "
                + "Benefit for something the employer offers.")]
-    public RequirementKind Kind { get; set; }
+    public PostingRequirementKind Kind { get; set; }
 
     [Description("True if the advertisement presents it as essential rather than desirable.")]
     public bool MustHave { get; set; }

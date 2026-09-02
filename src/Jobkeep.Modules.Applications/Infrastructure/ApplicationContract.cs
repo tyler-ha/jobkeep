@@ -1,4 +1,3 @@
-using Jobkeep.Data;
 using Jobkeep.Models;
 using Jobkeep.Shared;
 using Microsoft.EntityFrameworkCore;
@@ -9,7 +8,7 @@ namespace Jobkeep.Modules.Applications;
 // implementation stays here, with the module that owns the tables it guards.
 public class ApplicationContract : IApplicationContract
 {
-    private readonly IApplicationsDbContext _db;
+    private readonly ApplicationsDbContext _db;
     private readonly CreateApplicationHandler _createApplication;
     private readonly AddRequirementToPostingHandler _addRequirement;
     // This module's own other contract. Reused rather than reimplemented: linking
@@ -21,7 +20,7 @@ public class ApplicationContract : IApplicationContract
     private readonly IPostingContract _postings;
 
     public ApplicationContract(
-        IApplicationsDbContext db,
+        ApplicationsDbContext db,
         CreateApplicationHandler createApplication,
         AddRequirementToPostingHandler addRequirement,
         IPostingContract postings)

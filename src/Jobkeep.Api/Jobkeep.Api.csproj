@@ -18,6 +18,13 @@
     <!-- The concrete model provider, named in exactly one place (ModelClient.cs). -->
     <PackageReference Include="OllamaSharp" Version="5.4.30" />
 
+    <!-- The concrete DATABASE provider, and since 13.3b it is named here rather
+         than inherited. Program.cs calls UseNpgsql for all six contexts, which
+         is the same choice ModelClient.cs makes about IChatClient: the modules
+         know EF, the composition root knows it is Postgres. It used to arrive
+         transitively through Jobkeep.Infrastructure.Data, which is now deleted. -->
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+
     <!-- Design-time only, and it lives here rather than in Infrastructure.Data
          because `dotnet ef` resolves the provider and the connection string
          through the STARTUP project. Since 13.1 the command needs both halves
@@ -31,7 +38,9 @@
   <ItemGroup>
     <ProjectReference Include="../Jobkeep.SharedKernel/Jobkeep.SharedKernel.csproj" />
     <ProjectReference Include="../Jobkeep.Contracts/Jobkeep.Contracts.csproj" />
-    <ProjectReference Include="../Jobkeep.Infrastructure.Data/Jobkeep.Infrastructure.Data.csproj" />
+    <!-- For AuditSaveChangesInterceptor, which Program.cs registers and hands to
+         every one of the six contexts. -->
+    <ProjectReference Include="../Jobkeep.Persistence/Jobkeep.Persistence.csproj" />
     <ProjectReference Include="../Jobkeep.Modules.Applications/Jobkeep.Modules.Applications.csproj" />
     <ProjectReference Include="../Jobkeep.Modules.Analytics/Jobkeep.Modules.Analytics.csproj" />
     <ProjectReference Include="../Jobkeep.Modules.Ai/Jobkeep.Modules.Ai.csproj" />

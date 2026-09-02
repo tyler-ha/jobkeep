@@ -22,18 +22,26 @@ public sealed class SmokeTests(PostgresFixture fixture) : IntegrationTestBase(fi
     }
 
     [Fact]
-    public async Task Migrations_AppliedCleanly_SoAllEightTablesExist()
+    public async Task Migrations_AppliedCleanly_SoEveryModuleOwnsItsOwnSchema()
     {
-        // The fixture booting Program.cs in Development is what runs Database.Migrate().
-        // This asserts the result rather than the act, so a migration that stops applying
-        // fails here loudly instead of surfacing as a confusing error in another test.
+        // The fixture booting Program.cs in Development is what runs Database.Migrate()
+        // on each context. This asserts the result rather than the act, so a migration
+        // that stops applying fails here loudly instead of surfacing as a confusing
+        // error in another test.
+        //
+        // PHASE 13.3b turned this from a list of eight tables in `public` into a map of
+        // schema to table, and the shape of the assertion is the deliverable: it now
+        // fails if a table lands in the wrong schema, which is the mistake the split
+        // makes possible and nothing else would catch. A table in the wrong place still
+        // works — one database, one connection — right up until the module is extracted.
         var tables = await WithDbAsync(async db =>
         {
             var conn = db.Database.GetDbConnection();
             await db.Database.OpenConnectionAsync(Ct);
             using var cmd = conn.CreateCommand();
             cmd.CommandText =
-                "select table_name from information_schema.tables where table_schema = 'public' order by 1";
+                "select table_schema || '.' || table_name from information_schema.tables "
+                + "where table_schema not in ('pg_catalog', 'information_schema') order by 1";
             using var reader = await cmd.ExecuteReaderAsync(Ct);
 
             var names = new List<string>();
@@ -45,14 +53,39 @@ public sealed class SmokeTests(PostgresFixture fixture) : IntegrationTestBase(fi
             return names;
         });
 
-        Assert.Contains("__EFMigrationsHistory", tables);
-        Assert.Contains("companies", tables);
-        Assert.Contains("job_postings", tables);
-        Assert.Contains("skills", tables);
-        Assert.Contains("posting_skills", tables);
-        Assert.Contains("job_requirements", tables);
-        Assert.Contains("job_applications", tables);
-        Assert.Contains("ai_analyses", tables);
-        Assert.Contains("ats_results", tables);
+        // Applications: five tables plus the three views it publishes.
+        Assert.Contains("applications.companies", tables);
+        Assert.Contains("applications.job_postings", tables);
+        Assert.Contains("applications.posting_skills", tables);
+        Assert.Contains("applications.job_requirements", tables);
+        Assert.Contains("applications.job_applications", tables);
+        Assert.Contains("applications.v_application_status_counts", tables);
+        Assert.Contains("applications.v_company_application_counts", tables);
+        Assert.Contains("applications.v_posting_skill_demand", tables);
+
+        // The shared taxonomy, alone in its own schema — the whole argument for the
+        // Skills module in one line.
+        Assert.Contains("skills.skills", tables);
+
+        Assert.Contains("documents.document_imports", tables);
+        Assert.Contains("documents.resumes", tables);
+        Assert.Contains("documents.resume_skills", tables);
+        Assert.Contains("documents.resume_experiences", tables);
+        Assert.Contains("documents.resume_educations", tables);
+
+        Assert.Contains("ai.ai_analyses", tables);
+        Assert.Contains("ats.ats_results", tables);
+
+        // Five histories, one per table-owning context. Analytics has none because it
+        // owns nothing to create, and a sixth appearing here would mean it had started
+        // to.
+        foreach (var schema in PostgresFixture.ModuleSchemas)
+            Assert.Contains($"{schema}.__EFMigrationsHistory", tables);
+
+        Assert.DoesNotContain("analytics.__EFMigrationsHistory", tables);
+
+        // And nothing is left in `public`. That is what proves the split is complete
+        // rather than additive: a table the migration reset forgot would still be here.
+        Assert.DoesNotContain(tables, name => name.StartsWith("public."));
     }
 }

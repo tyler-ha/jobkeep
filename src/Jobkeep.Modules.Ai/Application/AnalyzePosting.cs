@@ -1,6 +1,5 @@
 using System.ComponentModel;
 using System.Text.Json;
-using Jobkeep.Data;
 using Jobkeep.Models;
 using Jobkeep.Modules.Applications;
 using Jobkeep.Shared;
@@ -117,7 +116,7 @@ internal static class AiSchema
 
 public class AnalyzePostingHandler
 {
-    private readonly IAiDbContext _db;
+    private readonly AiDbContext _db;
     private readonly IChatClient _chat;
     private readonly IPostingContract _postings;
     private readonly AiOptions _options;
@@ -129,7 +128,7 @@ public class AnalyzePostingHandler
     // today, a hosted provider later, decided in AiModule.cs by configuration.
     // Nothing below this line knows which one it is talking to.
     public AnalyzePostingHandler(
-        IAiDbContext db, IChatClient chat, IPostingContract postings,
+        AiDbContext db, IChatClient chat, IPostingContract postings,
         AiOptions options, ModelOptions model)
     {
         _db = db;

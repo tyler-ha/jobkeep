@@ -1,4 +1,3 @@
-using Jobkeep.Data;
 using Jobkeep.Modules.Skills;
 using Jobkeep.Shared;
 using Microsoft.EntityFrameworkCore;
@@ -14,10 +13,10 @@ namespace Jobkeep.Modules.Applications;
 // underneath them. "Remove C# from this job" is not "C# is no longer a skill".
 public class RemoveSkillFromPostingHandler
 {
-    private readonly IApplicationsDbContext _db;
+    private readonly ApplicationsDbContext _db;
     private readonly ISkillCatalog _skills;
 
-    public RemoveSkillFromPostingHandler(IApplicationsDbContext db, ISkillCatalog skills)
+    public RemoveSkillFromPostingHandler(ApplicationsDbContext db, ISkillCatalog skills)
     {
         _db = db;
         _skills = skills;

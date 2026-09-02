@@ -180,9 +180,12 @@ Full reasoning, the extraction triggers, and the decision record are in
 
 ### Where new code goes
 
-> **PHASE 13 IS IN PROGRESS AND THIS SECTION IS OUT OF DATE.** Step 13.1 landed
-> 2026-09-01: `src/` is now **ten projects**, one per module plus SharedKernel,
-> Contracts and Api — see `docs/phases/phase-13-clean-architecture.md` for the
+> **PHASE 13 IS IN PROGRESS AND THIS SECTION IS OUT OF DATE.** As of 13.3b
+> (2026-09-02) `src/` is **nine projects**: one per module, plus SharedKernel,
+> Contracts, Persistence and Api. Each module now holds its own entities
+> (`<Module>/Domain/`), its own EF configuration and `DbContext`
+> (`<Module>/Persistence/`) and its own migrations, in its own Postgres schema — see
+> `docs/phases/phase-13-clean-architecture.md` for the
 > target shape and the reference rule (*a module never references another module*),
 > which `tests/Jobkeep.Tests/Architecture/ModuleBoundaryTests.cs` enforces. The
 > vertical-slice rules below still describe how a **use case** is written, and that
@@ -223,8 +226,9 @@ Modules: `Applications` (core), `Analytics` (read-only), `Ai` (Phase 4),
 > **Superseded in part by Phase 13.** The Phase 2.1-2.3 migration described below
 > did finish, and its rules about *how a slice is written* still hold. What has
 > changed is where the files live: since 13.1 each module is its own project, and
-> the entities plus `AppDbContext` sit temporarily in `Jobkeep.Infrastructure.Data`,
-> a project whose own csproj explains that it is scheduled for deletion in 13.3.
+> since 13.3b each module holds its own entities and its own `DbContext`. The
+> quarantine project those things passed through, `Jobkeep.Infrastructure.Data`, is
+> **deleted**, and so is `AppDbContext`.
 
 **The migration is finished.** It ran incrementally across Phases 2.1-2.3 so each
 phase stayed runnable, and as of Phase 2.3 (2026-08-26) `src/` has **one** shape:
@@ -374,9 +378,9 @@ dotnet build Jobkeep.slnx
 dotnet run --project Jobkeep.Api
 ```
 
-Since Phase 13.1 there are ten projects under `src/`, so a bare `dotnet build` /
-`dotnet run` in that directory fails with **MSB1011** — name the solution or the
-project, as above. `docker compose up --build` is unaffected and remains the
+Since Phase 13.1 there are several projects under `src/` (nine, as of 13.3b), so a
+bare `dotnet build` / `dotnet run` in that directory fails with **MSB1011** — name the
+solution or the project, as above. `docker compose up --build` is unaffected and remains the
 normal way to start the stack.
 
 App listens on `http://localhost:5080` (`Jobkeep.Api/Properties/launchSettings.json`).
@@ -388,10 +392,25 @@ EF migrations (tool pinned to 10.0.11 in `src/dotnet-tools.json`, `rollForward: 
 ```bash
 dotnet tool restore
 
-# Since Phase 13.1: the model lives in one project and the connection string and
-# provider are resolved through another, so both have to be named. Without these
-# two flags the command fails in a way that reads like a broken tool install.
-dotnet ef migrations add <Name> --project Jobkeep.Infrastructure.Data --startup-project Jobkeep.Api
+# Since Phase 13.1 the model lives in one project and the connection string and
+# provider are resolved through another, so both have to be named. Since 13.3b there
+# are FIVE models — one per table-owning module, each with its own schema and its own
+# __EFMigrationsHistory — so the context has to be named too. Without all three flags
+# the command fails in a way that reads like a broken tool install.
+dotnet ef migrations add <Name> \
+  --project Jobkeep.Modules.Documents \
+  --startup-project Jobkeep.Api \
+  --context DocumentsDbContext
+
+# The five, with their schemas: ApplicationsDbContext (applications),
+# SkillsDbContext (skills), DocumentsDbContext (documents), AiDbContext (ai),
+# AtsDbContext (ats). AnalyticsDbContext owns no tables and has no migrations.
+
+# The cheap check that a refactor did not move the schema. Run it per context.
+dotnet ef migrations has-pending-model-changes \
+  --project Jobkeep.Modules.Documents \
+  --startup-project Jobkeep.Api \
+  --context DocumentsDbContext
 ```
 
 Tests (Phase 2.2) — xUnit v3 + Testcontainers, in `tests/Jobkeep.Tests/`:
@@ -589,48 +608,72 @@ about that date — verify it before relying on it.
 
 ## When asked to move to the next phase
 
-**Currently up next: Phase 13.3b — entities into modules, six contexts, six schemas.**
-Read `docs/phases/phase-13-clean-architecture.md` §13.3; **13.3a landed 2026-09-01**
-(suite 254) and 13.3 is split into three sub-steps there, with the three scope
-corrections that split it. The two that change how 13.3b is written:
+**Currently up next: Phase 13.3c — the integrity replacements and the diagrams.**
+Read `docs/phases/phase-13-clean-architecture.md` §13.3; it is the live plan, rewritten
+on 2026-09-01 when the user confirmed **microservices is the destination**. 13.3 is
+three sub-steps there and **13.3a and 13.3b are both done**.
 
-- **122 test call sites reach `AppDbContext` to arrange rows** — the doc's "no test
-  touches a handler, so this is free" claim is true of behaviour only. The agreed fix
-  is a **test-only** aggregate context in `tests/Jobkeep.Tests/Infrastructure/`,
-  applying all six module assemblies' configurations, so the 122 sites do not change.
-- **`PostgresFixture` is hard-wired to `SchemasToInclude = ["public"]`** with one
-  `__EFMigrationsHistory` ignored. Six schemas and six history tables means Respawn
-  truncates nothing and tests leak into each other — silently. Fix it in the same step
-  and assert a reset actually empties a seeded table.
+**13.3b LANDED 2026-09-02** (suite 254 → 256, five schemas, compose stack up from a
+dropped volume). It is the physical split, so most of what this file said about the
+data layer changed with it:
 
-Also from 13.3a: the schema goes in `ToTable`'s **second argument** in each
-`IEntityTypeConfiguration<T>`, not via `HasDefaultSchema` — that is what lets the test
-context apply all six and still be correct. And `ModelConventions.ApplyDatabaseDefaults`
-must be called **last** in every `OnModelCreating`, or entities configured after it
-silently lose their defaults.
+- **`Jobkeep.Infrastructure.Data` is deleted** and `src/` is **nine** projects. The
+  thirteen entities live in the five modules that own their tables (`<Module>/Domain/`),
+  their configurations beside them (`<Module>/Persistence/`), and the six
+  `I<X>DbContext` interfaces are **gone**, replaced by six real contexts. `AppDbContext`
+  no longer exists — do not look for it, and do not reintroduce anything like it.
+- **Five schemas, five migration histories:** `applications`, `skills`, `documents`,
+  `ai`, `ats`. Analytics has a context and neither, because it owns no tables; it reads
+  three views that live in `applications`. `Program.cs` migrates five contexts, not six.
+- **Entities kept `namespace Jobkeep.Models`.** Deliberate: the boundary is the project
+  reference graph, and **13.6 renames every namespace in one pass**. The two shared
+  enums in `Jobkeep.Contracts/Shared/SharedEnums.cs` are in that namespace too, which
+  reads oddly on purpose.
+- **`ApplicationStatus` and `SkillSource` are in Contracts, not copied.** Both appear in
+  two modules' response DTOs, so both reach the GraphQL schema, and two CLR enums of one
+  name is a schema-**build** failure. `PostingRequirementKind` and `ResumeSourceFormat`
+  stay copies because their entity half is never published. That is the test: **copy
+  only when one side is unpublished.**
+- **The six contexts are six units of work.** `ISkillCatalog.FindOrCreateAsync` saves in
+  its own transaction now, genuinely — its "call me before adding rows of your own"
+  ordering rule was belt-and-braces before and is the entire safeguard since.
+- **`dotnet ef` needs `--context` as well as both project flags**, e.g.
+  `dotnet ef migrations add X --project Jobkeep.Modules.Documents --startup-project
+  Jobkeep.Api --context DocumentsDbContext`.
+- **Raw SQL must name its schema.** Unqualified names resolve through `search_path` to
+  `public`, which now holds nothing. This bit eight tests, `::regclass` included.
+- **Dropping an FK silently drops its indexes**, including the UNIQUE index that made a
+  one-to-one "one". Four indexes had to be restated by hand; if you drop another
+  relationship, check what went with it.
 
-The user has agreed to **drop the dev database** at 13.3b (`docker compose down -v`);
-no `pg_dump` carry-over is needed.
+**What 13.3c is:** the four replacements for the dropped keys — delete notifications for
+`ai_analyses.PostingId` and `ats_results.ApplicationId`, delete-side checks for
+`job_applications.ResumeId` and `ats_results.ResumeId` — then flipping the two inverted
+tests in `DeleteBehaviourTests` back, and redrawing **both** diagrams with the
+`schema-diagram` skill from `pg_dump --schema-only` (not `migrations script`).
 
-Read
-`docs/phases/phase-13-clean-architecture.md`; it is the live plan, and it was
-rewritten on 2026-09-01 when the user confirmed **microservices is the destination**.
+Two things 13.3b made reachable that were impossible before, and both want reporting
+rather than silence at 13.3c: a skill id with no catalog row (dropped, not rendered
+blank) and an `ats_results.ResumeId` pointing at a deleted résumé (label left null).
+
+**The dev database was dropped at 13.3b**, as agreed. Asked and answered; do not re-ask.
+
 
 **13.2 IS DONE** (2026-09-01, all five sub-steps, suite 244 → 246 → 249 → 253 → 253).
-The property it bought, and the one 13.3 depends on: **no module names another
-module's table.** `AppDbContext` is resolved in exactly one file in `src/` —
-`Program.cs`, where the six `I<X>DbContext` interfaces are bound to it — and nothing
-moved in Postgres, so 13.3 gets to be a schema change and nothing else.
+The property it bought, and the one 13.3b then made physical: **no module names another
+module's table.** 13.2 did it logically, with nothing moving in Postgres, which is what
+let 13.3 be a schema change and nothing else.
 
-Seven things from 13.2 change how 13.3 is written:
+Six things from 13.2 still change how new code is written:
 
-- **A module takes its own `I<X>DbContext`, never `AppDbContext`.** Six interfaces
-  live in `src/Jobkeep.Infrastructure.Data/Contexts/`, each exposing only one
-  module's `DbSet`s. `ModuleBoundaryTests.No_module_takes_the_shared_context`
-  enforces it, and its allowlist, the conditional that read it and the canary that
-  guarded it were all **deleted in 13.2e** when the list emptied — as the list's own
-  comment instructed. Don't reintroduce one. At 13.3 these six interfaces are
-  replaced by real per-module `DbContext`s and the files go with `Jobkeep.Infrastructure.Data`.
+- **A module takes its OWN `DbContext` and no other.** 13.2's six `I<X>DbContext`
+  interfaces did this by omission; since 13.3b there are six real contexts and the
+  property is structural — another module's tables are not in the model.
+  `ModuleBoundaryTests.No_module_takes_a_context_it_does_not_own` enforces it (rewritten
+  at 13.3b, because the old version looked for `AppDbContext` by name and would have
+  gone vacuous when that type was deleted). Its allowlist, the conditional that read it
+  and the canary that guarded it were all **deleted in 13.2e** when the list emptied —
+  as the list's own comment instructed. Don't reintroduce one.
 - **Every cross-module crossing is a contract call, in `src/Jobkeep.Contracts/`.**
   Four interfaces: `IApplicationContract` (2 methods), `IPostingContract` (4),
   `IResumeContract` (3), `ISkillCatalog` (3). Implementations sit in
@@ -647,11 +690,13 @@ Seven things from 13.2 change how 13.3 is written:
   (batched, keyed by the name you passed in). Since 13.2c, `NaturalKey.Of` is called
   in exactly ONE file in `src/`. Do not reach for it near a skill name; that is the bug.
 - **`FindOrCreateAsync` SAVES — call it before adding anything of your own to the
-  change tracker.** All six interfaces still resolve the same scoped `AppDbContext`,
-  so a save in the catalog flushes your pending changes too, in a different
-  transaction from the rest of your unit of work. `CommitImport.CommitResumeAsync`
-  gets the order right and says why at length. The accepted cost is an orphan skill
-  row when a link fails; it is harmless and is written down, not to be re-discovered.
+  change tracker.** Until 13.3b all six interfaces resolved one scoped `AppDbContext`,
+  so the catalog's save flushed your pending changes too; since 13.3b it is simply a
+  different context and a different transaction. The rule is unchanged and the reason is
+  now the plain one: a failure after that save leaves the skill rows committed and yours
+  not. `CommitImport.CommitResumeAsync` gets the order right and says why at length. The
+  accepted cost is an orphan skill row when a link fails; it is harmless and is written
+  down, not to be re-discovered.
 - **A contract that writes must report a PARTIAL write, not throw.**
   `IApplicationContract.CommitPostingAsync` returns the ids alongside the error
   (`PostingCommitResult.Incomplete`) because the one thing a caller needs after a
@@ -668,13 +713,8 @@ Seven things from 13.2 change how 13.3 is written:
   `StringComparer.OrdinalIgnoreCase`, matching `GetResume` and `ListApplications`;
   a test pins it.
 
-**Two things 13.3 inherits as known gaps, both currently impossible:** a skill id with
-no catalog row is dropped rather than rendered blank, and an `ats_results.ResumeId`
-pointing at a deleted résumé leaves the label null. Both are held shut by foreign keys
-today. 13.3 drops those keys, so both become reachable and want reporting rather than
-silence.
-
-**Phase 6.5 group 4 (paste text) is parked**, by decision, until the 13.3 boundary.
+**Phase 6.5 group 4 (paste text) is parked**, by decision, until the 13.3 boundary —
+which 13.3b has now reached in every respect except 13.3c's clean-up.
 
 **13.2c is the one sub-step that touched the front end**, and only as a widened type:
 `ImportStatus` gained `CommitFailed` in `web/src/lib/api.ts`, plus a fourth queue tab

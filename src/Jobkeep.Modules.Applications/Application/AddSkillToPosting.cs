@@ -1,4 +1,3 @@
-using Jobkeep.Data;
 using Jobkeep.Models;
 using Jobkeep.Modules.Skills;
 using Jobkeep.Shared;
@@ -28,17 +27,19 @@ public record PostingSkillResponse(string SkillName, string? Category, bool IsRe
 
 public class AddSkillToPostingHandler
 {
-    private readonly IApplicationsDbContext _db;
+    private readonly ApplicationsDbContext _db;
     private readonly ISkillCatalog _skills;
 
     // The handler takes a DbContext directly: EF's DbContext is already a
     // unit-of-work plus a repository, so a hand-written repository over it would
     // be a layer that mostly forwards calls (architecture.md §2, rule 1).
     //
-    // Phase 13.2d narrowed it from AppDbContext to IApplicationsDbContext, which
-    // exposes this module's five DbSets and nothing else. `skills` is not among
-    // them, which is why the catalog is here too.
-    public AddSkillToPostingHandler(IApplicationsDbContext db, ISkillCatalog skills)
+    // Phase 13.2d narrowed it from the shared AppDbContext to this module's own
+    // IApplicationsDbContext, and 13.3b replaced that interface with the real
+    // ApplicationsDbContext below. Either way it exposes this module's five
+    // DbSets and nothing else; `skills` is not among them, which is why the
+    // catalog is here too.
+    public AddSkillToPostingHandler(ApplicationsDbContext db, ISkillCatalog skills)
     {
         _db = db;
         _skills = skills;
@@ -74,9 +75,10 @@ public class AddSkillToPostingHandler
         // forgetting turned an ordinary name into a 500.
         //
         // The catalog SAVES, and it is called before the link row is built for
-        // that reason (ISkillCatalog.FindOrCreateAsync says why at length). All
-        // six context interfaces still resolve one scoped AppDbContext, so a save
-        // in there flushes anything pending here.
+        // that reason (ISkillCatalog.FindOrCreateAsync says why at length).
+        // Since 13.3b that save is a genuinely separate transaction on the Skills
+        // context, so the ordering is the only thing keeping a failure between
+        // the two from leaving a link row pointing at nothing.
         var resolved = await _skills.FindOrCreateAsync([new SkillRequest(skillName, request.Category)], ct);
         var skill = resolved[skillName];
 

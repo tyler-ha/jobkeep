@@ -42,22 +42,31 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Phase 13.1 split src/Jobkeep.csproj into nine. All nine are named here
-         rather than relying on Jobkeep.Api pulling them in transitively: the
-         suite reaches the app over HTTP, but it also compiles against
-         Jobkeep.Models, Jobkeep.Data, Jobkeep.Shared and Jobkeep.Modules.Documents
-         directly, and the architecture tests need every module assembly loadable
-         by name. An implicit reference that disappears when someone tidies a
-         csproj is a confusing failure; a listed one is not. -->
+    <!-- Phase 13.1 split src/Jobkeep.csproj into nine. Every project is named
+         here rather than relying on Jobkeep.Api pulling them in transitively: the
+         suite reaches the app over HTTP, but it also compiles against the
+         entities, Jobkeep.Shared and Jobkeep.Modules.Documents directly, and the
+         architecture tests need every module assembly loadable by name. An
+         implicit reference that disappears when someone tidies a csproj is a
+         confusing failure; a listed one is not.
+
+         PHASE 13.3b changed three lines here and each is load-bearing:
+         Jobkeep.Infrastructure.Data is gone with the project; Jobkeep.Persistence
+         arrived, because TestDbContext calls ModelConventions and the app factory
+         attaches AuditSaveChangesInterceptor; and Jobkeep.Modules.Skills arrived,
+         which had been missing since 13.2 and was only working because Api pulled
+         it in — exactly the confusing failure this comment warns about, found by
+         TestDbContext needing to name all six module assemblies. -->
     <ProjectReference Include="../../src/Jobkeep.Api/Jobkeep.Api.csproj" />
     <ProjectReference Include="../../src/Jobkeep.SharedKernel/Jobkeep.SharedKernel.csproj" />
     <ProjectReference Include="../../src/Jobkeep.Contracts/Jobkeep.Contracts.csproj" />
-    <ProjectReference Include="../../src/Jobkeep.Infrastructure.Data/Jobkeep.Infrastructure.Data.csproj" />
+    <ProjectReference Include="../../src/Jobkeep.Persistence/Jobkeep.Persistence.csproj" />
     <ProjectReference Include="../../src/Jobkeep.Modules.Applications/Jobkeep.Modules.Applications.csproj" />
     <ProjectReference Include="../../src/Jobkeep.Modules.Analytics/Jobkeep.Modules.Analytics.csproj" />
     <ProjectReference Include="../../src/Jobkeep.Modules.Ai/Jobkeep.Modules.Ai.csproj" />
     <ProjectReference Include="../../src/Jobkeep.Modules.Ats/Jobkeep.Modules.Ats.csproj" />
     <ProjectReference Include="../../src/Jobkeep.Modules.Documents/Jobkeep.Modules.Documents.csproj" />
+    <ProjectReference Include="../../src/Jobkeep.Modules.Skills/Jobkeep.Modules.Skills.csproj" />
   </ItemGroup>
 
   <ItemGroup>

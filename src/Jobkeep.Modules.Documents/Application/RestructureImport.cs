@@ -1,5 +1,4 @@
 using System.Text.Json;
-using Jobkeep.Data;
 using Jobkeep.Models;
 using Jobkeep.Shared;
 using Microsoft.EntityFrameworkCore;
@@ -28,13 +27,13 @@ namespace Jobkeep.Modules.Documents;
 // rather than something the review screen does on load — see below.
 public class RestructureImportHandler
 {
-    private readonly IDocumentsDbContext _db;
+    private readonly DocumentsDbContext _db;
     private readonly IDocumentStructurer _structurer;
     private readonly ModelOptions _model;
     private readonly DocumentOptions _options;
 
     public RestructureImportHandler(
-        IDocumentsDbContext db, IDocumentStructurer structurer, ModelOptions model, DocumentOptions options)
+        DocumentsDbContext db, IDocumentStructurer structurer, ModelOptions model, DocumentOptions options)
     {
         _db = db;
         _structurer = structurer;

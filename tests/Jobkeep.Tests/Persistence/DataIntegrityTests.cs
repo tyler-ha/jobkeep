@@ -270,7 +270,7 @@ public sealed class DataIntegrityTests(PostgresFixture fixture) : IntegrationTes
         // schema noticing. This INSERT names neither the id nor the timestamps —
         // exactly what a non-EF writer would do — and Postgres must fill all three.
         await ExecuteAsync(
-            "INSERT INTO \"companies\" (\"Name\") VALUES ('Written By Raw Sql')");
+            "INSERT INTO applications.\"companies\" (\"Name\") VALUES ('Written By Raw Sql')");
 
         var row = await WithDbAsync(db => db.Companies.AsNoTracking()
             .SingleAsync(c => c.Name == "Written By Raw Sql", Ct));

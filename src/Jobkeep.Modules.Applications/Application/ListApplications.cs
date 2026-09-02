@@ -1,4 +1,3 @@
-using Jobkeep.Data;
 using Jobkeep.Models;
 using Jobkeep.Modules.Skills;
 using Jobkeep.Shared;
@@ -85,10 +84,10 @@ public class ListApplicationsHandler
     // Declared to Postgres as the ILIKE escape character; see Escape().
     private const string EscapeChar = @"\";
 
-    private readonly IApplicationsDbContext _db;
+    private readonly ApplicationsDbContext _db;
     private readonly ISkillCatalog _skills;
 
-    public ListApplicationsHandler(IApplicationsDbContext db, ISkillCatalog skills)
+    public ListApplicationsHandler(ApplicationsDbContext db, ISkillCatalog skills)
     {
         _db = db;
         _skills = skills;

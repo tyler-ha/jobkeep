@@ -1,4 +1,4 @@
-using Jobkeep.Data;
+using Jobkeep.Modules.Applications;
 using Jobkeep.Models;
 using Jobkeep.Shared;
 using Microsoft.EntityFrameworkCore;
@@ -20,9 +20,9 @@ public record ApplicationFunnel(List<StatusCount> Stages, int Total);
 
 public class StatusFunnelHandler
 {
-    private readonly IAnalyticsDbContext _db;
+    private readonly AnalyticsDbContext _db;
 
-    public StatusFunnelHandler(IAnalyticsDbContext db) => _db = db;
+    public StatusFunnelHandler(AnalyticsDbContext db) => _db = db;
 
     public async Task<SliceResult<ApplicationFunnel>> HandleAsync(CancellationToken ct = default)
     {

@@ -355,7 +355,7 @@ public class ImportTests(PostgresFixture fixture) : IntegrationTestBase(fixture)
             var resume = await db.Resumes
                 .Include(r => r.Experiences)
                 .Include(r => r.Educations)
-                .Include(r => r.ResumeSkills).ThenInclude(rs => rs.Skill)
+                .Include(r => r.ResumeSkills)
                 .SingleAsync(Ct);
 
             Assert.Equal("backend-focused", resume.Label);
@@ -432,9 +432,10 @@ public class ImportTests(PostgresFixture fixture) : IntegrationTestBase(fixture)
 
         await WithDbAsync(async db =>
         {
+            var names = await SkillNamesAsync(db);
             var application = await db.JobApplications
                 .Include(a => a.Posting).ThenInclude(p => p.Company)
-                .Include(a => a.Posting).ThenInclude(p => p.PostingSkills).ThenInclude(ps => ps.Skill)
+                .Include(a => a.Posting).ThenInclude(p => p.PostingSkills)
                 .Include(a => a.Posting).ThenInclude(p => p.Requirements)
                 .SingleAsync(Ct);
 
@@ -445,7 +446,7 @@ public class ImportTests(PostgresFixture fixture) : IntegrationTestBase(fixture)
             Assert.Equal("Senior Backend Engineer", application.Posting.Title);
 
             Assert.Equal(2, application.Posting.PostingSkills.Count);
-            Assert.True(application.Posting.PostingSkills.Single(s => s.Skill.Name == "C#").IsRequired);
+            Assert.True(application.Posting.PostingSkills.Single(s => names[s.SkillId] == "C#").IsRequired);
 
             Assert.Equal(2, application.Posting.Requirements.Count);
             Assert.Contains(application.Posting.Requirements,

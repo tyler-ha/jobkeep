@@ -1,4 +1,3 @@
-using Jobkeep.Data;
 using Jobkeep.Modules.Applications;
 using Jobkeep.Shared;
 using Microsoft.EntityFrameworkCore;
@@ -31,10 +30,10 @@ public record AnalysisSummaryResponse(
 
 public class GetAnalysisHandler
 {
-    private readonly IAiDbContext _db;
+    private readonly AiDbContext _db;
     private readonly IApplicationContract _applications;
 
-    public GetAnalysisHandler(IAiDbContext db, IApplicationContract applications)
+    public GetAnalysisHandler(AiDbContext db, IApplicationContract applications)
     {
         _db = db;
         _applications = applications;

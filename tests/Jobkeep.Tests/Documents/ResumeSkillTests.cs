@@ -86,9 +86,10 @@ public class ResumeSkillTests(PostgresFixture fixture) : IntegrationTestBase(fix
 
         await WithDbAsync(async db =>
         {
-            var link = await db.ResumeSkills.Include(rs => rs.Skill).SingleAsync(Ct);
+            var names = await SkillNamesAsync(db);
+            var link = await db.ResumeSkills.SingleAsync(Ct);
             Assert.Equal(resumeId, link.ResumeId);
-            Assert.Equal("Rust", link.Skill.Name);
+            Assert.Equal("Rust", names[link.SkillId]);
             Assert.Equal(SkillSource.Parsed, link.Source);
         });
     }

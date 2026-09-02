@@ -1,6 +1,5 @@
 using System.Security.Cryptography;
 using System.Text.Json;
-using Jobkeep.Data;
 using Jobkeep.Models;
 using Jobkeep.Shared;
 using Microsoft.EntityFrameworkCore;
@@ -41,14 +40,14 @@ public record ImportResponse(
 
 public class ImportDocumentHandler
 {
-    private readonly IDocumentsDbContext _db;
+    private readonly DocumentsDbContext _db;
     private readonly IDocumentTextExtractor _extractor;
     private readonly IDocumentStructurer _structurer;
     private readonly ModelOptions _model;
     private readonly DocumentOptions _options;
 
     public ImportDocumentHandler(
-        IDocumentsDbContext db,
+        DocumentsDbContext db,
         IDocumentTextExtractor extractor,
         IDocumentStructurer structurer,
         ModelOptions model,

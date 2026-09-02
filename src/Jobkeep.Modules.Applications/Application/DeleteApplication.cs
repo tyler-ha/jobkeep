@@ -1,4 +1,3 @@
-using Jobkeep.Data;
 using Jobkeep.Shared;
 using Microsoft.EntityFrameworkCore;
 
@@ -7,7 +6,7 @@ namespace Jobkeep.Modules.Applications;
 // Slice: delete an application.
 //
 // What survives the delete is a schema decision, not an accident:
-//   - ats_results cascades (IApplicationsDbContext), because your resume-vs-this-posting
+//   - ats_results cascades (ApplicationsDbContext), because your resume-vs-this-posting
 //     result has no meaning once the application is gone.
 //   - the job_posting is deliberately left in place. The FK is Restrict in the
 //     other direction and several applications can share one posting, so the ad
@@ -17,9 +16,9 @@ namespace Jobkeep.Modules.Applications;
 
 public class DeleteApplicationHandler
 {
-    private readonly IApplicationsDbContext _db;
+    private readonly ApplicationsDbContext _db;
 
-    public DeleteApplicationHandler(IApplicationsDbContext db) => _db = db;
+    public DeleteApplicationHandler(ApplicationsDbContext db) => _db = db;
 
     public async Task<SliceResult<bool>> HandleAsync(Guid id, CancellationToken ct = default)
     {

@@ -1,4 +1,4 @@
-using Jobkeep.Data;
+using Jobkeep.Modules.Applications;
 using Jobkeep.Modules.Skills;
 using Jobkeep.Shared;
 using Microsoft.EntityFrameworkCore;
@@ -32,10 +32,10 @@ public class SkillDemandHandler
     private const int MaxTop = 100;
     private const int DefaultTop = 20;
 
-    private readonly IAnalyticsDbContext _db;
+    private readonly AnalyticsDbContext _db;
     private readonly ISkillCatalog _skills;
 
-    public SkillDemandHandler(IAnalyticsDbContext db, ISkillCatalog skills)
+    public SkillDemandHandler(AnalyticsDbContext db, ISkillCatalog skills)
     {
         _db = db;
         _skills = skills;

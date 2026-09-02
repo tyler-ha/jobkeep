@@ -117,10 +117,22 @@ public interface ISkillCatalog
     // rather than discovered later.
     //
     // What callers must do about it: call this BEFORE adding their own rows to
-    // the change tracker. All six interfaces resolve the same scoped
-    // AppDbContext until 13.3, so a SaveChanges in here flushes whatever the
-    // caller has pending too — and a caller that half-built an aggregate first
-    // would get it committed early, in a different transaction from the rest.
+    // the change tracker.
+    //
+    // PHASE 13.3b CHANGED WHY, and left the rule itself untouched. Until then
+    // all six interfaces resolved one scoped AppDbContext, so a SaveChanges here
+    // flushed whatever the caller had pending — the hazard was that a caller who
+    // half-built an aggregate first would have it committed early, by someone
+    // else's save, in a different transaction from the rest of its work.
+    //
+    // Since 13.3b the Skills context is genuinely its own unit of work, so this
+    // save no longer touches the caller's change tracker at all. The rule
+    // survives because the underlying problem does: this is a separate
+    // transaction either way, so a failure after it leaves the skill rows
+    // committed and the caller's rows not. Calling first is what keeps the
+    // leftover an orphan taxonomy row — harmless, reusable — rather than a
+    // half-written aggregate. The ordering was belt-and-braces under one shared
+    // context and is the entire safeguard now.
     Task<IReadOnlyDictionary<string, SkillInfo>> FindOrCreateAsync(
         IReadOnlyCollection<SkillRequest> skills, CancellationToken ct = default);
 }

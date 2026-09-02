@@ -1,4 +1,3 @@
-using Jobkeep.Data;
 using Jobkeep.Modules.Documents;
 using Jobkeep.Shared;
 using Microsoft.EntityFrameworkCore;
@@ -32,10 +31,10 @@ namespace Jobkeep.Modules.Ats;
 // public DTO is unchanged, so no caller and no test on either surface moves.
 public class GetAtsResultHandler
 {
-    private readonly IAtsDbContext _db;
+    private readonly AtsDbContext _db;
     private readonly IResumeContract _resumes;
 
-    public GetAtsResultHandler(IAtsDbContext db, IResumeContract resumes)
+    public GetAtsResultHandler(AtsDbContext db, IResumeContract resumes)
     {
         _db = db;
         _resumes = resumes;

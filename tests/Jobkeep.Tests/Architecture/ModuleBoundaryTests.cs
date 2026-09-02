@@ -131,9 +131,10 @@ public class ModuleBoundaryTests
         // It cannot be held to the Foundation_projects rule above, because it
         // legitimately needs IAuditable. So the rule is one level weaker and
         // still checkable: SharedKernel, and nothing else of ours. In particular
-        // NOT Jobkeep.Infrastructure.Data — a reference there would mean an
-        // entity had been added, which is the thing its csproj says must not
-        // happen.
+        // NOT a module — a reference to one would mean an entity had been added,
+        // which is the thing its csproj says must not happen. That was easier to
+        // state before 13.3b, when every entity lived in one project it could be
+        // named against; the rule is unchanged and the check is the same.
         var ours = ReferencedJobkeepAssemblies("Jobkeep.Persistence")
             .Where(name => name != "Jobkeep.SharedKernel")
             .ToList();
@@ -144,22 +145,26 @@ public class ModuleBoundaryTests
     }
 
     [Fact]
-    public void No_module_takes_the_shared_context()
+    public void No_module_takes_a_context_it_does_not_own()
     {
-        // The reference rule above is about ASSEMBLIES; this one is about the type
-        // that made the assemblies necessary. Every module still references
-        // Jobkeep.Infrastructure.Data — it holds the entities until 13.3 — so any
-        // of them could name AppDbContext and reach all thirteen tables, and the
-        // boundary test would pass while the boundary did not exist.
+        // PHASE 13.3b REPLACED THIS TEST'S SUBJECT, because deleting AppDbContext would
+        // otherwise have quietly made it vacuous.
         //
-        // Phase 13.2 gives each module an I<X>DbContext exposing only its own
-        // DbSets. This is what makes that stick: a handler cannot quietly take the
-        // shared context back, because the missing property is what stops it
-        // naming another module's table.
+        // It used to look for a constructor parameter typed AppDbContext, which was the
+        // one type that could see all thirteen tables. That type is gone, so the literal
+        // check would now pass forever while proving nothing — the most expensive kind
+        // of green test.
         //
-        // Constructor parameters rather than fields, because DI is how a handler
-        // gets one. A module that new'd up an AppDbContext would need a connection
-        // string it has no way to reach.
+        // The rule that replaces it is stronger and does not depend on a name: a
+        // module's handler may take a DbContext DECLARED IN ITS OWN ASSEMBLY, and no
+        // other. That catches three things at once — another module's context, a future
+        // re-introduced shared one, and TestDbContext, the aggregate context in tests/
+        // that exists so 122 arrange call sites did not have to change. The last is why
+        // the check is written this way rather than as a second name to look for.
+        //
+        // Constructor parameters rather than fields, because DI is how a handler gets
+        // one. A module that new'd up a context would need a connection string it has no
+        // way to reach.
         var violations = new List<string>();
 
         foreach (var module in Modules)
@@ -169,14 +174,31 @@ public class ModuleBoundaryTests
             foreach (var type in assembly.GetTypes())
                 foreach (var ctor in type.GetConstructors())
                     foreach (var parameter in ctor.GetParameters())
-                        if (parameter.ParameterType.Name == "AppDbContext")
-                            violations.Add($"{module}: {type.Name}({parameter.Name})");
+                    {
+                        if (!IsDbContext(parameter.ParameterType)) continue;
+                        if (parameter.ParameterType.Assembly == assembly) continue;
+
+                        violations.Add(
+                            $"{module}: {type.Name}({parameter.ParameterType.Name} {parameter.Name})");
+                    }
         }
 
         Assert.True(violations.Count == 0,
-            "A module takes AppDbContext. Depend on that module's I<X>DbContext instead, "
-            + "and reach another module through Jobkeep.Contracts:\n  "
+            "A module takes a DbContext it does not own. Depend on your own module's "
+            + "context and reach another module through Jobkeep.Contracts:\n  "
             + string.Join("\n  ", violations));
+    }
+
+    private static bool IsDbContext(Type type)
+    {
+        // By name up the base chain, so this file needs no reference to EF Core. The
+        // same reasoning as loading assemblies by name below: a test about what modules
+        // may depend on should not itself depend on much.
+        for (var t = type; t is not null; t = t.BaseType)
+            if (t.FullName == "Microsoft.EntityFrameworkCore.DbContext")
+                return true;
+
+        return false;
     }
 
     // DELETED IN 13.2c: The_recorded_exception_is_actually_visible_to_this_test.

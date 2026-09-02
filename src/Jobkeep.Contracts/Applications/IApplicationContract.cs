@@ -105,14 +105,29 @@ public record PostingRequirement(string Text, PostingRequirementKind Kind, bool 
 // tolerated. Jobkeep.Contracts must reference no other Jobkeep assembly — it
 // becomes the wire schema when a module is extracted, and
 // ModuleBoundaryTests.Foundation_projects_depend_on_nothing_of_ours enforces it
-// — so it cannot name the entity enum, which lives with the entity in
-// Jobkeep.Infrastructure.Data.
+// — so it cannot name the entity enum, which since 13.3b lives with its entity
+// in Jobkeep.Modules.Applications.
 //
-// At 13.3 these are two services that happen to agree on three words, which is
-// what a shared vocabulary looks like once it has to cross a network. The
-// mapping between them is an explicit switch in ApplicationContract rather than
-// a cast, so adding a value to one without the other fails to compile instead of
+// These are two services that happen to agree on three words, which is what a
+// shared vocabulary looks like once it has to cross a network. The mapping
+// between them is an explicit switch in ApplicationContract rather than a cast,
+// so adding a value to one without the other fails to compile instead of
 // silently renumbering.
+//
+// PHASE 13.3b removed the SECOND switch. Documents used to carry the entity enum
+// in its draft DTOs and map it here on the way into a commit; it could not keep
+// doing that once RequirementKind moved into Applications, and the fix was to
+// type the drafts on THIS enum instead of adding a reference. That is the better
+// shape and the split is what forced it: a draft's destination was always the
+// contract, so carrying another module's entity enum was never right.
+//
+// The remaining switch is in ApplicationContract, on the owning side, where a
+// contract value becomes a column. That one is irreducible.
+//
+// Contrast SharedEnums.cs, where ApplicationStatus and SkillSource could NOT be
+// copied — two CLR enums of one name break the GraphQL schema build. The
+// difference is whether both copies are published, and this one's entity half
+// never is.
 public enum PostingRequirementKind { Qualification, Responsibility, Benefit }
 
 // What came of a commit.

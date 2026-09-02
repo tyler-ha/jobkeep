@@ -1,4 +1,3 @@
-using Jobkeep.Data;
 using Jobkeep.Models;
 using Jobkeep.Shared;
 using Microsoft.EntityFrameworkCore;
@@ -31,10 +30,10 @@ public record ImportSummary(
 
 public class ListImportsHandler
 {
-    private readonly IDocumentsDbContext _db;
+    private readonly DocumentsDbContext _db;
     private readonly DocumentOptions _options;
 
-    public ListImportsHandler(IDocumentsDbContext db, DocumentOptions options)
+    public ListImportsHandler(DocumentsDbContext db, DocumentOptions options)
     {
         _db = db;
         _options = options;

@@ -1,4 +1,4 @@
-using Jobkeep.Data;
+using Jobkeep.Modules.Applications;
 using Jobkeep.Shared;
 using Microsoft.EntityFrameworkCore;
 
@@ -20,9 +20,9 @@ public class CompanyRollupHandler
     private const int MaxTop = 100;
     private const int DefaultTop = 20;
 
-    private readonly IAnalyticsDbContext _db;
+    private readonly AnalyticsDbContext _db;
 
-    public CompanyRollupHandler(IAnalyticsDbContext db) => _db = db;
+    public CompanyRollupHandler(AnalyticsDbContext db) => _db = db;
 
     public async Task<SliceResult<List<CompanyRollupItem>>> HandleAsync(
         int? top, CancellationToken ct = default)

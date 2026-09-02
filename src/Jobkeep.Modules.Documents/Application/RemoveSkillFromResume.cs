@@ -1,4 +1,3 @@
-using Jobkeep.Data;
 using Jobkeep.Modules.Skills;
 using Jobkeep.Shared;
 using Microsoft.EntityFrameworkCore;
@@ -29,10 +28,10 @@ namespace Jobkeep.Modules.Documents;
 // to prevent. Documents owns `resume_skills`; Applications owns `posting_skills`.
 public class RemoveSkillFromResumeHandler
 {
-    private readonly IDocumentsDbContext _db;
+    private readonly DocumentsDbContext _db;
     private readonly ISkillCatalog _skills;
 
-    public RemoveSkillFromResumeHandler(IDocumentsDbContext db, ISkillCatalog skills)
+    public RemoveSkillFromResumeHandler(DocumentsDbContext db, ISkillCatalog skills)
     {
         _db = db;
         _skills = skills;

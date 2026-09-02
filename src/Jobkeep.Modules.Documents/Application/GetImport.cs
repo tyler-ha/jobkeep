@@ -1,4 +1,3 @@
-using Jobkeep.Data;
 using Jobkeep.Shared;
 using Microsoft.EntityFrameworkCore;
 
@@ -13,9 +12,9 @@ namespace Jobkeep.Modules.Documents;
 // document in front of them.
 public class GetImportHandler
 {
-    private readonly IDocumentsDbContext _db;
+    private readonly DocumentsDbContext _db;
 
-    public GetImportHandler(IDocumentsDbContext db) => _db = db;
+    public GetImportHandler(DocumentsDbContext db) => _db = db;
 
     public async Task<SliceResult<ImportResponse>> HandleAsync(Guid id, CancellationToken ct = default)
     {

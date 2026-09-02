@@ -39,8 +39,12 @@ public sealed class DedupTests(PostgresFixture fixture) : IntegrationTestBase(fi
         (await Client.AddSkillAsync(second, "C#", Ct)).EnsureSuccessStatusCode();
 
         var skills = await WithDbAsync(db => db.Skills.Where(s => s.Name == "C#").ToListAsync(Ct));
+        // 13.3b: `ps.Skill.Name` was a join onto another module's table, and the
+        // navigation is gone. Counting by the id the single skill row actually has
+        // asserts the same thing and is what the application would have to do.
+        var skillId = Assert.Single(skills).Id;
         var links = await WithDbAsync(db =>
-            db.PostingSkills.Where(ps => ps.Skill.Name == "C#").CountAsync(Ct));
+            db.PostingSkills.Where(ps => ps.SkillId == skillId).CountAsync(Ct));
 
         Assert.Single(skills);
         Assert.Equal(2, links);

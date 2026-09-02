@@ -1,4 +1,3 @@
-using Jobkeep.Data;
 using Jobkeep.Models;
 using Jobkeep.Modules.Skills;
 using Jobkeep.Shared;
@@ -14,10 +13,10 @@ namespace Jobkeep.Modules.Applications;
 
 public class PostingContract : IPostingContract
 {
-    private readonly IApplicationsDbContext _db;
+    private readonly ApplicationsDbContext _db;
     private readonly ISkillCatalog _skills;
 
-    public PostingContract(IApplicationsDbContext db, ISkillCatalog skills)
+    public PostingContract(ApplicationsDbContext db, ISkillCatalog skills)
     {
         _db = db;
         _skills = skills;

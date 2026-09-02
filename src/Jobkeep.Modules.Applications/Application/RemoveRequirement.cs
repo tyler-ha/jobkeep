@@ -1,4 +1,3 @@
-using Jobkeep.Data;
 using Jobkeep.Shared;
 using Microsoft.EntityFrameworkCore;
 
@@ -14,9 +13,9 @@ namespace Jobkeep.Modules.Applications;
 // route's parent is the cheap habit that prevents it.
 public class RemoveRequirementHandler
 {
-    private readonly IApplicationsDbContext _db;
+    private readonly ApplicationsDbContext _db;
 
-    public RemoveRequirementHandler(IApplicationsDbContext db) => _db = db;
+    public RemoveRequirementHandler(ApplicationsDbContext db) => _db = db;
 
     public async Task<SliceResult<bool>> HandleAsync(
         Guid applicationId, Guid requirementId, CancellationToken ct = default)

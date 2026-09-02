@@ -1,4 +1,3 @@
-using Jobkeep.Data;
 using Jobkeep.Models;
 using Jobkeep.Shared;
 using Microsoft.EntityFrameworkCore;
@@ -30,7 +29,7 @@ namespace Jobkeep.Modules.Applications;
 internal static class CompanyLookup
 {
     public static async Task<Company> ResolveAsync(
-        IApplicationsDbContext db, Company incoming, CancellationToken ct = default)
+        ApplicationsDbContext db, Company incoming, CancellationToken ct = default)
     {
         // Normalise in C# with the same rule Postgres uses for the generated
         // column. EF translates this to a plain equality against an indexed
@@ -52,7 +51,7 @@ internal static class CompanyLookup
         return existing;
     }
 
-    public static Task<Company> ResolveAsync(IApplicationsDbContext db, string name, CancellationToken ct = default)
+    public static Task<Company> ResolveAsync(ApplicationsDbContext db, string name, CancellationToken ct = default)
         => ResolveAsync(db, new Company { Name = name }, ct);
 
 }

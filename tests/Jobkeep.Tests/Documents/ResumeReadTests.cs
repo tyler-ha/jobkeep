@@ -69,7 +69,10 @@ public class ResumeReadTests(PostgresFixture fixture) : IntegrationTestBase(fixt
                     db.Skills.Add(skill);
                 }
 
-                resume.ResumeSkills.Add(new ResumeSkill { Skill = skill, Source = SkillSource.Parsed });
+                // 13.3b: the link carries the id, not the row. Skill.Id is assigned
+                // by the property initialiser, so this works for a skill that has
+                // not been saved yet exactly as the navigation used to.
+                resume.ResumeSkills.Add(new ResumeSkill { SkillId = skill.Id, Source = SkillSource.Parsed });
             }
 
             if (withRecords)

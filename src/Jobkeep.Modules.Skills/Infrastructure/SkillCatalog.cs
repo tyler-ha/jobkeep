@@ -1,11 +1,10 @@
-using Jobkeep.Data;
 using Jobkeep.Models;
 using Jobkeep.Shared;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jobkeep.Modules.Skills;
 
-// The one implementation of ISkillCatalog. Holds ISkillsDbContext, which exposes
+// The one implementation of ISkillCatalog. Holds SkillsDbContext, which exposes
 // exactly one DbSet — this module cannot see another module's tables even by
 // accident, which is the property Phase 13.2 exists to establish.
 //
@@ -14,9 +13,9 @@ namespace Jobkeep.Modules.Skills;
 // writer can forget", which is the difference between a convention and a design.
 public class SkillCatalog : ISkillCatalog
 {
-    private readonly ISkillsDbContext _db;
+    private readonly SkillsDbContext _db;
 
-    public SkillCatalog(ISkillsDbContext db) => _db = db;
+    public SkillCatalog(SkillsDbContext db) => _db = db;
 
     public async Task<IReadOnlyDictionary<Guid, SkillInfo>> GetAsync(
         IReadOnlyCollection<Guid> ids, CancellationToken ct = default)

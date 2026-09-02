@@ -9,7 +9,7 @@ namespace Jobkeep.Modules.Analytics;
 // Analytics is READ-ONLY. It owns no tables, has no mutations, and every one of
 // its handlers is a single aggregate query. Until Phase 13.2 that property was
 // what made the next section's exception acceptable; it is now enforced by
-// IAnalyticsDbContext, which has no SaveChangesAsync to call.
+// AnalyticsDbContext, which has no SaveChangesAsync to call.
 //
 // ---------------------------------------------------------------------------
 // The boundary tradeoff, rewritten in Phase 13.2 because the old one is now wrong
@@ -49,7 +49,7 @@ namespace Jobkeep.Modules.Analytics;
 // over the base tables, which is what catches that.
 //
 // Views/AnalyticsViews.cs holds the view definitions and the per-view reasoning.
-// IAnalyticsDbContext has no SaveChangesAsync at all — read-only is now enforced
+// AnalyticsDbContext has no SaveChangesAsync at all — read-only is now enforced
 // by the type rather than asserted in a comment.
 public static class AnalyticsModule
 {

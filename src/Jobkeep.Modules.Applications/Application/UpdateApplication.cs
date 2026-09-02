@@ -1,4 +1,3 @@
-using Jobkeep.Data;
 using Jobkeep.Models;
 using Jobkeep.Modules.Documents;
 using Jobkeep.Modules.Skills;
@@ -31,17 +30,17 @@ public record UpdateApplicationRequest(
 
 public class UpdateApplicationHandler
 {
-    private readonly IApplicationsDbContext _db;
+    private readonly ApplicationsDbContext _db;
     private readonly ISkillCatalog _skills;
     private readonly IResumeContract _resumes;
 
-    // Phase 13.2d. IApplicationsDbContext exposes this module's five DbSets and
+    // Phase 13.2d. ApplicationsDbContext exposes this module's five DbSets and
     // nothing else, so the two columns this slice needs from other modules —
     // a résumé's label, a skill's name — arrive through contracts instead of
     // through a navigation property. ApplicationDetailProjection.HydrateAsync is
     // where they are joined back on.
     public UpdateApplicationHandler(
-        IApplicationsDbContext db, ISkillCatalog skills, IResumeContract resumes)
+        ApplicationsDbContext db, ISkillCatalog skills, IResumeContract resumes)
     {
         _db = db;
         _skills = skills;

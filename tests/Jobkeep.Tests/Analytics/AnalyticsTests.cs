@@ -56,10 +56,16 @@ public sealed class AnalyticsTests(PostgresFixture fixture) : IntegrationTestBas
         (await Client.AddSkillAsync(atlassian, "C#", Ct)).EnsureSuccessStatusCode();
         (await Client.AddSkillAsync(canva, "AWS", Ct)).EnsureSuccessStatusCode();
 
+        // 13.3b: this joins ACROSS two schemas, and the application can no longer
+        // write it — `skills` is the Skills module's table, reached through
+        // ISkillCatalog. That is the point of the test rather than a problem with it.
+        // It is the specification, in the form the phase-2 doc argued for, and the
+        // endpoint has to keep matching it while getting there by a different route
+        // (one bounded second query, resolving ids to names).
         var topSkillPerSql = (string?)await ScalarAsync(
             """
-            SELECT s."Name" FROM skills s
-            JOIN posting_skills ps ON ps."SkillId" = s."Id"
+            SELECT s."Name" FROM skills.skills s
+            JOIN applications.posting_skills ps ON ps."SkillId" = s."Id"
             GROUP BY s."Name" ORDER BY COUNT(*) DESC, s."Name" LIMIT 1
             """);
 
@@ -203,7 +209,7 @@ public sealed class AnalyticsTests(PostgresFixture fixture) : IntegrationTestBas
         // with the stages — and with the number of rows actually in the table.
         Assert.Equal(4, funnel.GetProperty("total").GetInt32());
         Assert.Equal(4, byStatus.Values.Sum());
-        Assert.Equal(4L, await ScalarAsync("SELECT COUNT(*) FROM job_applications"));
+        Assert.Equal(4L, await ScalarAsync("SELECT COUNT(*) FROM applications.job_applications"));
     }
 
     // ------------------------------------------------------------------
@@ -228,7 +234,7 @@ public sealed class AnalyticsTests(PostgresFixture fixture) : IntegrationTestBas
             rollup.Select(c => (Name(c), c.GetProperty("applicationCount").GetInt32())).ToArray());
 
         // One company row per name, not one per application.
-        Assert.Equal(2L, await ScalarAsync("SELECT COUNT(*) FROM companies"));
+        Assert.Equal(2L, await ScalarAsync("SELECT COUNT(*) FROM applications.companies"));
     }
 
     [Fact]

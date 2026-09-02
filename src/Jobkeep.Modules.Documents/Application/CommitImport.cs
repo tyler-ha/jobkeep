@@ -1,4 +1,3 @@
-using Jobkeep.Data;
 using Jobkeep.Models;
 using Jobkeep.Modules.Applications;
 using Jobkeep.Modules.Skills;
@@ -58,12 +57,12 @@ public record CommitResponse(
 
 public class CommitImportHandler
 {
-    private readonly IDocumentsDbContext _db;
+    private readonly DocumentsDbContext _db;
     private readonly ISkillCatalog _skills;
     private readonly IApplicationContract _applications;
 
     public CommitImportHandler(
-        IDocumentsDbContext db,
+        DocumentsDbContext db,
         ISkillCatalog skills,
         IApplicationContract applications)
     {
@@ -135,17 +134,20 @@ public class CommitImportHandler
         // ------------------------------------------------------------------
         // 13.2c: find-or-create moved behind ISkillCatalog, which does its own
         // SaveChanges (its interface says so at length, and explains why it has
-        // to once Skills is a service). Every I<X>DbContext still resolves the
-        // same scoped AppDbContext until 13.3, so that SaveChanges flushes
-        // whatever THIS method has pending too.
+        // to once Skills is a service).
+        //
+        // 13.3b MADE THAT LITERAL. The catalog now saves through its own
+        // own unit of work, on the `skills` schema, in a
+        // transaction this method has no part in. What was "the same context, so
+        // mind the flush" is now simply two transactions.
         //
         // Resolving skills before building the resume is what keeps that
-        // harmless. Do it the other way round and the catalog's save would
-        // commit a half-built resume — no skills, no import status change — in
-        // its own transaction, and a failure just after would leave a resume the
-        // user cannot re-import (the label check above would refuse the retry).
-        // Ordering is the whole fix; there is no cleverer one available without
-        // a distributed transaction.
+        // harmless, and the argument is unchanged by the split. Do it the other
+        // way round and the catalog's save would commit a half-built resume -
+        // no skills, no import status change — in its own transaction, and a
+        // failure just after would leave a resume the user cannot re-import (the
+        // label check above would refuse the retry). Ordering is the whole fix;
+        // there is no cleverer one available without a distributed transaction.
         var resolved = await ResolveSkillsAsync(draft.Skills, ct);
 
         var resume = new Resume
@@ -380,7 +382,7 @@ public class CommitImportHandler
                     draft.SourceUrl,
                     draft.Skills.Select(s => new ExtractedSkill(Clip(s.Name, 100)!, s.Required)).ToList(),
                     draft.Requirements
-                        .Select(r => new PostingRequirement(r.Text, ToContract(r.Kind), r.IsMustHave))
+                        .Select(r => new PostingRequirement(r.Text, r.Kind, r.IsMustHave))
                         .ToList()),
                 ct);
         }
@@ -481,14 +483,4 @@ public class CommitImportHandler
             0, 0, 0, 0));
     }
 
-    // Draft enum to contract enum. Two switches exist for one mapping — this one
-    // and ToEntity in ApplicationContract — because Jobkeep.Contracts may not
-    // reference the assembly the entity enum lives in. See PostingRequirementKind.
-    private static PostingRequirementKind ToContract(RequirementKind kind) => kind switch
-    {
-        RequirementKind.Qualification => PostingRequirementKind.Qualification,
-        RequirementKind.Responsibility => PostingRequirementKind.Responsibility,
-        RequirementKind.Benefit => PostingRequirementKind.Benefit,
-        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unmapped requirement kind."),
-    };
 }

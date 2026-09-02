@@ -1,6 +1,5 @@
 using System.ComponentModel;
 using System.Text.Json;
-using Jobkeep.Data;
 using Jobkeep.Models;
 using Jobkeep.Modules.Applications;
 using Jobkeep.Modules.Documents;
@@ -154,7 +153,7 @@ public class CheckAtsHandler
     // One table, and it is the only one this module owns. Everything else this
     // slice needs arrives through a contract - which is the entire substance of
     // 13.2e, since before it this field was AppDbContext and reached all thirteen.
-    private readonly IAtsDbContext _db;
+    private readonly AtsDbContext _db;
     private readonly IApplicationContract _applications;
     private readonly IPostingContract _postings;
     private readonly IResumeContract _resumes;
@@ -163,7 +162,7 @@ public class CheckAtsHandler
     private readonly ModelOptions _model;
 
     public CheckAtsHandler(
-        IAtsDbContext db,
+        AtsDbContext db,
         IApplicationContract applications,
         IPostingContract postings,
         IResumeContract resumes,

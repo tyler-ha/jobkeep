@@ -1,5 +1,4 @@
 using System.Text.Json;
-using Jobkeep.Data;
 using Jobkeep.Models;
 using Jobkeep.Shared;
 using Microsoft.EntityFrameworkCore;
@@ -21,9 +20,9 @@ namespace Jobkeep.Modules.Documents;
 // path syntax for "the third experience entry's second bullet".
 public class ReviewImportHandler
 {
-    private readonly IDocumentsDbContext _db;
+    private readonly DocumentsDbContext _db;
 
-    public ReviewImportHandler(IDocumentsDbContext db) => _db = db;
+    public ReviewImportHandler(DocumentsDbContext db) => _db = db;
 
     public async Task<SliceResult<ImportResponse>> HandleAsync(
         Guid id, ImportDraft draft, CancellationToken ct = default)

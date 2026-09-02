@@ -62,7 +62,7 @@ public class DocumentOptions
 // `document_imports`, `resumes`, `resume_skills`, `resume_experiences` and
 // `resume_educations`. That is the whole list, and since Phase 13.2c it is also
 // the whole list of tables this module's code can NAME: every handler takes
-// IDocumentsDbContext, which exposes those five DbSets and nothing else.
+// DocumentsDbContext, which exposes those five DbSets and nothing else.
 //
 // It reaches two other modules, both through Jobkeep.Contracts and neither
 // through a project reference:

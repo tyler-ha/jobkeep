@@ -15,7 +15,7 @@ public static class SkillsModule
     public static IServiceCollection AddSkillsModule(this IServiceCollection services)
     {
         // Scoped, matching the context it holds. A singleton here would capture a
-        // scoped ISkillsDbContext, which is the captive-dependency bug
+        // scoped SkillsDbContext, which is the captive-dependency bug
         // ApplicationsModule.cs calls out.
         services.AddScoped<ISkillCatalog, SkillCatalog>();
         return services;

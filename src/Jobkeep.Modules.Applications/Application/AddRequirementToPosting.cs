@@ -1,4 +1,3 @@
-using Jobkeep.Data;
 using Jobkeep.Models;
 using Jobkeep.Shared;
 using Microsoft.EntityFrameworkCore;
@@ -22,9 +21,9 @@ public record RequirementResponse(Guid Id, string Text, RequirementKind Kind, bo
 
 public class AddRequirementToPostingHandler
 {
-    private readonly IApplicationsDbContext _db;
+    private readonly ApplicationsDbContext _db;
 
-    public AddRequirementToPostingHandler(IApplicationsDbContext db) => _db = db;
+    public AddRequirementToPostingHandler(ApplicationsDbContext db) => _db = db;
 
     public async Task<SliceResult<RequirementResponse>> HandleAsync(
         Guid applicationId, AddRequirementToPostingRequest request, CancellationToken ct = default)

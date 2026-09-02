@@ -1,4 +1,3 @@
-using Jobkeep.Data;
 using Jobkeep.Models;
 using Jobkeep.Shared;
 using Microsoft.EntityFrameworkCore;
@@ -47,10 +46,10 @@ public record ResumeSummary(
 
 public class ListResumesHandler
 {
-    private readonly IDocumentsDbContext _db;
+    private readonly DocumentsDbContext _db;
     private readonly DocumentOptions _options;
 
-    public ListResumesHandler(IDocumentsDbContext db, DocumentOptions options)
+    public ListResumesHandler(DocumentsDbContext db, DocumentOptions options)
     {
         _db = db;
         _options = options;

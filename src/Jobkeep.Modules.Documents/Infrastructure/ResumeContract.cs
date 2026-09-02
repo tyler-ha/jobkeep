@@ -1,4 +1,3 @@
-using Jobkeep.Data;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jobkeep.Modules.Documents;
@@ -11,9 +10,9 @@ namespace Jobkeep.Modules.Documents;
 // contracts: a slice answers a user's request, and this answers another module's.
 public class ResumeContract : IResumeContract
 {
-    private readonly IDocumentsDbContext _db;
+    private readonly DocumentsDbContext _db;
 
-    public ResumeContract(IDocumentsDbContext db) => _db = db;
+    public ResumeContract(DocumentsDbContext db) => _db = db;
 
     public async Task<ResumeRef?> GetAsync(Guid resumeId, CancellationToken ct = default)
         // Two columns, projected. The caller is checking an id or rendering a

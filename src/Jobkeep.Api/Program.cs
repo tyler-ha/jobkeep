@@ -4,7 +4,6 @@ using System.Text.Json.Serialization;
 // half still lives with its module. Both halves disappear into controllers
 // and a module DI extension in 13.5.
 using Jobkeep.Api.Endpoints;
-using Jobkeep.Data;
 using Jobkeep.GraphQL;
 using Jobkeep.Modules.Ai;
 using Jobkeep.Modules.Analytics;
@@ -27,7 +26,7 @@ var builder = WebApplication.CreateBuilder(args);
 var connectionString = builder.Configuration.GetConnectionString("Postgres");
 
 // Phase 7 — the audit-timestamp interceptor (F8). Registered here rather than
-// inside AppDbContext because AppDbContext's job is the schema, in one readable
+// inside a context, because a context's job is the schema, in one readable
 // place, and because a test needs to be able to swap the clock or leave the
 // interceptor off entirely to write a known timestamp and watch it change.
 //
@@ -36,36 +35,69 @@ var connectionString = builder.Configuration.GetConnectionString("Postgres");
 // service is the safe direction — the captive-dependency hazard runs the other
 // way.
 builder.Services.AddSingleton<AuditSaveChangesInterceptor>();
-builder.Services.AddDbContext<AppDbContext>((sp, options) => options
-    .UseNpgsql(connectionString)
-    .AddInterceptors(sp.GetRequiredService<AuditSaveChangesInterceptor>()));
 
-// Phase 13.2 — the per-module views of that one context. Each interface exposes
-// only its own module's DbSets, so a handler physically cannot name another
-// module's table: the property is not there to type.
+// ---------------------------------------------------------------------------
+// PHASE 13.3b — six contexts, six schemas, six migration histories
+// ---------------------------------------------------------------------------
+// This block used to register ONE AppDbContext and then six interfaces over it,
+// each resolving that same scoped instance. It bought the 13.2 property — a
+// handler cannot name another module's table — while leaving Postgres untouched,
+// so nothing about behaviour changed in that step. This is the step that changes
+// it.
 //
-// Registered HERE, in the composition root, and that placement is the point. The
-// module projects still reference Jobkeep.Infrastructure.Data (it dies at 13.3),
-// so any of them could resolve AppDbContext by name if it were wired locally.
-// Keeping the concrete type in one file means there is exactly one place a
-// module could cheat from, and an architecture test watches for it.
+// What is the SAME: one connection string, one database, one Postgres server.
+// Nothing here is a second deployment, and nothing is meant to be yet.
 //
-// All six resolve the SAME scoped AppDbContext rather than constructing one
-// each. That matters: a slice holding two of these interfaces is holding one
-// change tracker and one transaction, exactly as before. Registering them as
-// separate contexts would have made SaveChanges mean different things depending
-// on which interface was asked — a behaviour change smuggled into the one step
-// whose whole value is that it has none. 13.3 splits them for real.
-builder.Services.AddScoped<IApplicationsDbContext>(sp => sp.GetRequiredService<AppDbContext>());
-builder.Services.AddScoped<ISkillsDbContext>(sp => sp.GetRequiredService<AppDbContext>());
-builder.Services.AddScoped<IDocumentsDbContext>(sp => sp.GetRequiredService<AppDbContext>());
-builder.Services.AddScoped<IAiDbContext>(sp => sp.GetRequiredService<AppDbContext>());
-builder.Services.AddScoped<IAtsDbContext>(sp => sp.GetRequiredService<AppDbContext>());
-builder.Services.AddScoped<IAnalyticsDbContext>(sp => sp.GetRequiredService<AppDbContext>());
+// What is DIFFERENT, and it is the whole point:
+//
+//   * Each context maps only its own module's tables, in its own SCHEMA. A
+//     query cannot join across a boundary any more, because the other table is
+//     not in the model. That is the property that survives extraction: a join
+//     that does not exist cannot stop working when the boundary becomes a
+//     network.
+//
+//   * Each has its own __EFMigrationsHistory, in its own schema. Five contexts
+//     own tables and therefore migrations; Analytics owns neither. Separate
+//     histories mean a module's schema can be created, migrated and eventually
+//     MOVED without asking the other five for permission — which is exactly what
+//     extracting one would require.
+//
+//   * They are six units of work. Two of them in one handler is two change
+//     trackers and two transactions. Nothing in src/ holds two, but
+//     ISkillCatalog.FindOrCreateAsync is called from four modules and saves
+//     through the Skills context, so its "call me before adding rows of your
+//     own" ordering rule is now load-bearing rather than precautionary.
+//     CommitImport.CommitResumeAsync already gets it right and says why.
+//
+// The interceptor goes on all six. It stamps CreatedAtUtc/UpdatedAtUtc on
+// anything IAuditable, which is a rule about entities rather than about modules,
+// so leaving it off one context would be a silent inconsistency in the data
+// rather than a visible one in the code.
+void AddModuleContext<TContext>(string schema) where TContext : DbContext =>
+    builder.Services.AddDbContext<TContext>((sp, options) => options
+        .UseNpgsql(connectionString, npgsql => npgsql
+            // Same table name in six schemas, rather than six names in one. A
+            // module that is lifted out takes its schema whole, history included,
+            // and needs no rename on the way.
+            .MigrationsHistoryTable("__EFMigrationsHistory", schema))
+        .AddInterceptors(sp.GetRequiredService<AuditSaveChangesInterceptor>()));
+
+AddModuleContext<ApplicationsDbContext>("applications");
+AddModuleContext<SkillsDbContext>("skills");
+AddModuleContext<DocumentsDbContext>("documents");
+AddModuleContext<AiDbContext>("ai");
+AddModuleContext<AtsDbContext>("ats");
+
+// Analytics reads three views published by Applications and owns no tables, so
+// it gets a context but no migrations history — there is nothing for it to
+// create, and giving it a history table would imply otherwise.
+builder.Services.AddDbContext<AnalyticsDbContext>((sp, options) => options
+    .UseNpgsql(connectionString));
 
 // Every use case is a vertical slice under Modules/ (docs/architecture.md §2).
-// Each slice handler takes AppDbContext directly, so this registers them and
-// nothing else — as of Phase 2.3 there is no repository layer left to register.
+// Each slice handler takes its module's own DbContext directly, so this
+// registers them and nothing else — as of Phase 2.3 there is no repository layer
+// left to register.
 builder.Services.AddApplicationsModule();
 
 // Phase 13.2. The shared skill taxonomy, promoted out of Applications a step
@@ -75,8 +107,9 @@ builder.Services.AddSkillsModule();
 
 // Phase 2.4. Read-only: three aggregate queries and no tables of its own. Since
 // Phase 13.2 it reads three PUBLISHED VIEWS rather than Applications' tables, so
-// the decision-13 exception it relied on is retired — Views/AnalyticsViews.cs
-// has the argument, and IAnalyticsDbContext has no SaveChangesAsync at all.
+// the decision-13 exception it relied on is retired — Jobkeep.Contracts'
+// PublishedViews.cs has the argument. Since 13.3b those views live in the
+// `applications` schema and AnalyticsDbContext maps nothing else.
 builder.Services.AddAnalyticsModule();
 
 // Phase 4. Owns `ai_analyses`; reaches Applications-owned tables through
@@ -185,7 +218,20 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     using var scope = app.Services.CreateScope();
-    scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.Migrate();
+
+    // PHASE 13.3b — five contexts, five migration histories, and the ORDER
+    // matters exactly once. Applications' initial migration creates the three
+    // views Analytics reads; the other four are independent of each other,
+    // because the split removed every foreign key that crossed a schema. That
+    // independence is the deliverable: five migrations that can run in any order
+    // are five modules that could be deployed separately.
+    //
+    // Analytics is absent because it owns nothing to create.
+    scope.ServiceProvider.GetRequiredService<ApplicationsDbContext>().Database.Migrate();
+    scope.ServiceProvider.GetRequiredService<SkillsDbContext>().Database.Migrate();
+    scope.ServiceProvider.GetRequiredService<DocumentsDbContext>().Database.Migrate();
+    scope.ServiceProvider.GetRequiredService<AiDbContext>().Database.Migrate();
+    scope.ServiceProvider.GetRequiredService<AtsDbContext>().Database.Migrate();
 }
 
 // Only expose the interactive docs in Development — no reason to ship

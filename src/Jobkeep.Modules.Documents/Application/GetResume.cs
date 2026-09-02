@@ -1,4 +1,3 @@
-using Jobkeep.Data;
 using Jobkeep.Models;
 using Jobkeep.Modules.Skills;
 using Jobkeep.Shared;
@@ -85,10 +84,10 @@ public class GetResumeHandler
 
     private record ResumeSkillRow(Guid SkillId, SkillSource Source);
 
-    private readonly IDocumentsDbContext _db;
+    private readonly DocumentsDbContext _db;
     private readonly ISkillCatalog _skills;
 
-    public GetResumeHandler(IDocumentsDbContext db, ISkillCatalog skills)
+    public GetResumeHandler(DocumentsDbContext db, ISkillCatalog skills)
     {
         _db = db;
         _skills = skills;

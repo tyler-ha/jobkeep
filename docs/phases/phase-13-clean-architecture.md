@@ -528,8 +528,8 @@ corrections below. **13.3a landed the same day.**
 | | What | State |
 |---|---|---|
 | **13.3a** | the configuration seam: per-entity configs, `Jobkeep.Persistence` | **Done** |
-| 13.3b | entities into modules, six contexts, six schemas, migration reset | Not started |
-| 13.3c | integrity replacements, `DeleteBehaviourTests`, the diagrams | Not started |
+| **13.3b** | entities into modules, six contexts, six schemas, migration reset | **Done 2026-09-02** |
+| 13.3c | integrity replacements, delete notifications, the diagrams | Not started |
 
 #### Scope correction taken 2026-09-01, before any code moved
 
@@ -554,6 +554,114 @@ corrections below. **13.3a landed the same day.**
 **Decisions taken with the user:** drop the dev database (`compose down -v`, no
 `pg_dump` carry-over); keep the 122 call sites compiling with per-module
 `IEntityTypeConfiguration<T>` plus a **test-only** aggregate context; split into three.
+
+#### What landed in 13.3b — 2026-09-02
+
+**The physical split. Suite 254 -> 256, build clean, five schemas in Postgres, the
+compose stack up from a dropped volume.**
+
+- **Ten projects became nine.** `Jobkeep.Infrastructure.Data` is deleted, as its own
+  csproj said it would be. Its thirteen entities went to the five modules that own
+  their tables, its sixteen configurations went with them, its six `I<X>DbContext`
+  interfaces were replaced by six real contexts, and its five migrations were replaced
+  by five initial ones.
+- **Five schemas, five migration histories.** `applications`, `skills`, `documents`,
+  `ai`, `ats`. Analytics has a context and no schema, because it owns no tables — it
+  reads three views that live in `applications`. `Program.cs` migrates five contexts
+  and not the sixth, which turns "Analytics owns nothing" from a comment into a fact
+  about the deployment.
+- **Five foreign keys dropped**, exactly the five 13.3a marked. Verified end to end
+  afterwards: create an application, add a skill (Applications and Skills, two
+  contexts, two transactions), read `/stats/skill-demand` (Analytics reads a published
+  view in `applications`, then resolves ids through `ISkillCatalog` in `skills`).
+- **The dev database was dropped** (`compose down -v`), as agreed. No `pg_dump`
+  carry-over.
+
+**Four design questions the plan did not answer, resolved before any code moved:**
+
+1. **Two enums could not follow their entity.** `ApplicationStatus` and `SkillSource`
+   each appear in *two* modules' response DTOs, so both reach the HotChocolate schema.
+   The copy-with-a-mapping-switch pattern that `PostingRequirementKind` and
+   `ResumeSourceFormat` use would put two CLR enums of one name in one GraphQL schema,
+   which is a schema-**build** failure — every request 500s and nothing in the C# build
+   says why. Both moved to `Jobkeep.Contracts` instead, as genuinely shared vocabulary.
+   `src/Jobkeep.Contracts/Shared/SharedEnums.cs` carries the argument.
+2. **Entities keep `namespace Jobkeep.Models`.** This is a move, not a rename: the
+   boundary is the project reference graph, not the namespace, and 13.6 renames
+   everything in one pass. Renaming now would do 13.6's job early and badly, and bury
+   the real change in churn.
+3. **`RequirementKind` crossed, and had an existing answer.** Documents carried
+   Applications' entity enum in its draft DTOs and mapped it at commit. The drafts are
+   typed on `PostingRequirementKind` now and the mapping switch is deleted — the better
+   shape, which the split forced. Member names are identical, so the REST payload and
+   the stored `DraftJson` are byte-identical; only the GraphQL *type name* for a draft
+   requirement changed.
+4. **The three published views split three ways.** 13.3a's comment said the mapping
+   "belongs to APPLICATIONS, because Applications publishes it", and that could not
+   survive: `AnalyticsDbContext` reads them, can only apply its own assembly's
+   configurations, and may not reference Applications. The rule that replaced it is
+   publisher-owns-the-definition, consumer-owns-the-read — payload shape in Contracts,
+   SQL in Applications' migration, `HasNoKey().ToView(..., "applications")` in
+   Analytics. Analytics naming that schema is an **address**, and at extraction it
+   becomes a URL.
+
+**Five things found by doing it that the plan and both handoffs missed:**
+
+- **Dropping a foreign key silently drops its INDEX, and in two places that index was
+  load-bearing.** EF indexes an FK column automatically. `posting_skills` and
+  `resume_skills` both have a composite PK leading with the *other* column, so
+  `SkillId` lost its only index — and `ListApplications`' skill filter is exactly a
+  lookup by `SkillId`. Both restated explicitly.
+- **Dropping a one-to-one FK silently drops the UNIQUE index that made it "one".**
+  `ai_analyses.PostingId` and `ats_results.ApplicationId` were unique only as a side
+  effect of `HasForeignKey<T>`. `AnalyzePosting` and `CheckAts` both update-or-insert on
+  the assumption that a second row cannot exist. Both indexes restated.
+- **Every table-owning module needs the Npgsql PROVIDER, not just Applications.** The
+  expectation was that only Applications would (`EF.Functions.ILike`). But a migration
+  is provider-specific: the generated snapshot and designer files name
+  `NpgsqlValueGenerationStrategy` directly and do not compile without it. That is a real
+  statement about the boundary rather than a build detail — a module that can be lifted
+  out creates its own schema, and creating a schema means knowing which database it is.
+- **The suite's raw SQL was a bigger surface than the navigation properties.** The
+  handoff budgeted for the assertions traversing the five cut navigations, and those
+  were right. It missed that **eight tests use raw SQL naming unqualified tables**,
+  which resolve through `search_path` to `public` — the one schema that no longer holds
+  anything. Including `'posting_skills'::regclass`, which fails the same way and looks
+  nothing like a table name.
+- **`tests/Jobkeep.Tests.csproj` never referenced `Jobkeep.Modules.Skills`.** It had
+  been working since 13.2 only because `Jobkeep.Api` pulled it in transitively —
+  precisely the confusing failure that ItemGroup's own comment warns about. Found by
+  `TestDbContext` needing to name all six module assemblies.
+
+**The two scope corrections held.** The test-only aggregate context worked as designed:
+**all 122 arrange call sites compile unchanged**, because every configuration names its
+schema in `ToTable`'s second argument rather than through `HasDefaultSchema`, so
+applying all six assemblies' configurations to one model reproduces the six real
+contexts exactly. And `PostgresFixture`'s Respawn config was fixed in the same step —
+`SchemasToInclude` is the five schemas, `TablesToIgnore` is five *schema-qualified*
+history tables — with `ResetIsolationTests` asserting that a reset actually empties a
+seeded table in every schema, because the failure mode there is silence rather than an
+error.
+
+**Two delete tests were INVERTED rather than deleted.** `DeleteBehaviourTests` now
+asserts the orphans the split creates: an `ats_result` outliving its application, an
+`ai_analysis` outliving its posting. That is the same thing this suite did with the
+case-sensitive skill dedup — a defect written down as a passing test is visible, and it
+breaks loudly on the change that fixes it. 13.3c flips both back.
+
+**One architecture test was rewritten rather than moved.**
+`No_module_takes_the_shared_context` looked for a constructor parameter typed
+`AppDbContext`. Deleting that type would have left it passing forever while proving
+nothing. It is now `No_module_takes_a_context_it_does_not_own`: a module may take a
+`DbContext` declared in its own assembly and no other, which catches another module's
+context, a future re-introduced shared one, and `TestDbContext` itself.
+
+**What 13.3c inherits, concretely.** Four replacements for the dropped keys:
+delete notifications for `ai_analyses.PostingId` and `ats_results.ApplicationId`, and
+the delete-side check for `job_applications.ResumeId` and `ats_results.ResumeId` (the
+write-side check already exists, through `IResumeContract.GetAsync` — a check at write
+cannot stop a row disappearing afterwards, which is the two thirds of RESTRICT that a
+contract does not replace). Plus both diagrams, which are now wrong.
 
 #### What landed in 13.3a
 
