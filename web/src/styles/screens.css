@@ -805,7 +805,7 @@
   font-family: var(--font-display);
   font-variation-settings: 'wdth' var(--display-wdth);
   font-size: var(--t-2xl);
-  line-height: 1;
+  line-height: 1.35;
   letter-spacing: var(--track-display);
 }
 
@@ -1203,7 +1203,12 @@
   font-size: var(--t-xs);
   color: var(--muted);
   padding: 2px var(--s-1);
-  border: 1px solid var(--rule);
+  /* --rule is 1.21 on this ground and tokens.css says in as many words that it is
+   * a decorative hairline and never an input's sole border. This is a select, and
+   * this border is its only boundary. --rule-strong is 3.05 and clears the 3.0
+   * threshold WCAG puts on non-text UI boundaries — it is what every other control
+   * in the app already uses. Measured 2026-09-03. */
+  border: 1px solid var(--rule-strong);
   border-radius: var(--r-sm);
   background: var(--ground);
 }

@@ -2,10 +2,23 @@
  * one screen uses. Anything that belongs to a single screen lives in
  * screens.css instead; this file stays the shared layer. */
 
+/* Capped and centred as ONE slab — nav and content travel together.
+ *
+ * `main` carries max-width: var(--shell-max) with no auto margin, so before this
+ * the whole app pinned to the left edge: on a 2560px display that left a measured
+ * 904px void down the right of every screen, which is what the first real look at
+ * the app (2026-09-03) found. Centring `main` alone would fix the void and open a
+ * second gap between the nav and the content, so the cap belongs here.
+ *
+ * Deliberately NOT widening --shell-max instead: the eight artboards were composed
+ * at 1440, and letting the column grow re-flows every one of them. That is a
+ * redesign; this is a fix. */
 .shell {
   display: grid;
   grid-template-columns: var(--nav-w) minmax(0, 1fr);
   min-height: 100vh;
+  max-width: calc(var(--shell-max) + var(--nav-w));
+  margin-inline: auto;
 }
 
 /* ---- Navigation --------------------------------------------------------- */
@@ -271,11 +284,13 @@
   border-color: var(--pri-dark);
 }
 
-.btn-primary:disabled {
-  background: color-mix(in srgb, var(--pri) 35%, var(--ground));
-  border-color: transparent;
-  color: var(--card);
-}
+/* A disabled primary deliberately has NO rule of its own — it falls through to
+ * .btn:disabled and looks like every other disabled button. The override that
+ * used to sit here kept the white label over a 35% blue tint, which measures
+ * 1.85:1: the least legible text in the app, on the one control that most needs
+ * to say "not yet" rather than "broken". .btn:disabled is muted-on-ground at
+ * 5.46. A disabled button is not a primary button, so it should not look like
+ * one. Measured 2026-09-03. */
 
 /* ---- Fields ------------------------------------------------------------- */
 

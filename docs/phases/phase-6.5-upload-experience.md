@@ -377,6 +377,136 @@ The only group with a backend half. Plan, for the session that picks it up:
   in `lib/api.ts`, `stubFetch` branches for **both** `POST /imports` and
   `POST /imports/text`, and one `user-event` test that types and submits.
 
+### Group 6 — the upload stops blocking (not started)
+
+**This REVERSES a decision written into Group 3 above and into the header comment
+of `web/src/lib/progress.ts`**, at the user's instruction on 2026-09-03: *"upload is
+one process, don't block the user, then we process through our backend. Whenever it
+is done, we update the changes in the UI."* The reversal is recorded rather than
+quietly applied, because the refused design is argued at length in two places and a
+future reader would otherwise think the argument was simply lost.
+
+Group 3 refused a `202`+poll design for two stated reasons: it needs a new
+`ImportStatus` value, and it needs a migration. **The second is wrong, and checking
+it is what makes this affordable.** `document_imports.Status` is
+`HasConversion<string>().HasMaxLength(20)` with **no CHECK constraint**
+(`DocumentImportConfiguration.cs:18`) — the only CHECK constraints in the schema are
+the two on `job_postings`. A new enum value of twenty characters or fewer is a code
+change and nothing else. This was already established at 13.2c, when `CommitFailed`
+was added for exactly this reason, and it was never carried back into this doc.
+
+The first reason stands: there is a new value, and it is `Parsing`.
+
+#### What actually blocks
+
+One line. `ImportDocument.cs:159` — `await _structurer.StructureAsync(...)`, up to
+`ModelOptions.TimeoutSeconds` (180) against llama3.2:3b on CPU. Everything before it
+is byte work and finishes in milliseconds.
+
+**The split is already drawn in the code.** `ImportDocument.cs:149` commits the row
+*before* the model call, deliberately, with a comment explaining that the durable
+extraction is worth more than the structuring. So the change is not "make this
+async" — it is "return at the line that already exists", and the reasoning for that
+early save transfers unchanged.
+
+#### Who runs the model, then — and why it is not a background service
+
+The obvious answer is an `IHostedService` with a `Channel<Guid>` queue: about forty
+lines, no new dependency, works locally and in Compose.
+
+**It is refused, and the reason is Phase 10.** The deploy target is AWS Lambda
+behind a Function URL. Lambda freezes the execution environment once the response is
+returned; work queued to a background thread is not guaranteed to run, and when it
+does run it may be on the next invocation, minutes later, or never. A design whose
+central mechanism silently stops working on the deploy target is a design that buys
+a local demo with a production defect.
+
+The counter-argument, stated here so it is not re-made: Ollama is not on Lambda
+either, so the AI story there is *already* unsolved. True — and that is the reason
+not to add a **second** unsolved thing when a free alternative has none.
+
+**The alternative is that the client drives it, and the endpoint already exists.**
+`POST /imports/{id}/reparse` (`RestructureImport.cs`) runs the model over the stored
+text with no re-upload. That is the entire second half of this feature: already
+written, already tested, already on both surfaces. Group 3's own comment points at
+it as the place this design would start; it turns out to be the place it finishes
+too.
+
+#### The shape
+
+1. `POST /imports` extracts, saves, and returns **202** with the row in `Parsing`.
+   The `StructureAsync` call and the two `SaveChangesAsync` after it move out.
+2. The client navigates to the review screen **immediately** — honest now, because
+   it is instant.
+3. The client fires `POST /imports/{id}/reparse` and does not await it for the
+   purpose of blocking anything.
+4. The client polls `GET /imports/{id}` until `Status != Parsing`, then paints the
+   draft.
+
+`RestructureImport` already sets `AwaitingReview` on success and already writes a
+`Warning` on model failure, so steps 1 and 3 need no new agreement between them
+beyond the one new enum value.
+
+#### `Parsing` is a claim, not a lock
+
+**The known ceiling, written down rather than engineered away.** If the user closes
+the tab while step 3 is in flight, the request is cancelled and the row stays in
+`Parsing` for ever. There is no lease, no timeout, no sweeper and no outbox — the
+same position 13.3c took on domain events, and for the same reason: the cheap
+recovery already exists.
+
+A `Parsing` row is re-runnable by pressing the button the queue already needs, and
+the queue is where an abandoned one is visible. Anything more — a visibility
+timeout, a lease column, a reaper — is Phase 14's, alongside the outbox.
+
+#### Three things this fixes for free
+
+- **The silent empty draft.** Today a parse cancelled mid-flight (tab closed, hard
+  reload) leaves a row that looks *normal* in the queue: `AwaitingReview`, empty
+  draft, no `Warning`. The other two degraded paths both explain themselves; this
+  one cannot, because cancellation runs no code. `Parsing` makes the state
+  self-describing, which is the property the other two already have.
+- **The navigate-after-unmount bug.** `Upload.tsx:277` calls `navigate()` after the
+  await with no liveness guard, and react-router 7's `useNavigate` sets
+  `activeRef.current = true` in a layout effect **with no cleanup**, so the ref
+  stays true after unmount and the navigation fires. Today that means: upload a CV,
+  click another nav link, and up to 180 seconds later the app yanks you onto the
+  review screen from wherever you went. After this change the navigate happens in
+  about a second, so it stops being reachable in practice. **Guard it anyway** — two
+  lines, matching the `let live = true` pattern the read effects in this same file
+  already use (`Upload.tsx:130`, `JobPost.tsx:60`, `AtsCheck.tsx:127`,
+  `Applications.tsx:112`). A latent bug that is merely hard to hit is still a bug.
+- **The progress bar becomes truthful.** `estimateProgress` stays — the wait did not
+  disappear, it moved — but it now models a wait the client can *observe ending*,
+  because polling reports the transition rather than inferring it. The header
+  comment in `progress.ts` must be rewritten, not deleted: its tradeoff was
+  correctly reasoned for the design it described.
+
+#### "Whenever it is done, we update the changes in the UI" — how far to take it
+
+Two levels, and the recommendation is the first.
+
+**In scope: the review screen polls.** Navigating away and coming back shows the
+finished draft; the queue shows `Parsing` rows in their own state. This satisfies
+"don't block the user" completely and needs no new machinery.
+
+**Marked, not built: a global notification.** Telling the user on *whatever screen
+they are on* needs a poller above the router and somewhere to keep its state.
+`web/src` has no context, store or provider today — deliberately, per Phase 6 — and
+adding the app's first one to deliver a toast is a large structural change bought
+for a small courtesy. **Do it only if the user asks after using the polled
+version**, because the polled version may well be enough.
+
+#### Cost
+
+No migration. One enum value, one slice shortened, one existing endpoint reused, and
+the front-end poll. The `SwaggerDocumentTests` pin still applies — the multipart
+route keeps its shape, only its body of work shrinks.
+
+The tests that change: anything asserting `POST /imports` returns a populated draft
+now asserts `202` and `Parsing`, and the round trip through `/reparse` becomes the
+test that a draft eventually appears.
+
 ---
 
 ## Deviations from the plan
@@ -414,6 +544,8 @@ The only group with a backend half. Plan, for the session that picks it up:
 ## What is still outstanding
 
 - **Group 4**, above.
+- **Group 6**, above — the upload stops blocking. Opened 2026-09-03; it
+  reverses a Group 3 decision at the user's instruction.
 - **The Phase 6 visual pass on the other seven screens.** Still blocked on the
   user's eyes: the Chrome extension has been disconnected for five sessions, so
   nothing in this phase has been *seen*, only reasoned about from the CSS.
