@@ -1,4 +1,5 @@
 using Jobkeep.Shared;
+using Mediator;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jobkeep.Modules.Applications;
@@ -16,19 +17,23 @@ namespace Jobkeep.Modules.Applications;
 //     the ad itself, once nothing is applying with it.
 //   - the company and any shared skills survive for the same reason they are
 //     shared rows at all.
-public class DeleteApplicationHandler
+public record DeleteApplication(Guid Id) : IRequest<SliceResult<bool>>;
+
+public class DeleteApplicationHandler : IRequestHandler<DeleteApplication, SliceResult<bool>>
 {
     private readonly ApplicationsDbContext _db;
-    private readonly IDomainEventPublisher _events;
+    private readonly IPublisher _events;
 
-    public DeleteApplicationHandler(ApplicationsDbContext db, IDomainEventPublisher events)
+    public DeleteApplicationHandler(ApplicationsDbContext db, IPublisher events)
     {
         _db = db;
         _events = events;
     }
 
-    public async Task<SliceResult<bool>> HandleAsync(Guid id, CancellationToken ct = default)
+    public async ValueTask<SliceResult<bool>> Handle(
+        DeleteApplication message, CancellationToken ct)
     {
+        var id = message.Id;
         // Loads the row rather than issuing ExecuteDelete, so EF applies the
         // configured cascades instead of leaving the database to decide. Since
         // 13.3b the only cascades left from here are within Applications' own
@@ -56,9 +61,10 @@ public class DeleteApplicationHandler
         // the same conclusion: prefer the residue nobody can see.
         //
         // The honest gap: this is publish-after-commit with no outbox, so a crash
-        // in between loses the event entirely. DomainEvents.cs records why an
-        // outbox waits for Phase 14 rather than arriving here.
-        await _events.PublishAsync(new ApplicationDeleted(id), ct);
+        // in between loses the event entirely. Jobkeep.Contracts'
+        // ApplicationEvents.cs records why an outbox waits for Phase 14 rather
+        // than arriving here, and why 13.4's mediator did not change it.
+        await _events.Publish(new ApplicationDeleted(id), ct);
 
         return SliceResult<bool>.Ok(true);
     }

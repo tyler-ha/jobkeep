@@ -1,5 +1,6 @@
 using Jobkeep.Models;
 using Jobkeep.Shared;
+using Mediator;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jobkeep.Modules.Documents;
@@ -28,7 +29,9 @@ public record ImportSummary(
     DateTime CreatedAtUtc,
     Guid? CommittedEntityId);
 
-public class ListImportsHandler
+public record ListImports(ImportStatus? Status) : IRequest<SliceResult<List<ImportSummary>>>;
+
+public class ListImportsHandler : IRequestHandler<ListImports, SliceResult<List<ImportSummary>>>
 {
     private readonly DocumentsDbContext _db;
     private readonly DocumentOptions _options;
@@ -39,9 +42,10 @@ public class ListImportsHandler
         _options = options;
     }
 
-    public async Task<SliceResult<List<ImportSummary>>> HandleAsync(
-        ImportStatus? status, CancellationToken ct = default)
+    public async ValueTask<SliceResult<List<ImportSummary>>> Handle(
+        ListImports message, CancellationToken ct)
     {
+        var status = message.Status;
         var query = _db.DocumentImports.AsNoTracking();
 
         // The default view is the queue: what still needs confirming. Passing an

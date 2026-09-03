@@ -3,6 +3,7 @@ using System.Text.Json;
 using Jobkeep.Models;
 using Jobkeep.Modules.Applications;
 using Jobkeep.Shared;
+using Mediator;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
 
@@ -114,7 +115,9 @@ internal static class AiSchema
     public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 }
 
-public class AnalyzePostingHandler
+public record AnalyzePosting(Guid ApplicationId) : IRequest<SliceResult<AiAnalysisResponse>>;
+
+public class AnalyzePostingHandler : IRequestHandler<AnalyzePosting, SliceResult<AiAnalysisResponse>>
 {
     private readonly AiDbContext _db;
     private readonly IChatClient _chat;
@@ -138,9 +141,10 @@ public class AnalyzePostingHandler
         _model = model;
     }
 
-    public async Task<SliceResult<AiAnalysisResponse>> HandleAsync(
-        Guid applicationId, CancellationToken ct = default)
+    public async ValueTask<SliceResult<AiAnalysisResponse>> Handle(
+        AnalyzePosting message, CancellationToken ct)
     {
+        var applicationId = message.ApplicationId;
         var content = await _postings.GetContentAsync(applicationId, ct);
         if (content is null)
             return SliceResult<AiAnalysisResponse>.NotFound($"Application {applicationId} not found.");

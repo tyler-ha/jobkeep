@@ -1,5 +1,6 @@
 using Jobkeep.Modules.Applications;
 using Jobkeep.Shared;
+using Mediator;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jobkeep.Modules.Ai;
@@ -28,7 +29,9 @@ public record AnalysisSummaryResponse(
     string? ModelUsed,
     DateTime AnalyzedAtUtc);
 
-public class GetAnalysisHandler
+public record GetAnalysis(Guid ApplicationId) : IRequest<SliceResult<AnalysisSummaryResponse>>;
+
+public class GetAnalysisHandler : IRequestHandler<GetAnalysis, SliceResult<AnalysisSummaryResponse>>
 {
     private readonly AiDbContext _db;
     private readonly IApplicationContract _applications;
@@ -39,9 +42,10 @@ public class GetAnalysisHandler
         _applications = applications;
     }
 
-    public async Task<SliceResult<AnalysisSummaryResponse>> HandleAsync(
-        Guid applicationId, CancellationToken ct = default)
+    public async ValueTask<SliceResult<AnalysisSummaryResponse>> Handle(
+        GetAnalysis message, CancellationToken ct)
     {
+        var applicationId = message.ApplicationId;
         // PHASE 13.2 — This used to be ONE query: an EXISTS over job_applications
         // inside a query on ai_analyses, joining across the posting FK. The
         // comment here argued for that join on the grounds that the only contract

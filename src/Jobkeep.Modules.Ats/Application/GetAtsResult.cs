@@ -1,5 +1,6 @@
 using Jobkeep.Modules.Documents;
 using Jobkeep.Shared;
+using Mediator;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jobkeep.Modules.Ats;
@@ -29,7 +30,9 @@ namespace Jobkeep.Modules.Ats;
 // It is now the row-plus-hydration shape ApplicationDetail arrived at in 13.2d:
 // project what this module owns, then finish the response from a contract. The
 // public DTO is unchanged, so no caller and no test on either surface moves.
-public class GetAtsResultHandler
+public record GetAtsResult(Guid ApplicationId) : IRequest<SliceResult<AtsCheckResponse>>;
+
+public class GetAtsResultHandler : IRequestHandler<GetAtsResult, SliceResult<AtsCheckResponse>>
 {
     private readonly AtsDbContext _db;
     private readonly IResumeContract _resumes;
@@ -40,9 +43,10 @@ public class GetAtsResultHandler
         _resumes = resumes;
     }
 
-    public async Task<SliceResult<AtsCheckResponse>> HandleAsync(
-        Guid applicationId, CancellationToken ct = default)
+    public async ValueTask<SliceResult<AtsCheckResponse>> Handle(
+        GetAtsResult message, CancellationToken ct)
     {
+        var applicationId = message.ApplicationId;
         // Flat projection, no Include, and the label left null for now.
         var found = await _db.AtsResults
             .AsNoTracking()

@@ -2,6 +2,20 @@ using Jobkeep.Modules.Ai;
 using Jobkeep.Modules.Applications;
 using Jobkeep.Modules.Ats;
 using Jobkeep.Modules.Documents;
+using Mediator;
+
+// PHASE 13.4 — namespace aliases, and they are not cosmetic. Every resolver
+// below is named for the field it publishes (`GetApplication`, `CheckAts`), and
+// 13.4 gave the request record the same name — so a bare `new CheckAts(...)`
+// inside this class binds to the METHOD and does not compile. Aliasing the five
+// module namespaces keeps the call sites one line each; the alternative is
+// fully-qualified type names on every field, or renaming resolvers and changing
+// the published schema to suit a C# lookup rule.
+using Apps = Jobkeep.Modules.Applications;
+using Stats = Jobkeep.Modules.Analytics;
+using Ai = Jobkeep.Modules.Ai;
+using Docs = Jobkeep.Modules.Documents;
+using Ats = Jobkeep.Modules.Ats;
 
 namespace Jobkeep.GraphQL;
 
@@ -19,21 +33,21 @@ public class Mutation
 {
     public async Task<ApplicationDetail> CreateApplication(
         CreateApplicationRequest input,
-        [Service] CreateApplicationHandler handler, CancellationToken ct)
-        => (await handler.HandleAsync(input, ct)).ValueOrThrow();
+        [Service] ISender sender, CancellationToken ct)
+        => (await sender.Send(new Apps.CreateApplication(input), ct)).ValueOrThrow();
 
     public async Task<ApplicationDetail> UpdateApplication(
         Guid id, UpdateApplicationRequest input,
-        [Service] UpdateApplicationHandler handler, CancellationToken ct)
-        => (await handler.HandleAsync(id, input, ct)).ValueOrThrow();
+        [Service] ISender sender, CancellationToken ct)
+        => (await sender.Send(new Apps.UpdateApplication(id, input), ct)).ValueOrThrow();
 
     // Deleting an application that is already gone is now an error carrying
     // NOT_FOUND, where it used to return false. GraphQL has no status codes, so
     // `false` was the only signal available and it read identically to a
     // successful no-op — the REST side has always answered 404.
     public async Task<bool> DeleteApplication(
-        Guid id, [Service] DeleteApplicationHandler handler, CancellationToken ct)
-        => (await handler.HandleAsync(id, ct)).ValueOrThrow();
+        Guid id, [Service] ISender sender, CancellationToken ct)
+        => (await sender.Send(new Apps.DeleteApplication(id), ct)).ValueOrThrow();
 
     // PHASE 13.3c — the first way to delete a job ad, and the publisher behind
     // the delete notification that replaced `ai_analyses.PostingId`'s cascade.
@@ -44,8 +58,8 @@ public class Mutation
     // row that has to be gone before this can succeed. The id is on every
     // application detail response as `posting.id`.
     public async Task<bool> DeletePosting(
-        Guid id, [Service] DeletePostingHandler handler, CancellationToken ct)
-        => (await handler.HandleAsync(id, ct)).ValueOrThrow();
+        Guid id, [Service] ISender sender, CancellationToken ct)
+        => (await sender.Send(new Apps.DeletePosting(id), ct)).ValueOrThrow();
 
     // Exercises the shared-skills join: reuses an existing Skill row by name or
     // creates it, then links it to the application's posting.
@@ -56,24 +70,24 @@ public class Mutation
     // away from (architecture.md A1/A2).
     public async Task<PostingSkillResponse> AddSkillToPosting(
         Guid applicationId, AddSkillToPostingRequest input,
-        [Service] AddSkillToPostingHandler handler, CancellationToken ct)
-        => (await handler.HandleAsync(applicationId, input, ct)).ValueOrThrow();
+        [Service] ISender sender, CancellationToken ct)
+        => (await sender.Send(new Apps.AddSkillToPosting(applicationId, input), ct)).ValueOrThrow();
 
     // Unlinks the posting_skills join row; the shared `skills` row survives.
     public async Task<bool> RemoveSkillFromPosting(
         Guid applicationId, string skillName,
-        [Service] RemoveSkillFromPostingHandler handler, CancellationToken ct)
-        => (await handler.HandleAsync(applicationId, skillName, ct)).ValueOrThrow();
+        [Service] ISender sender, CancellationToken ct)
+        => (await sender.Send(new Apps.RemoveSkillFromPosting(applicationId, skillName), ct)).ValueOrThrow();
 
     public async Task<RequirementResponse> AddRequirementToPosting(
         Guid applicationId, AddRequirementToPostingRequest input,
-        [Service] AddRequirementToPostingHandler handler, CancellationToken ct)
-        => (await handler.HandleAsync(applicationId, input, ct)).ValueOrThrow();
+        [Service] ISender sender, CancellationToken ct)
+        => (await sender.Send(new Apps.AddRequirementToPosting(applicationId, input), ct)).ValueOrThrow();
 
     public async Task<bool> RemoveRequirement(
         Guid applicationId, Guid requirementId,
-        [Service] RemoveRequirementHandler handler, CancellationToken ct)
-        => (await handler.HandleAsync(applicationId, requirementId, ct)).ValueOrThrow();
+        [Service] ISender sender, CancellationToken ct)
+        => (await sender.Send(new Apps.RemoveRequirement(applicationId, requirementId), ct)).ValueOrThrow();
 
     // Phase 4 — runs the local model over the posting's description and stores
     // what it extracted. A mutation, not a query, on both surfaces: it writes an
@@ -87,8 +101,8 @@ public class Mutation
     // three lines long.
     public async Task<AiAnalysisResponse> AnalyzePosting(
         Guid applicationId,
-        [Service] AnalyzePostingHandler handler, CancellationToken ct)
-        => (await handler.HandleAsync(applicationId, ct)).ValueOrThrow();
+        [Service] ISender sender, CancellationToken ct)
+        => (await sender.Send(new Ai.AnalyzePosting(applicationId), ct)).ValueOrThrow();
 
     // Phase 4.5 — the three writes in the review cycle. The upload that starts it
     // is REST-only; see DocumentsModule.cs for why a file does not belong in a
@@ -100,36 +114,36 @@ public class Mutation
     // provably identical rather than two records that drift.
     public async Task<ImportResponse> ReviewImport(
         Guid id, ImportDraft draft,
-        [Service] ReviewImportHandler handler, CancellationToken ct)
-        => (await handler.HandleAsync(id, draft, ct)).ValueOrThrow();
+        [Service] ISender sender, CancellationToken ct)
+        => (await sender.Send(new Docs.ReviewImport(id, draft), ct)).ValueOrThrow();
 
     // Re-runs the model over the stored text. The dividend of storing the
     // extracted text between the two stages: a better prompt or a better model
     // costs no re-upload (RestructureImport.cs).
     public async Task<ImportResponse> RestructureImport(
         Guid id,
-        [Service] RestructureImportHandler handler, CancellationToken ct)
-        => (await handler.HandleAsync(id, ct)).ValueOrThrow();
+        [Service] ISender sender, CancellationToken ct)
+        => (await sender.Send(new Docs.RestructureImport(id), ct)).ValueOrThrow();
 
     // The gate. Nothing an uploaded document proposes becomes a real row until
     // this is called.
     public async Task<CommitResponse> ConfirmImport(
         Guid id,
-        [Service] CommitImportHandler handler, CancellationToken ct)
-        => (await handler.HandleAsync(id, ct)).ValueOrThrow();
+        [Service] ISender sender, CancellationToken ct)
+        => (await sender.Send(new Docs.CommitImport(id), ct)).ValueOrThrow();
 
     public async Task<bool> DiscardImport(
         Guid id,
-        [Service] DiscardImportHandler handler, CancellationToken ct)
-        => (await handler.HandleAsync(id, ct)).ValueOrThrow();
+        [Service] ISender sender, CancellationToken ct)
+        => (await sender.Send(new Docs.DiscardImport(id), ct)).ValueOrThrow();
 
     // PHASE 13.3c — delete a resume version. Errors carrying INVALID_INPUT when
     // an application or a stored ATS check still points at it, which is the same
     // refusal REST answers 400 to; the rule is in DeleteResumeHandler, so the two
     // surfaces have nowhere to disagree about it.
     public async Task<bool> DeleteResume(
-        Guid id, [Service] DeleteResumeHandler handler, CancellationToken ct)
-        => (await handler.HandleAsync(id, ct)).ValueOrThrow();
+        Guid id, [Service] ISender sender, CancellationToken ct)
+        => (await sender.Send(new Docs.DeleteResume(id), ct)).ValueOrThrow();
 
     // The resume-side mirror of addSkillToPosting, and the first write to
     // `resume_skills` that is not part of the import cycle. Both halves of the
@@ -138,16 +152,16 @@ public class Mutation
     // prose and SQL in its skill list) without re-importing the document.
     public async Task<ResumeSkillResponse> AddSkillToResume(
         Guid resumeId, AddSkillToResumeRequest input,
-        [Service] AddSkillToResumeHandler handler, CancellationToken ct)
-        => (await handler.HandleAsync(resumeId, input, ct)).ValueOrThrow();
+        [Service] ISender sender, CancellationToken ct)
+        => (await sender.Send(new Docs.AddSkillToResume(resumeId, input), ct)).ValueOrThrow();
 
     // Phase 6 step 6.1 — the inverse, added when the front-end design turned
     // "add a skill" into a drag. Unlinks the resume_skills join row; the shared
     // `skills` row survives, exactly as on the posting side.
     public async Task<bool> RemoveSkillFromResume(
         Guid resumeId, string skillName,
-        [Service] RemoveSkillFromResumeHandler handler, CancellationToken ct)
-        => (await handler.HandleAsync(resumeId, skillName, ct)).ValueOrThrow();
+        [Service] ISender sender, CancellationToken ct)
+        => (await sender.Send(new Docs.RemoveSkillFromResume(resumeId, skillName), ct)).ValueOrThrow();
 
     // Phase 5 — the ATS check. A mutation because it writes an ats_results row,
     // even though most of what it does is read.
@@ -158,6 +172,6 @@ public class Mutation
     // it because neither of them decides it.
     public async Task<AtsCheckResponse> CheckAts(
         Guid applicationId, Guid? resumeId,
-        [Service] CheckAtsHandler handler, CancellationToken ct)
-        => (await handler.HandleAsync(applicationId, resumeId, ct)).ValueOrThrow();
+        [Service] ISender sender, CancellationToken ct)
+        => (await sender.Send(new Ats.CheckAts(applicationId, resumeId), ct)).ValueOrThrow();
 }

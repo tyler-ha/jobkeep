@@ -1,6 +1,7 @@
 using Jobkeep.Models;
 using Jobkeep.Modules.Skills;
 using Jobkeep.Shared;
+using Mediator;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jobkeep.Modules.Documents;
@@ -50,7 +51,11 @@ public record AddSkillToResumeRequest(string SkillName, string? Category);
 // you have.
 public record ResumeSkillResponse(string SkillName, string? Category, SkillSource Source);
 
-public class AddSkillToResumeHandler
+public record AddSkillToResume(
+    Guid ResumeId,
+    AddSkillToResumeRequest Request) : IRequest<SliceResult<ResumeSkillResponse>>;
+
+public class AddSkillToResumeHandler : IRequestHandler<AddSkillToResume, SliceResult<ResumeSkillResponse>>
 {
     private readonly DocumentsDbContext _db;
     private readonly ISkillCatalog _skills;
@@ -61,9 +66,10 @@ public class AddSkillToResumeHandler
         _skills = skills;
     }
 
-    public async Task<SliceResult<ResumeSkillResponse>> HandleAsync(
-        Guid resumeId, AddSkillToResumeRequest request, CancellationToken ct = default)
+    public async ValueTask<SliceResult<ResumeSkillResponse>> Handle(
+        AddSkillToResume message, CancellationToken ct)
     {
+        var (resumeId, request) = message;
         // Validation in the handler, not at either edge, so REST and GraphQL
         // cannot enforce different rules (architecture.md A4).
         var skillName = request.SkillName?.Trim();

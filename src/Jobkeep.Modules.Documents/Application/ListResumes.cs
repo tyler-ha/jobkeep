@@ -1,5 +1,6 @@
 using Jobkeep.Models;
 using Jobkeep.Shared;
+using Mediator;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jobkeep.Modules.Documents;
@@ -44,7 +45,9 @@ public record ResumeSummary(
     DateTime CreatedAtUtc,
     DateTime UpdatedAtUtc);
 
-public class ListResumesHandler
+public record ListResumes() : IRequest<SliceResult<List<ResumeSummary>>>;
+
+public class ListResumesHandler : IRequestHandler<ListResumes, SliceResult<List<ResumeSummary>>>
 {
     private readonly DocumentsDbContext _db;
     private readonly DocumentOptions _options;
@@ -55,7 +58,8 @@ public class ListResumesHandler
         _options = options;
     }
 
-    public async Task<SliceResult<List<ResumeSummary>>> HandleAsync(CancellationToken ct = default)
+    public async ValueTask<SliceResult<List<ResumeSummary>>> Handle(
+        ListResumes message, CancellationToken ct)
     {
         var items = await _db.Resumes
             .AsNoTracking()

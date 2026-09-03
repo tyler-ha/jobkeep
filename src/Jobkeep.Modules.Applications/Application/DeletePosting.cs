@@ -1,4 +1,5 @@
 using Jobkeep.Shared;
+using Mediator;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jobkeep.Modules.Applications;
@@ -37,19 +38,23 @@ namespace Jobkeep.Modules.Applications;
 // Postgres, in the same transaction, exactly as before. That is the difference
 // between this refusal and the ones in DeleteResume.cs, where the key is gone and
 // the check is all there is.
-public class DeletePostingHandler
+public record DeletePosting(Guid Id) : IRequest<SliceResult<bool>>;
+
+public class DeletePostingHandler : IRequestHandler<DeletePosting, SliceResult<bool>>
 {
     private readonly ApplicationsDbContext _db;
-    private readonly IDomainEventPublisher _events;
+    private readonly IPublisher _events;
 
-    public DeletePostingHandler(ApplicationsDbContext db, IDomainEventPublisher events)
+    public DeletePostingHandler(ApplicationsDbContext db, IPublisher events)
     {
         _db = db;
         _events = events;
     }
 
-    public async Task<SliceResult<bool>> HandleAsync(Guid id, CancellationToken ct = default)
+    public async ValueTask<SliceResult<bool>> Handle(
+        DeletePosting message, CancellationToken ct)
     {
+        var id = message.Id;
         var posting = await _db.JobPostings.FirstOrDefaultAsync(p => p.Id == id, ct);
         if (posting is null)
             return SliceResult<bool>.NotFound($"Posting {id} not found.");
@@ -75,7 +80,7 @@ public class DeletePostingHandler
         // PHASE 13.3c — the replacement for ai_analyses' dropped CASCADE, after
         // the save for the reason DeleteApplication.cs argues at length: the
         // orphan nobody can see beats the destroyed row somebody can.
-        await _events.PublishAsync(new PostingDeleted(id), ct);
+        await _events.Publish(new PostingDeleted(id), ct);
 
         return SliceResult<bool>.Ok(true);
     }

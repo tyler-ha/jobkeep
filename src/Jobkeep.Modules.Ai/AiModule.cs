@@ -64,16 +64,19 @@ public static class AiModule
         // here. See Shared/ModelClient.cs for why the model client stopped being
         // this module's to own once Documents also needed one.
 
-        // Scoped, matching AppDbContext — both handlers hold one.
-        services.AddScoped<AnalyzePostingHandler>();
-        services.AddScoped<GetAnalysisHandler>();
+        // PHASE 13.4 — the AddScoped<XHandler>() lines that were here are gone.
+        // AddMediator() in Program.cs registers every IRequestHandler<,> and
+        // INotificationHandler<> it finds in the referenced module assemblies, so
+        // a new slice is now a file and a route, with nothing to remember to
+        // register. What stays below is what a mediator cannot know about.
 
-        // PHASE 13.3c. What replaces `ai_analyses.PostingId ON DELETE CASCADE`,
-        // dropped in 13.3b when the two tables landed in two schemas. Registered
-        // as a subscriber, so Applications announces a deleted posting and does
-        // not learn that this module exists — SharedKernel/DomainEvents.cs argues
+        // That includes OnPostingDeleted, which replaces
+        // `ai_analyses.PostingId ON DELETE CASCADE` (dropped at 13.3b when the two
+        // tables landed in two schemas) and had its own AddScoped line here until
+        // 13.4. It is discovered as an INotificationHandler<PostingDeleted>, so
+        // Applications still announces a deleted posting and still never learns
+        // that this module exists — Jobkeep.Contracts' ApplicationEvents.cs argues
         // that direction against the simpler contract call.
-        services.AddScoped<IDomainEventHandler<PostingDeleted>, OnPostingDeleted>();
 
         // IPostingContract used to be registered here, on the argument that Ai
         // was its only consumer. Phase 4.5 made Documents a second one, which is

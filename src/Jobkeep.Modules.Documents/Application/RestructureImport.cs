@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Jobkeep.Models;
 using Jobkeep.Shared;
+using Mediator;
 using Microsoft.EntityFrameworkCore;
 
 // HotChocolate publishes a global `Path` type (its GraphQL field-path), which
@@ -25,7 +26,9 @@ namespace Jobkeep.Modules.Documents;
 //
 // It is destructive of hand edits, which is why it is a separate explicit action
 // rather than something the review screen does on load — see below.
-public class RestructureImportHandler
+public record RestructureImport(Guid Id) : IRequest<SliceResult<ImportResponse>>;
+
+public class RestructureImportHandler : IRequestHandler<RestructureImport, SliceResult<ImportResponse>>
 {
     private readonly DocumentsDbContext _db;
     private readonly IDocumentStructurer _structurer;
@@ -41,8 +44,10 @@ public class RestructureImportHandler
         _options = options;
     }
 
-    public async Task<SliceResult<ImportResponse>> HandleAsync(Guid id, CancellationToken ct = default)
+    public async ValueTask<SliceResult<ImportResponse>> Handle(
+        RestructureImport message, CancellationToken ct)
     {
+        var id = message.Id;
         var import = await _db.DocumentImports.FirstOrDefaultAsync(d => d.Id == id, ct);
         if (import is null)
             return SliceResult<ImportResponse>.NotFound($"Import {id} not found.");

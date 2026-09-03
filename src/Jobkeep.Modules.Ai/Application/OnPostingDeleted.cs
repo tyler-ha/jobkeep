@@ -1,5 +1,6 @@
 using Jobkeep.Modules.Applications;
 using Jobkeep.Shared;
+using Mediator;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jobkeep.Modules.Ai;
@@ -22,14 +23,14 @@ namespace Jobkeep.Modules.Ai;
 // ExecuteDelete for the same two reasons as the Ats handler: `ai_analyses` is a
 // leaf with nothing to cascade, and deleting zero rows must be a success so a
 // redelivered event is harmless.
-public class OnPostingDeleted : IDomainEventHandler<PostingDeleted>
+public class OnPostingDeleted : INotificationHandler<PostingDeleted>
 {
     private readonly AiDbContext _db;
 
     public OnPostingDeleted(AiDbContext db) => _db = db;
 
-    public async Task HandleAsync(PostingDeleted domainEvent, CancellationToken ct = default)
+    public async ValueTask Handle(PostingDeleted notification, CancellationToken ct)
         => await _db.AiAnalyses
-            .Where(a => a.PostingId == domainEvent.PostingId)
+            .Where(a => a.PostingId == notification.PostingId)
             .ExecuteDeleteAsync(ct);
 }

@@ -1,5 +1,6 @@
 using Jobkeep.Modules.Applications;
 using Jobkeep.Shared;
+using Mediator;
 
 namespace Jobkeep.Api.Endpoints;
 
@@ -27,47 +28,47 @@ public static class ApplicationsEndpoints
         // that has to be kept in step by hand.
         group.MapGet("/", async (
             [AsParameters] ApplicationQuery query,
-            ListApplicationsHandler handler,
+            ISender sender,
             CancellationToken ct) =>
-            (await handler.HandleAsync(query, ct)).ToHttpResult());
+            (await sender.Send(new ListApplications(query), ct)).ToHttpResult());
 
         // GET /applications/{id}
         group.MapGet("/{id:guid}", async (
             Guid id,
-            GetApplicationHandler handler,
+            ISender sender,
             CancellationToken ct) =>
-            (await handler.HandleAsync(id, ct)).ToHttpResult());
+            (await sender.Send(new GetApplication(id), ct)).ToHttpResult());
 
         // POST /applications — 201 with a Location header pointing at the new row.
         group.MapPost("/", async (
             CreateApplicationRequest request,
-            CreateApplicationHandler handler,
+            ISender sender,
             CancellationToken ct) =>
-            (await handler.HandleAsync(request, ct))
+            (await sender.Send(new CreateApplication(request), ct))
                 .ToHttpResult(created => Results.Created($"/applications/{created.Id}", created)));
 
         // PATCH /applications/{id} — send only what changed.
         group.MapPatch("/{id:guid}", async (
             Guid id,
             UpdateApplicationRequest request,
-            UpdateApplicationHandler handler,
+            ISender sender,
             CancellationToken ct) =>
-            (await handler.HandleAsync(id, request, ct)).ToHttpResult());
+            (await sender.Send(new UpdateApplication(id, request), ct)).ToHttpResult());
 
         // DELETE /applications/{id}
         group.MapDelete("/{id:guid}", async (
             Guid id,
-            DeleteApplicationHandler handler,
+            ISender sender,
             CancellationToken ct) =>
-            (await handler.HandleAsync(id, ct)).ToHttpResult(_ => Results.NoContent()));
+            (await sender.Send(new DeleteApplication(id), ct)).ToHttpResult(_ => Results.NoContent()));
 
         // POST /applications/{id}/skills — link a skill to this application's posting
         group.MapPost("/{id:guid}/skills", async (
             Guid id,
             AddSkillToPostingRequest request,
-            AddSkillToPostingHandler handler,
+            ISender sender,
             CancellationToken ct) =>
-            (await handler.HandleAsync(id, request, ct)).ToHttpResult());
+            (await sender.Send(new AddSkillToPosting(id, request), ct)).ToHttpResult());
 
         // DELETE /applications/{id}/skills/{skillName} — unlink it again.
         // The skill NAME is the key rather than an id because that's what a caller
@@ -78,25 +79,25 @@ public static class ApplicationsEndpoints
         group.MapDelete("/{id:guid}/skills/{skillName}", async (
             Guid id,
             string skillName,
-            RemoveSkillFromPostingHandler handler,
+            ISender sender,
             CancellationToken ct) =>
-            (await handler.HandleAsync(id, skillName, ct)).ToHttpResult(_ => Results.NoContent()));
+            (await sender.Send(new RemoveSkillFromPosting(id, skillName), ct)).ToHttpResult(_ => Results.NoContent()));
 
         // POST /applications/{id}/requirements — the table's first write path
         group.MapPost("/{id:guid}/requirements", async (
             Guid id,
             AddRequirementToPostingRequest request,
-            AddRequirementToPostingHandler handler,
+            ISender sender,
             CancellationToken ct) =>
-            (await handler.HandleAsync(id, request, ct)).ToHttpResult());
+            (await sender.Send(new AddRequirementToPosting(id, request), ct)).ToHttpResult());
 
         // DELETE /applications/{id}/requirements/{requirementId}
         group.MapDelete("/{id:guid}/requirements/{requirementId:guid}", async (
             Guid id,
             Guid requirementId,
-            RemoveRequirementHandler handler,
+            ISender sender,
             CancellationToken ct) =>
-            (await handler.HandleAsync(id, requirementId, ct)).ToHttpResult(_ => Results.NoContent()));
+            (await sender.Send(new RemoveRequirement(id, requirementId), ct)).ToHttpResult(_ => Results.NoContent()));
 
         // PHASE 13.3c — a second group, under a second prefix, in the same
         // module. The URL follows the resource a caller is thinking about ("this
@@ -113,9 +114,9 @@ public static class ApplicationsEndpoints
         // DELETE /postings/{id} — 400 while any application still names it.
         postings.MapDelete("/{id:guid}", async (
             Guid id,
-            DeletePostingHandler handler,
+            ISender sender,
             CancellationToken ct) =>
-            (await handler.HandleAsync(id, ct)).ToHttpResult(_ => Results.NoContent()))
+            (await sender.Send(new DeletePosting(id), ct)).ToHttpResult(_ => Results.NoContent()))
             .WithSummary("Delete a job ad, once no application is logged against it.");
 
         return app;

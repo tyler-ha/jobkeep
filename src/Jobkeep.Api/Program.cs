@@ -94,19 +94,39 @@ AddModuleContext<AtsDbContext>("ats");
 builder.Services.AddDbContext<AnalyticsDbContext>((sp, options) => options
     .UseNpgsql(connectionString));
 
-// PHASE 13.3c. The in-process publisher behind the two delete notifications that
-// replaced the cascades 13.3b dropped. Registered in the composition root rather
-// than by a module, because it belongs to no module: Applications publishes, Ats
-// and Ai subscribe, and none of the three may know the others exist.
+// ---------------------------------------------------------------------------
+// PHASE 13.4 — dispatch
+// ---------------------------------------------------------------------------
+// One call registers every IRequestHandler<,> and INotificationHandler<> in the
+// referenced module assemblies, and it is the ONLY registration either surface
+// needs to reach a use case. Each module's Add*Module() below used to list its
+// own handlers by name; what those calls still register is everything a mediator
+// cannot know about — the contract implementations, the DbContexts, and the
+// module-specific options.
 //
-// Scoped, matching the contexts the handlers hold. A singleton would capture the
-// root provider and resolve a scoped DbContext from it, which is the captive-
-// dependency trap this project's DI comments keep naming.
+// It also replaces the hand-rolled DomainEventPublisher 13.3c registered here.
+// That file is deleted: IPublisher and INotificationHandler<> do the same job,
+// and the two publish call sites did not move, which is exactly why the seam was
+// hand-rolled a step early rather than waited for.
 //
-// SharedKernel/DomainEvents.cs is where the interfaces live and where the choice
-// of a publisher over a fifth contract method is argued. 13.4 replaces all three
-// types with the chosen mediator's equivalents; the call sites do not move.
-builder.Services.AddScoped<IDomainEventPublisher, DomainEventPublisher>();
+// martinothamar/Mediator is SOURCE-GENERATED. The registrations and the
+// request-to-handler switch are emitted at compile time into this assembly, so
+// Send() is a direct call rather than a reflection lookup — which is also what
+// keeps the Lambda's trimming/AOT option open at Phase 10. That is why the
+// generator package sits in Jobkeep.Api alone while the marker interfaces the
+// modules implement come from Mediator.Abstractions, pinned once in
+// Jobkeep.Contracts.
+//
+// What the generator does NOT buy: Send() takes IRequest<T>, so a request whose
+// handler is missing compiles fine and throws MissingMessageHandlerException at
+// runtime. That is the coupling the old `XHandler handler` parameter made the
+// compiler check, and it is bought back deliberately in
+// tests/Jobkeep.Tests/Architecture/DispatchTests.cs rather than assumed.
+//
+// Scoped, matching the six DbContexts a handler holds. The library's default is
+// SINGLETON, and taking it would make every handler a captive dependency over a
+// disposed context — the trap every AddScoped comment in this file names.
+builder.Services.AddMediator(options => options.ServiceLifetime = ServiceLifetime.Scoped);
 
 // Every use case is a vertical slice under Modules/ (docs/architecture.md §2).
 // Each slice handler takes its module's own DbContext directly, so this

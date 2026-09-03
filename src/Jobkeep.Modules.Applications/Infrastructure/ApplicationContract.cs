@@ -1,5 +1,6 @@
 using Jobkeep.Models;
 using Jobkeep.Shared;
+using Mediator;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jobkeep.Modules.Applications;
@@ -9,8 +10,13 @@ namespace Jobkeep.Modules.Applications;
 public class ApplicationContract : IApplicationContract
 {
     private readonly ApplicationsDbContext _db;
-    private readonly CreateApplicationHandler _createApplication;
-    private readonly AddRequirementToPostingHandler _addRequirement;
+
+    // PHASE 13.4. Two handlers by name became one ISender. The substance is
+    // unchanged — this file still delegates to its own module's use cases rather
+    // than writing the tables itself — but a contract that names a handler type
+    // is a contract that has to be edited when the handler is renamed, split or
+    // moved, and this one exists precisely to survive that.
+    private readonly ISender _sender;
     // This module's own other contract. Reused rather than reimplemented: linking
     // extracted skills to a posting is one operation with one set of rules (never
     // restamp a human's row), and it already lives behind IPostingContract for
@@ -21,13 +27,11 @@ public class ApplicationContract : IApplicationContract
 
     public ApplicationContract(
         ApplicationsDbContext db,
-        CreateApplicationHandler createApplication,
-        AddRequirementToPostingHandler addRequirement,
+        ISender sender,
         IPostingContract postings)
     {
         _db = db;
-        _createApplication = createApplication;
-        _addRequirement = addRequirement;
+        _sender = sender;
         _postings = postings;
     }
 
@@ -59,8 +63,8 @@ public class ApplicationContract : IApplicationContract
     public async Task<PostingCommitResult> CommitPostingAsync(
         PostingCommitRequest request, CancellationToken ct = default)
     {
-        var created = await _createApplication.HandleAsync(
-            new CreateApplicationRequest(
+        var created = await _sender.Send(
+            new CreateApplication(new CreateApplicationRequest(
                 request.Company,
                 request.Title,
                 request.Location,
@@ -71,7 +75,7 @@ public class ApplicationContract : IApplicationContract
                 // that chooses one. Both are set through the ordinary update
                 // path, not smuggled in through a contract.
                 Notes: null,
-                ResumeId: null),
+                ResumeId: null)),
             ct);
 
         // Only Invalid becomes a Refused. Anything else from the handler is a
@@ -113,9 +117,11 @@ public class ApplicationContract : IApplicationContract
             var rejected = 0;
             foreach (var requirement in request.Requirements)
             {
-                var result = await _addRequirement.HandleAsync(
-                    application.Id,
-                    new AddRequirementToPostingRequest(requirement.Text, ToEntity(requirement.Kind), requirement.IsMustHave),
+                var result = await _sender.Send(
+                    new AddRequirementToPosting(
+                        application.Id,
+                        new AddRequirementToPostingRequest(
+                            requirement.Text, ToEntity(requirement.Kind), requirement.IsMustHave)),
                     ct);
                 if (result.Status == ResultStatus.Ok) saved++;
                 else rejected++;

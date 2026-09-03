@@ -1,5 +1,6 @@
 using Jobkeep.Modules.Skills;
 using Jobkeep.Shared;
+using Mediator;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jobkeep.Modules.Documents;
@@ -26,7 +27,11 @@ namespace Jobkeep.Modules.Documents;
 // for the reason AddSkillToResume.cs gives at length: sharing the write path would
 // put one module's write inside the other's file, which is the thing rule 2 exists
 // to prevent. Documents owns `resume_skills`; Applications owns `posting_skills`.
-public class RemoveSkillFromResumeHandler
+public record RemoveSkillFromResume(
+    Guid ResumeId,
+    string SkillName) : IRequest<SliceResult<bool>>;
+
+public class RemoveSkillFromResumeHandler : IRequestHandler<RemoveSkillFromResume, SliceResult<bool>>
 {
     private readonly DocumentsDbContext _db;
     private readonly ISkillCatalog _skills;
@@ -37,9 +42,10 @@ public class RemoveSkillFromResumeHandler
         _skills = skills;
     }
 
-    public async Task<SliceResult<bool>> HandleAsync(
-        Guid resumeId, string skillName, CancellationToken ct = default)
+    public async ValueTask<SliceResult<bool>> Handle(
+        RemoveSkillFromResume message, CancellationToken ct)
     {
+        var (resumeId, skillName) = message;
         var name = skillName?.Trim();
         if (string.IsNullOrEmpty(name))
             return SliceResult<bool>.Invalid("skillName is required.");

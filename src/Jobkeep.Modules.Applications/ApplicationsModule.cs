@@ -16,20 +16,11 @@ public static class ApplicationsModule
 {
     public static IServiceCollection AddApplicationsModule(this IServiceCollection services)
     {
-        // Scoped, matching AppDbContext's lifetime — a handler holds the
-        // request's context, so a singleton here would be a captive dependency.
-        services.AddScoped<ListApplicationsHandler>();
-        services.AddScoped<GetApplicationHandler>();
-        services.AddScoped<CreateApplicationHandler>();
-        services.AddScoped<UpdateApplicationHandler>();
-        services.AddScoped<DeleteApplicationHandler>();
-        // PHASE 13.3c. The first way to remove a job ad; DeletePosting.cs says
-        // why it arrived with the delete notifications rather than before them.
-        services.AddScoped<DeletePostingHandler>();
-        services.AddScoped<AddSkillToPostingHandler>();
-        services.AddScoped<RemoveSkillFromPostingHandler>();
-        services.AddScoped<AddRequirementToPostingHandler>();
-        services.AddScoped<RemoveRequirementHandler>();
+        // PHASE 13.4 — the AddScoped<XHandler>() lines that were here are gone.
+        // AddMediator() in Program.cs registers every IRequestHandler<,> and
+        // INotificationHandler<> it finds in the referenced module assemblies, so
+        // a new slice is now a file and a route, with nothing to remember to
+        // register. What stays below is what a mediator cannot know about.
 
         // The contract other modules use to reach Applications-owned tables.
         // Registered by the owning module rather than by its callers, now that

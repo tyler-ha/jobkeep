@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using Jobkeep.Models;
 using Jobkeep.Shared;
+using Mediator;
 using Microsoft.EntityFrameworkCore;
 
 // HotChocolate publishes a global `Path` type (its GraphQL field-path), which
@@ -38,7 +39,14 @@ public record ImportResponse(
     DateTime UpdatedAtUtc,
     Guid? CommittedEntityId);
 
-public class ImportDocumentHandler
+public record ImportDocument(
+    byte[] Bytes,
+    string FileName,
+    DocumentKind Kind,
+    string? Label,
+    string? SourceUrl) : IRequest<SliceResult<ImportResponse>>;
+
+public class ImportDocumentHandler : IRequestHandler<ImportDocument, SliceResult<ImportResponse>>
 {
     private readonly DocumentsDbContext _db;
     private readonly IDocumentTextExtractor _extractor;
@@ -60,14 +68,10 @@ public class ImportDocumentHandler
         _options = options;
     }
 
-    public async Task<SliceResult<ImportResponse>> HandleAsync(
-        byte[] bytes,
-        string fileName,
-        DocumentKind kind,
-        string? label,
-        string? sourceUrl,
-        CancellationToken ct = default)
+    public async ValueTask<SliceResult<ImportResponse>> Handle(
+        ImportDocument message, CancellationToken ct)
     {
+        var (bytes, fileName, kind, label, sourceUrl) = message;
         // The filename is a display label and nothing else. It is truncated here
         // and never used to open, create or name anything on disk — the bytes are
         // discarded after extraction, so there is no file operation for a hostile

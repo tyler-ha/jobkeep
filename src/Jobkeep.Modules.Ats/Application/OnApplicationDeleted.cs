@@ -1,5 +1,6 @@
 using Jobkeep.Modules.Applications;
 using Jobkeep.Shared;
+using Mediator;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jobkeep.Modules.Ats;
@@ -32,14 +33,14 @@ namespace Jobkeep.Modules.Ats;
 // rows is a success. That matters because a retry of a half-delivered event, or
 // a second delete of an application already gone, must not turn into an error
 // the caller cannot act on.
-public class OnApplicationDeleted : IDomainEventHandler<ApplicationDeleted>
+public class OnApplicationDeleted : INotificationHandler<ApplicationDeleted>
 {
     private readonly AtsDbContext _db;
 
     public OnApplicationDeleted(AtsDbContext db) => _db = db;
 
-    public async Task HandleAsync(ApplicationDeleted domainEvent, CancellationToken ct = default)
+    public async ValueTask Handle(ApplicationDeleted notification, CancellationToken ct)
         => await _db.AtsResults
-            .Where(r => r.ApplicationId == domainEvent.ApplicationId)
+            .Where(r => r.ApplicationId == notification.ApplicationId)
             .ExecuteDeleteAsync(ct);
 }

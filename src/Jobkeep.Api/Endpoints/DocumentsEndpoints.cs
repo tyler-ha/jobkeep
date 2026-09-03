@@ -1,6 +1,7 @@
 using Jobkeep.Models;
 using Jobkeep.Modules.Documents;
 using Jobkeep.Shared;
+using Mediator;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Jobkeep.Api.Endpoints;
@@ -78,7 +79,7 @@ public static class DocumentsEndpoints
             [FromForm] DocumentKind kind,
             [FromForm] string? label,
             [FromForm] string? sourceUrl,
-            ImportDocumentHandler handler,
+            ISender sender,
             DocumentOptions options,
             CancellationToken ct) =>
         {
@@ -96,8 +97,8 @@ public static class DocumentsEndpoints
             using var buffer = new MemoryStream();
             await file.CopyToAsync(buffer, ct);
 
-            return (await handler.HandleAsync(
-                buffer.ToArray(), file.FileName, kind, label, sourceUrl, ct))
+            return (await sender.Send(
+                new ImportDocument(buffer.ToArray(), file.FileName, kind, label, sourceUrl), ct))
                 .ToHttpResult(created => Results.Created($"/imports/{created.Id}", created));
         })
         // Required for [FromForm] binding in a minimal API. ASP.NET Core enables
@@ -148,51 +149,51 @@ public static class DocumentsEndpoints
         // is still waiting on you.
         group.MapGet("/", async (
             ImportStatus? status,
-            ListImportsHandler handler,
+            ISender sender,
             CancellationToken ct) =>
-            (await handler.HandleAsync(status, ct)).ToHttpResult());
+            (await sender.Send(new ListImports(status), ct)).ToHttpResult());
 
         // GET /imports/{id} — the review screen: draft plus the extracted text.
         group.MapGet("/{id:guid}", async (
             Guid id,
-            GetImportHandler handler,
+            ISender sender,
             CancellationToken ct) =>
-            (await handler.HandleAsync(id, ct)).ToHttpResult());
+            (await sender.Send(new GetImport(id), ct)).ToHttpResult());
 
         // PUT /imports/{id} — the user's corrections. A full replace of the
         // draft; see ReviewImport.cs for why this is not a PATCH.
         group.MapPut("/{id:guid}", async (
             Guid id,
             ImportDraft draft,
-            ReviewImportHandler handler,
+            ISender sender,
             CancellationToken ct) =>
-            (await handler.HandleAsync(id, draft, ct)).ToHttpResult());
+            (await sender.Send(new ReviewImport(id, draft), ct)).ToHttpResult());
 
         // POST /imports/{id}/reparse — run the model over the stored text again.
         // POST because it is neither safe nor idempotent in the HTTP sense: it
         // replaces the draft, and a second call can produce a different one.
         group.MapPost("/{id:guid}/reparse", async (
             Guid id,
-            RestructureImportHandler handler,
+            ISender sender,
             CancellationToken ct) =>
-            (await handler.HandleAsync(id, ct)).ToHttpResult());
+            (await sender.Send(new RestructureImport(id), ct)).ToHttpResult());
 
         // POST /imports/{id}/confirm — the gate. Everything before this writes
         // one row in one table nothing else reads; this is where a resume, an
         // application, skills and requirements come into existence.
         group.MapPost("/{id:guid}/confirm", async (
             Guid id,
-            CommitImportHandler handler,
+            ISender sender,
             CancellationToken ct) =>
-            (await handler.HandleAsync(id, ct)).ToHttpResult());
+            (await sender.Send(new CommitImport(id), ct)).ToHttpResult());
 
         // DELETE /imports/{id} — discard. Marks the row rather than removing it;
         // DiscardImport.cs explains what that buys.
         group.MapDelete("/{id:guid}", async (
             Guid id,
-            DiscardImportHandler handler,
+            ISender sender,
             CancellationToken ct) =>
-            (await handler.HandleAsync(id, ct)).ToHttpResult(_ => Results.NoContent()));
+            (await sender.Send(new DiscardImport(id), ct)).ToHttpResult(_ => Results.NoContent()));
 
         // A second group, under a second path prefix, in the same module — because
         // a module owns its routes, and Documents owns `resume_skills`. The URL
@@ -208,9 +209,9 @@ public static class DocumentsEndpoints
         resumes.MapPost("/{id:guid}/skills", async (
             Guid id,
             AddSkillToResumeRequest request,
-            AddSkillToResumeHandler handler,
+            ISender sender,
             CancellationToken ct) =>
-            (await handler.HandleAsync(id, request, ct)).ToHttpResult())
+            (await sender.Send(new AddSkillToResume(id, request), ct)).ToHttpResult())
             .WithSummary("Add a skill to a resume, reusing the shared skill row.");
 
         // DELETE /resumes/{id}/skills/{skillName} — the inverse of the above, and
@@ -226,25 +227,25 @@ public static class DocumentsEndpoints
         resumes.MapDelete("/{id:guid}/skills/{skillName}", async (
             Guid id,
             string skillName,
-            RemoveSkillFromResumeHandler handler,
+            ISender sender,
             CancellationToken ct) =>
-            (await handler.HandleAsync(id, skillName, ct)).ToHttpResult(_ => Results.NoContent()))
+            (await sender.Send(new RemoveSkillFromResume(id, skillName), ct)).ToHttpResult(_ => Results.NoContent()))
             .WithSummary("Remove a skill from a resume; the shared skill row survives.");
 
         // GET /resumes — the shelf. Summaries only; ListResumes.cs explains why
         // the resume text is not in them.
         resumes.MapGet("/", async (
-            ListResumesHandler handler,
+            ISender sender,
             CancellationToken ct) =>
-            (await handler.HandleAsync(ct)).ToHttpResult())
+            (await sender.Send(new ListResumes(), ct)).ToHttpResult())
             .WithSummary("List resume versions, newest-updated first.");
 
         // GET /resumes/{id} — one resume in full, text included.
         resumes.MapGet("/{id:guid}", async (
             Guid id,
-            GetResumeHandler handler,
+            ISender sender,
             CancellationToken ct) =>
-            (await handler.HandleAsync(id, ct)).ToHttpResult())
+            (await sender.Send(new GetResume(id), ct)).ToHttpResult())
             .WithSummary("One resume: structured records plus the text they came from.");
 
         // DELETE /resumes/{id} — the endpoint DiscardImport's error message has
@@ -256,9 +257,9 @@ public static class DocumentsEndpoints
         // themselves.
         resumes.MapDelete("/{id:guid}", async (
             Guid id,
-            DeleteResumeHandler handler,
+            ISender sender,
             CancellationToken ct) =>
-            (await handler.HandleAsync(id, ct)).ToHttpResult(_ => Results.NoContent()))
+            (await sender.Send(new DeleteResume(id), ct)).ToHttpResult(_ => Results.NoContent()))
             .WithSummary("Delete a resume version, if nothing still points at it.");
 
         return app;

@@ -1,5 +1,6 @@
 using Jobkeep.Modules.Ats;
 using Jobkeep.Shared;
+using Mediator;
 
 namespace Jobkeep.Api.Endpoints;
 
@@ -30,18 +31,18 @@ public static class AtsEndpoints
         group.MapPost("/{id:guid}/ats-check", async (
             Guid id,
             Guid? resumeId,
-            CheckAtsHandler handler,
+            ISender sender,
             CancellationToken ct) =>
-            (await handler.HandleAsync(id, resumeId, ct)).ToHttpResult());
+            (await sender.Send(new CheckAts(id, resumeId), ct)).ToHttpResult());
 
         // GET — reads back what was stored, running no model. The same split
         // GetAnalysis.cs makes, and the reason the result is a table rather than
         // a computed response.
         group.MapGet("/{id:guid}/ats-check", async (
             Guid id,
-            GetAtsResultHandler handler,
+            ISender sender,
             CancellationToken ct) =>
-            (await handler.HandleAsync(id, ct)).ToHttpResult());
+            (await sender.Send(new GetAtsResult(id), ct)).ToHttpResult());
 
         return app;
     }

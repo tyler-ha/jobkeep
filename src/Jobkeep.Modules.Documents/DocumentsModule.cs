@@ -102,21 +102,11 @@ public static class DocumentsModule
         // is a dependency nothing in Program.cs shows.
         services.AddScoped<IResumeContract, ResumeContract>();
 
-        services.AddScoped<ImportDocumentHandler>();
-        services.AddScoped<GetImportHandler>();
-        services.AddScoped<ListImportsHandler>();
-        services.AddScoped<ReviewImportHandler>();
-        services.AddScoped<RestructureImportHandler>();
-        services.AddScoped<CommitImportHandler>();
-        services.AddScoped<DiscardImportHandler>();
-        services.AddScoped<AddSkillToResumeHandler>();
-        services.AddScoped<ListResumesHandler>();
-        services.AddScoped<GetResumeHandler>();
-        services.AddScoped<RemoveSkillFromResumeHandler>();
-        // PHASE 13.3c. The endpoint DiscardImport's error message has been
-        // pointing at since Phase 4.5; DeleteResume.cs says why it is only
-        // now real, and what its two refusals cost.
-        services.AddScoped<DeleteResumeHandler>();
+        // PHASE 13.4 — the AddScoped<XHandler>() lines that were here are gone.
+        // AddMediator() in Program.cs registers every IRequestHandler<,> and
+        // INotificationHandler<> it finds in the referenced module assemblies, so
+        // a new slice is now a file and a route, with nothing to remember to
+        // register. What stays below is what a mediator cannot know about.
 
         return services;
     }
