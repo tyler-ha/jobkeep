@@ -25,7 +25,7 @@ namespace Jobkeep.Modules.Applications.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("Jobkeep.Models.Company", b =>
+            modelBuilder.Entity("Jobkeep.Modules.Applications.Domain.Company", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -80,7 +80,7 @@ namespace Jobkeep.Modules.Applications.Migrations
                     b.ToTable("companies", "applications");
                 });
 
-            modelBuilder.Entity("Jobkeep.Models.JobApplication", b =>
+            modelBuilder.Entity("Jobkeep.Modules.Applications.Domain.JobApplication", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -133,7 +133,7 @@ namespace Jobkeep.Modules.Applications.Migrations
                     b.ToTable("job_applications", "applications");
                 });
 
-            modelBuilder.Entity("Jobkeep.Models.JobPosting", b =>
+            modelBuilder.Entity("Jobkeep.Modules.Applications.Domain.JobPosting", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -214,7 +214,7 @@ namespace Jobkeep.Modules.Applications.Migrations
                         });
                 });
 
-            modelBuilder.Entity("Jobkeep.Models.JobRequirement", b =>
+            modelBuilder.Entity("Jobkeep.Modules.Applications.Domain.JobRequirement", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -254,7 +254,7 @@ namespace Jobkeep.Modules.Applications.Migrations
                     b.ToTable("job_requirements", "applications");
                 });
 
-            modelBuilder.Entity("Jobkeep.Models.PostingSkill", b =>
+            modelBuilder.Entity("Jobkeep.Modules.Applications.Domain.PostingSkill", b =>
                 {
                     b.Property<Guid>("PostingId")
                         .ValueGeneratedOnAdd()
@@ -281,9 +281,9 @@ namespace Jobkeep.Modules.Applications.Migrations
                     b.ToTable("posting_skills", "applications");
                 });
 
-            modelBuilder.Entity("Jobkeep.Models.JobApplication", b =>
+            modelBuilder.Entity("Jobkeep.Modules.Applications.Domain.JobApplication", b =>
                 {
-                    b.HasOne("Jobkeep.Models.JobPosting", "Posting")
+                    b.HasOne("Jobkeep.Modules.Applications.Domain.JobPosting", "Posting")
                         .WithMany("Applications")
                         .HasForeignKey("PostingId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -292,9 +292,9 @@ namespace Jobkeep.Modules.Applications.Migrations
                     b.Navigation("Posting");
                 });
 
-            modelBuilder.Entity("Jobkeep.Models.JobPosting", b =>
+            modelBuilder.Entity("Jobkeep.Modules.Applications.Domain.JobPosting", b =>
                 {
-                    b.HasOne("Jobkeep.Models.Company", "Company")
+                    b.HasOne("Jobkeep.Modules.Applications.Domain.Company", "Company")
                         .WithMany("Postings")
                         .HasForeignKey("CompanyId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -303,9 +303,9 @@ namespace Jobkeep.Modules.Applications.Migrations
                     b.Navigation("Company");
                 });
 
-            modelBuilder.Entity("Jobkeep.Models.JobRequirement", b =>
+            modelBuilder.Entity("Jobkeep.Modules.Applications.Domain.JobRequirement", b =>
                 {
-                    b.HasOne("Jobkeep.Models.JobPosting", "Posting")
+                    b.HasOne("Jobkeep.Modules.Applications.Domain.JobPosting", "Posting")
                         .WithMany("Requirements")
                         .HasForeignKey("PostingId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -314,9 +314,9 @@ namespace Jobkeep.Modules.Applications.Migrations
                     b.Navigation("Posting");
                 });
 
-            modelBuilder.Entity("Jobkeep.Models.PostingSkill", b =>
+            modelBuilder.Entity("Jobkeep.Modules.Applications.Domain.PostingSkill", b =>
                 {
-                    b.HasOne("Jobkeep.Models.JobPosting", "Posting")
+                    b.HasOne("Jobkeep.Modules.Applications.Domain.JobPosting", "Posting")
                         .WithMany("PostingSkills")
                         .HasForeignKey("PostingId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -325,12 +325,12 @@ namespace Jobkeep.Modules.Applications.Migrations
                     b.Navigation("Posting");
                 });
 
-            modelBuilder.Entity("Jobkeep.Models.Company", b =>
+            modelBuilder.Entity("Jobkeep.Modules.Applications.Domain.Company", b =>
                 {
                     b.Navigation("Postings");
                 });
 
-            modelBuilder.Entity("Jobkeep.Models.JobPosting", b =>
+            modelBuilder.Entity("Jobkeep.Modules.Applications.Domain.JobPosting", b =>
                 {
                     b.Navigation("Applications");
 

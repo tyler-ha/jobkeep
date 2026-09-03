@@ -1,8 +1,13 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using Jobkeep.Models;
+using Jobkeep.Contracts.Documents;
+using Jobkeep.Modules.Applications;
+using Jobkeep.Modules.Applications.Domain;
+using Jobkeep.Modules.Documents.Domain;
+using Jobkeep.SharedKernel;
 using Jobkeep.Tests.Infrastructure;
+using Jobkeep.Tests.Parity;
 
 namespace Jobkeep.Tests.Rest;
 

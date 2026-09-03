@@ -1,6 +1,10 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.DependencyInjection;
+using Jobkeep.Contracts.Skills;
+using Jobkeep.Modules.Applications.Domain;
+using Jobkeep.Modules.Documents.Domain;
+using Jobkeep.Modules.Skills.Domain;
 
 namespace Jobkeep.Tests.Infrastructure;
 

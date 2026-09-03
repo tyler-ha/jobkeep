@@ -1,4 +1,4 @@
-namespace Jobkeep.Shared;
+namespace Jobkeep.SharedKernel;
 
 // What a slice handler returns. A handler knows whether the thing it was asked
 // to do succeeded, wasn't found, or was invalid — it does NOT know whether it

@@ -23,7 +23,7 @@ namespace Jobkeep.Modules.Ats.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("Jobkeep.Models.AtsResult", b =>
+            modelBuilder.Entity("Jobkeep.Modules.Ats.Domain.AtsResult", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()

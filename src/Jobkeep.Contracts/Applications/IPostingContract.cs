@@ -3,9 +3,10 @@
 // The namespace is deliberately unchanged -- 13.6 renames namespaces to match
 // projects, in one pass, once nothing else is moving.
 
-using Jobkeep.Models;
+using Jobkeep.Contracts.Shared;
+using Jobkeep.Contracts.Skills;
 
-namespace Jobkeep.Modules.Applications;
+namespace Jobkeep.Contracts.Applications;
 
 // The public contract Applications exposes about a POSTING — the ad behind an
 // application. Its callers are the Ai module (Phase 4) and the Ats module (13.2e).

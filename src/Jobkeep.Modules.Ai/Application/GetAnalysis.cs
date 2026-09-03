@@ -1,5 +1,6 @@
-using Jobkeep.Modules.Applications;
-using Jobkeep.Shared;
+using Jobkeep.Contracts.Applications;
+using Jobkeep.Modules.Ai.Domain;
+using Jobkeep.SharedKernel;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
 
@@ -24,7 +25,7 @@ namespace Jobkeep.Modules.Ai;
 // ApplicationDetail.cs was rewritten rather than deleted.
 public record AnalysisSummaryResponse(
     Guid PostingId,
-    Models.SeniorityLevel Seniority,
+    Domain.SeniorityLevel Seniority,
     string? Summary,
     string? ModelUsed,
     DateTime AnalyzedAtUtc);

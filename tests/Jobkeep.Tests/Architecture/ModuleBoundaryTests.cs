@@ -1,4 +1,10 @@
 using System.Reflection;
+using Jobkeep.Contracts.Applications;
+using Jobkeep.Contracts.Skills;
+using Jobkeep.Modules.Applications;
+using Jobkeep.Modules.Documents;
+using Jobkeep.SharedKernel;
+using Jobkeep.Tests.Infrastructure;
 
 namespace Jobkeep.Tests.Architecture;
 

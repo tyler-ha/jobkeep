@@ -1,4 +1,4 @@
-namespace Jobkeep.Shared;
+namespace Jobkeep.SharedKernel;
 
 // Phase 7. The C# half of the case-insensitive natural key.
 //

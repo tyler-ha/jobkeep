@@ -1,4 +1,8 @@
-namespace Jobkeep.Models;
+using Jobkeep.Contracts.Applications;
+using Jobkeep.Contracts.Documents;
+using Jobkeep.Contracts.Shared;
+using Jobkeep.SharedKernel;
+namespace Jobkeep.Modules.Applications.Domain;
 
 // Aggregate root: YOUR record of applying to a posting.
 //

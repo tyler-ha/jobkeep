@@ -1,5 +1,7 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using Jobkeep.Api.GraphQL;
+using Jobkeep.SharedKernel;
 
 namespace Jobkeep.Tests.Infrastructure;
 

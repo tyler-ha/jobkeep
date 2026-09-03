@@ -1,5 +1,7 @@
-using Jobkeep.Models;
+using Jobkeep.Contracts.Shared;
+using Jobkeep.Contracts.Skills;
 using Jobkeep.Modules.Skills;
+using Jobkeep.Modules.Skills.Domain;
 using Jobkeep.Tests.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 

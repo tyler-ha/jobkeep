@@ -1,4 +1,5 @@
-using Jobkeep.Modules.Applications;
+using Jobkeep.Contracts.Applications;
+using Jobkeep.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jobkeep.Modules.Analytics;

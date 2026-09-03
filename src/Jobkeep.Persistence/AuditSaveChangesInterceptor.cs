@@ -1,4 +1,4 @@
-using Jobkeep.Models;
+using Jobkeep.SharedKernel;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Diagnostics;

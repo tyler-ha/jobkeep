@@ -1,11 +1,18 @@
-using Jobkeep.Models;
+using Jobkeep.Contracts.Applications;
 using Jobkeep.Modules.Ai;
+using Jobkeep.Modules.Ai.Domain;
 using Jobkeep.Modules.Analytics;
 using Jobkeep.Modules.Applications;
+using Jobkeep.Modules.Applications.Domain;
 using Jobkeep.Modules.Ats;
+using Jobkeep.Modules.Ats.Domain;
 using Jobkeep.Modules.Documents;
+using Jobkeep.Modules.Documents.Domain;
 using Jobkeep.Modules.Skills;
+using Jobkeep.Modules.Skills.Domain;
 using Jobkeep.Persistence;
+using Jobkeep.Tests.Architecture;
+using Jobkeep.Tests.Ats;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jobkeep.Tests.Infrastructure;

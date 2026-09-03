@@ -1,4 +1,7 @@
 using System.Net;
+using Jobkeep.Modules.Applications;
+using Jobkeep.Modules.Applications.Domain;
+using Jobkeep.Modules.Skills.Domain;
 using Jobkeep.Tests.Infrastructure;
 
 namespace Jobkeep.Tests.Persistence;
@@ -110,7 +113,7 @@ public sealed class DedupTests(PostgresFixture fixture) : IntegrationTestBase(fi
 
         var failure = await Assert.ThrowsAsync<DbUpdateException>(() => WithDbAsync(async db =>
         {
-            db.Companies.Add(new Jobkeep.Models.Company { Name = "Telstra" });
+            db.Companies.Add(new Jobkeep.Modules.Applications.Domain.Company { Name = "Telstra" });
             await db.SaveChangesAsync(Ct);
         }));
 

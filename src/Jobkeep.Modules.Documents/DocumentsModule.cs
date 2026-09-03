@@ -1,5 +1,6 @@
-using Jobkeep.Models;
-using Jobkeep.Shared;
+using Jobkeep.Contracts.Applications;
+using Jobkeep.Contracts.Documents;
+using Jobkeep.Contracts.Skills;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 

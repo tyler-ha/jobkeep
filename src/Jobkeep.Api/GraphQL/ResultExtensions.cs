@@ -1,6 +1,6 @@
-using Jobkeep.Shared;
+using Jobkeep.SharedKernel;
 
-namespace Jobkeep.GraphQL;
+namespace Jobkeep.Api.GraphQL;
 
 // GraphQL's edge translation of a slice Result — the counterpart to REST's
 // ToHttpResult. GraphQL has no status codes: a failure is an entry in the

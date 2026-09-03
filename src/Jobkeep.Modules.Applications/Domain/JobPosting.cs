@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
+using Jobkeep.SharedKernel;
 
-namespace Jobkeep.Models;
+namespace Jobkeep.Modules.Applications.Domain;
 
 // The external job ad — the thing you found on Indeed/LinkedIn. This is the
 // unit the AI analyzer (Phase 4) reads, and AI-derived facts describe it.

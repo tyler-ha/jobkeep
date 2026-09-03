@@ -1,4 +1,5 @@
-namespace Jobkeep.Models;
+using Jobkeep.Contracts.Shared;
+namespace Jobkeep.Modules.Applications.Domain;
 
 // Phase 2.5. The status lifecycle, as a pure function of (from, to).
 //

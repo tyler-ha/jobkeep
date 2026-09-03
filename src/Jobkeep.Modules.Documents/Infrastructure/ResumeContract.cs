@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using Jobkeep.Contracts.Documents;
+using Jobkeep.Modules.Documents.Domain;
 
 namespace Jobkeep.Modules.Documents;
 
@@ -70,12 +72,12 @@ public class ResumeContract : IResumeContract
     // compile and stay compiling after someone reorders either enum; this stops
     // building the moment the two lists disagree, which is the whole reason the
     // duplication is written down as correct rather than tolerated.
-    private static ResumeSourceFormat? MapFormat(Models.SourceFormat? format) => format switch
+    private static ResumeSourceFormat? MapFormat(Domain.SourceFormat? format) => format switch
     {
-        Models.SourceFormat.PlainText => ResumeSourceFormat.PlainText,
-        Models.SourceFormat.Markdown => ResumeSourceFormat.Markdown,
-        Models.SourceFormat.Pdf => ResumeSourceFormat.Pdf,
-        Models.SourceFormat.Docx => ResumeSourceFormat.Docx,
+        Domain.SourceFormat.PlainText => ResumeSourceFormat.PlainText,
+        Domain.SourceFormat.Markdown => ResumeSourceFormat.Markdown,
+        Domain.SourceFormat.Pdf => ResumeSourceFormat.Pdf,
+        Domain.SourceFormat.Docx => ResumeSourceFormat.Docx,
         null => null,
         _ => throw new ArgumentOutOfRangeException(nameof(format), format, null)
     };

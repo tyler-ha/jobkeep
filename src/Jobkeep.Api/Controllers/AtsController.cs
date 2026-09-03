@@ -1,5 +1,5 @@
+using Jobkeep.Modules.Ai;
 using Jobkeep.Modules.Ats;
-using Jobkeep.Shared;
 using Mediator;
 using Microsoft.AspNetCore.Mvc;
 

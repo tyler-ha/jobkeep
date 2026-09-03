@@ -1,4 +1,5 @@
-namespace Jobkeep.Models;
+using Jobkeep.Contracts.Applications;
+namespace Jobkeep.Modules.Ai.Domain;
 
 // How senior the ad reads. Lives here rather than with the other posting enums
 // because it is the analyzer's OUTPUT, not something the ad states — Ai is the

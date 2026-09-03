@@ -1,5 +1,4 @@
 using Jobkeep.Modules.Analytics;
-using Jobkeep.Shared;
 using Mediator;
 using Microsoft.AspNetCore.Mvc;
 

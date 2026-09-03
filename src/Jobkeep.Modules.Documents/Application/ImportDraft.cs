@@ -1,7 +1,8 @@
 using System.ComponentModel;
 using System.Text.Json;
-using Jobkeep.Models;
-using Jobkeep.Modules.Applications;
+using Jobkeep.Contracts.Applications;
+using Jobkeep.Contracts.Shared;
+using Jobkeep.Modules.Documents.Domain;
 
 namespace Jobkeep.Modules.Documents;
 

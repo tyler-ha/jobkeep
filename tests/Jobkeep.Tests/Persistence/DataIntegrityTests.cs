@@ -1,5 +1,7 @@
 using System.Net.Http.Json;
-using Jobkeep.Models;
+using Jobkeep.Modules.Applications;
+using Jobkeep.Modules.Documents.Domain;
+using Jobkeep.SharedKernel;
 using Jobkeep.Tests.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 

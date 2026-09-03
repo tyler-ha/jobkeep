@@ -2,6 +2,7 @@ using Jobkeep.Modules.Ai;
 using Jobkeep.Modules.Applications;
 using Jobkeep.Modules.Ats;
 using Jobkeep.Modules.Documents;
+using Jobkeep.Modules.Skills.Domain;
 using Mediator;
 
 // PHASE 13.4 — namespace aliases, and they are not cosmetic. Every resolver
@@ -17,7 +18,7 @@ using Ai = Jobkeep.Modules.Ai;
 using Docs = Jobkeep.Modules.Documents;
 using Ats = Jobkeep.Modules.Ats;
 
-namespace Jobkeep.GraphQL;
+namespace Jobkeep.Api.GraphQL;
 
 // GraphQL write side. Every mutation is a thin adapter: it hands the request to
 // the same slice handler REST calls and translates the outcome.

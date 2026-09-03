@@ -1,7 +1,10 @@
 using Microsoft.Extensions.AI;
 using OllamaSharp;
+using Jobkeep.Modules.Ai;
+using Jobkeep.Modules.Applications;
+using Jobkeep.SharedKernel;
 
-namespace Jobkeep.Shared;
+namespace Jobkeep.Api;
 
 // PHASE 13.1: ModelOptions lives in Jobkeep.SharedKernel and the registration
 // stays in Jobkeep.Api. Three modules (Ai, Ats, Documents) inject these settings;

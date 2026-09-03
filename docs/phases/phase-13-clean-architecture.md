@@ -1,14 +1,16 @@
 # Phase 13 — module-owned Clean Architecture, on the road to services
 
-**Status: In progress. Steps 13.1, 13.2 (a–e), 13.3 (a–c), 13.4 and 13.5 done,
+**Status: DONE. All steps — 13.1, 13.2 (a–e), 13.3 (a–c), 13.4, 13.5 and 13.6 —
 2026-09-01 to 2026-09-03** (branches `phase-13/module-boundaries`, then
 `phase-13/dispatch`, then `phase-13/controllers`, suite 239 → … → 254 → 256 → 266 →
-268 → 283 green).
+268 → 283 → 285 green).
 **13.2 is complete: no module names another module's table. 13.3 is complete: no
 module SHARES a table, a context or a schema with another, and the six foreign keys
 that used to cross a boundary are replaced in application code. 13.4 is complete:
 neither API surface names a handler — both send a message. 13.5 is complete: every
-route is a controller action and `Api/Endpoints/` is deleted.** 13.6 remains.
+route is a controller action and `Api/Endpoints/` is deleted. 13.6 is complete: a
+namespace names the project that holds it, and the standing docs say what the code
+does.**
 
 **This doc was rewritten on 2026-09-01.** The version before it (written the same
 day, commit `bf968a0`) planned a **layer-first** migration: one `Domain`, one
@@ -1035,15 +1037,106 @@ routes. Deliberate: 13.6 rewrites that section in one pass, and it already carri
 banner pointing at this doc. **Diagrams not redrawn** — nothing in the schema moved,
 and they are frozen until 1.0 ships on master either way.
 
-### 13.6 — namespaces, docs, decision record
+### 13.6 — namespaces, docs, decision record — DONE 2026-09-03
 
-Namespaces renamed to match projects, **last**, when nothing else is moving. Then
-`architecture.md` sections 2 and 3 and decisions 5, 6, 7, 12, 13, 15, 17 superseded
-in place; CLAUDE.md's "Where new code goes" and "Migration state" rewritten (both
-currently carry a pointer to this doc instead); **`architecture.svg` NOT redrawn —
-diagrams are frozen until 1.0 ships on master, so 13.6 records what moved and leaves
-the picture stale**; the
-inside-a-module layering rules added to the architecture suite.
+Suite **283 → 285**. No migration, no `web/` change, no behaviour change: 145 files
+touched and every one of them a namespace or a using.
+
+**What was renamed, and why it was not cosmetic.** Four namespaces spanned more than
+one project:
+
+| Was | Held | Now |
+|---|---|---|
+| `Jobkeep.Models` | entities from five modules, plus Contracts, plus SharedKernel | `Jobkeep.Modules.<X>.Domain`, `Jobkeep.Contracts.Shared`, `Jobkeep.SharedKernel` |
+| `Jobkeep.Shared` | SharedKernel and Api | `Jobkeep.SharedKernel`, `Jobkeep.Api` |
+| `Jobkeep.GraphQL` | Api — named no project at all | `Jobkeep.Api.GraphQL` |
+| `Jobkeep.Modules.<X>` | the module **and** its contract in Contracts | `Jobkeep.Contracts.<X>` for the contract half |
+
+The rule that replaced them: **a namespace begins with the name of the project that
+holds it.** The whole of Phase 13 is about making the reference graph real, and a
+namespace spanning projects hides it at the one place a person reads it — the using
+block.
+
+#### The defect the rename found, which is the argument for having done it
+
+`DispatchTests` loads its six module assemblies through one type each, because a
+referenced assembly is not in the AppDomain until something touches it. The Skills
+line read:
+
+```csharp
+typeof(Jobkeep.Modules.Skills.ISkillCatalog).Assembly
+```
+
+`ISkillCatalog` lives in the **Contracts** assembly. So the list named Contracts
+twice, **never loaded `Jobkeep.Modules.Skills` at all**, and every handler in that
+module went unchecked behind a line that compiled and passed — the most expensive
+kind of green. The rename is what surfaced it: the reference stopped resolving and
+the build said so. Fixed to `SkillsModule`, with the story kept in a comment beside
+it. The orphan-notification check had the same shape and was correct by accident;
+it now names `Jobkeep.Contracts.Applications.ApplicationDeleted` on purpose.
+
+#### Two traps the plan did not know
+
+- **EF's model snapshots record entity types by CLR full name**, so renaming an
+  entity's namespace is model drift as far as `migrations has-pending-model-changes`
+  is concerned — a schema change that changes no schema. `"Jobkeep.Models.Skill"`
+  had to become `"Jobkeep.Modules.Skills.Domain.Skill"` in all five snapshots and
+  their `.Designer.cs` files, as a string replacement. **Verified afterwards, per
+  context: all five report no pending changes.** Anyone renaming an entity namespace
+  again must do this, and must check, or the next `migrations add` emits an empty
+  migration and hides it.
+- **A scripted rewrite strips the UTF-8 BOM** if it reads with `utf-8-sig` and writes
+  with `utf-8`. EF's generated files carry one. Thirteen files had it restored by
+  hand; `docs/tool-usage.md` already warned about BOMs in EF's SQL output and this is
+  the same trap wearing a different hat.
+
+#### The layering test, and the dependency that was NOT added
+
+`ModuleBoundaryTests`' own comment said the inside-a-module rules "arrive in 13.6,
+and can bring [NetArchTest] with them". They arrived; it did not. Both rules came to
+about a dozen lines of reflection each in `Architecture/LayeringTests.cs`, and a
+package is a cost every future session pays. The comment was written before the
+rules were and it guessed high.
+
+- `A_namespace_begins_with_the_name_of_the_project_that_holds_it` — scoped to
+  `Jobkeep*` namespaces, because Mediator's source generator legitimately emits into
+  `Mediator.Internals` and `Microsoft.Extensions.DependencyInjection` from inside
+  `Jobkeep.Api`.
+- `A_modules_Domain_knows_nothing_of_EF_or_of_the_rest_of_its_module` — signatures
+  only: base types, interfaces, fields (backing fields included, because EF writes
+  through them), properties, parameters, returns and attributes. **The ceiling is
+  written down in the test:** a method *body* calling EF would not be seen. Accepted
+  — these are POCOs, and the alternative is an IL reader or a package.
+- It carries a **canary** (`examined >= 13`). A rule keyed on a namespace *suffix* is
+  one rename away from examining nothing and passing forever, and this repository has
+  already paid for that once — see the note on
+  `No_module_takes_a_context_it_does_not_own`.
+
+#### Docs
+
+`architecture.md`: sections 1, 2 and 3 rewritten; decisions **5, 6, 7, 12, 13, 15
+and 17** superseded in place with the reversal argued rather than asserted; decisions
+**19, 20 and 21** added for the phase itself, the mediator and the namespace rule.
+Section 1 was not on the plan's list and was the most wrong thing in the file — it
+still opened *"One ASP.NET Core 8 project"* and pointed at `src/Data/AppDbContext.cs`.
+
+Decision **7 is the notable reversal**: "MVC controllers — proposed for retirement"
+had stood since 2026-08-25 and 13.5 adopted them. The original objection — controllers
+organise by technical layer, cutting across vertical slices — is only true when the
+controller holds logic, and since 13.4 it holds none.
+
+**The A1-A9 finding table was deliberately NOT swept.** Its `Where` column still says
+`Modules/Applications/...`. One line was added above the table saying the paths
+predate Phase 13; re-reading nine findings a change never touched is the recurring
+cost decision 12 exists to stop.
+
+`CLAUDE.md`: "Where new code goes" and "Migration state" collapsed into one accurate
+section, plus a "Superseded rules" list so the four reversals stay legible.
+
+**Diagrams deliberately not redrawn — frozen until 1.0.** `architecture.svg` is wrong
+in two ways now (it draws `AppDbContext`, and it draws the surfaces calling handlers
+directly rather than sending a message). Both are noted in place, above the image,
+rather than fixed.
 
 ---
 

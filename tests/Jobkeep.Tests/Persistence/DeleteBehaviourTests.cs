@@ -1,5 +1,10 @@
 using System.Net;
-using Jobkeep.Models;
+using Jobkeep.Contracts.Applications;
+using Jobkeep.Modules.Ai;
+using Jobkeep.Modules.Ai.Domain;
+using Jobkeep.Modules.Applications;
+using Jobkeep.Modules.Ats;
+using Jobkeep.Modules.Ats.Domain;
 using Jobkeep.Tests.Infrastructure;
 
 namespace Jobkeep.Tests.Persistence;

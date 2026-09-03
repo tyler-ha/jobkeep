@@ -1,4 +1,5 @@
-namespace Jobkeep.Models;
+using Jobkeep.SharedKernel;
+namespace Jobkeep.Modules.Skills.Domain;
 
 // PHASE 14 — another name for a skill that already has a row.
 //

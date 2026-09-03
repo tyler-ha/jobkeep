@@ -1,4 +1,7 @@
-namespace Jobkeep.Models;
+using Jobkeep.Contracts.Shared;
+using Jobkeep.Persistence;
+using Jobkeep.SharedKernel;
+namespace Jobkeep.Modules.Skills.Domain;
 
 // A normalized, SHARED skill. Stored once (unique Name) and linked to many
 // postings via PostingSkill — this is what turns "top skills across all my

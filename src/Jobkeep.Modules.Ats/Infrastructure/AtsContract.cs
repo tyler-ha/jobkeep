@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Jobkeep.Contracts.Ats;
 
 namespace Jobkeep.Modules.Ats;
 

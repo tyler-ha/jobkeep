@@ -1,6 +1,7 @@
-using Jobkeep.Models;
-using Jobkeep.Modules.Skills;
-using Jobkeep.Shared;
+using Jobkeep.Contracts.Applications;
+using Jobkeep.Contracts.Shared;
+using Jobkeep.Contracts.Skills;
+using Jobkeep.Modules.Applications.Domain;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jobkeep.Modules.Applications;

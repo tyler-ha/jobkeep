@@ -1,4 +1,6 @@
-using Jobkeep.Models;
+using Jobkeep.Contracts.Shared;
+using Jobkeep.Modules.Applications.Domain;
+using Jobkeep.Tests.Parity;
 
 namespace Jobkeep.Tests.Domain;
 

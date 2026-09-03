@@ -25,7 +25,7 @@ namespace Jobkeep.Modules.Skills.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("Jobkeep.Models.Skill", b =>
+            modelBuilder.Entity("Jobkeep.Modules.Skills.Domain.Skill", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()

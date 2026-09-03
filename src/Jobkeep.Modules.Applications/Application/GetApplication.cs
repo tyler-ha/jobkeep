@@ -1,6 +1,6 @@
-using Jobkeep.Modules.Documents;
-using Jobkeep.Modules.Skills;
-using Jobkeep.Shared;
+using Jobkeep.Contracts.Documents;
+using Jobkeep.Contracts.Skills;
+using Jobkeep.SharedKernel;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
 

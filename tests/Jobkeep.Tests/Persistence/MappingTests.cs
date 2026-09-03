@@ -1,4 +1,6 @@
-using Jobkeep.Models;
+using Jobkeep.Contracts.Shared;
+using Jobkeep.Modules.Applications.Domain;
+using Jobkeep.Modules.Ats.Domain;
 using Jobkeep.Tests.Infrastructure;
 
 namespace Jobkeep.Tests.Persistence;

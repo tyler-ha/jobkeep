@@ -1,6 +1,10 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Jobkeep.Contracts.Skills;
+using Jobkeep.Modules.Applications;
+using Jobkeep.Modules.Documents;
+using Jobkeep.Modules.Skills.Domain;
 using Jobkeep.Tests.Infrastructure;
 
 namespace Jobkeep.Tests.Rest;

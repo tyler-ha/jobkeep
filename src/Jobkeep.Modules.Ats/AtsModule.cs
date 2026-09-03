@@ -1,5 +1,7 @@
-using Jobkeep.Modules.Applications;
-using Jobkeep.Shared;
+using Jobkeep.Contracts.Applications;
+using Jobkeep.Contracts.Ats;
+using Jobkeep.Contracts.Documents;
+using Jobkeep.Contracts.Skills;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Jobkeep.Modules.Ats;
