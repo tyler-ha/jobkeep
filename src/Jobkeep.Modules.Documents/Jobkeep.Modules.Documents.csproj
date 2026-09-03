@@ -1,0 +1,94 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The Documents module. A plain class library on purpose: the handlers never
+       knew about HTTP — only the route-mapping half of DocumentsModule.cs did, and
+       Phase 13.1 lifted that into Jobkeep.Api/Endpoints/. Keeping ASP.NET out of
+       here is what makes the layering claim checkable rather than decorative.
+
+       REFERENCE RULE, enforced by tests/Jobkeep.Tests/Architecture/: this project
+       may reference SharedKernel, Contracts and Persistence. It may NOT reference
+       another Jobkeep.Modules.* project.
+
+       Phase 13.3b deleted Jobkeep.Infrastructure.Data, which used to be on that
+       list and used to hold this module's entities, its EF mapping and the one
+       shared DbContext. All three now live here. -->
+  <PropertyGroup>
+    <RootNamespace>Jobkeep.Modules.Documents</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- IChatClient only. The concrete provider (Ollama today, a hosted API later)
+         is registered in Jobkeep.Api — that swap is the whole point of the
+         abstraction, so a module that named a provider would undo it. -->
+    <PackageReference Include="Microsoft.Extensions.AI" Version="10.9.0" />
+    <!-- IConfiguration.Bind lives in the Binder package, not in the abstractions.
+         The old single project got it free from the Web SDK; a class library says
+         so. Pinned to 10.0.11 to match everything else in the graph. -->
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.11" />
+
+
+    <!-- IConfiguration is deliberately NOT pinned here. It arrives transitively at
+         10.0.11 via EF Relational, pinned in the ItemGroup below since 13.3b (it
+         used to be pinned once, in Jobkeep.Infrastructure.Data, and inherited);
+         a second pin is a second thing to bump in lockstep, and this repo has
+         already been bitten twice by EF version drift (see the CS1705 comment in
+         tests/Jobkeep.Tests/Jobkeep.Tests.csproj). One pin, one place. -->
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The two concrete extractors in Infrastructure/. These are the only
+         infrastructure packages any module carries, and they are why Documents
+         has an Infrastructure/ folder while the other modules do not. -->
+    <PackageReference Include="PdfPig" Version="0.1.16" />
+    <PackageReference Include="DocumentFormat.OpenXml" Version="3.5.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- PHASE 13.3b. Every module carries EF now, because every module owns a
+         DbContext and its own tables. Until this step they arrived transitively
+         through Jobkeep.Infrastructure.Data, which was the single project that
+         pinned them.
+
+         Both packages are named explicitly and both are pinned to the exact
+         10.0.11 the app compiles against. Npgsql declares a RANGE on EF Core
+         ([10.0.4, 11.0.0)) while EF Design pins an exact version, so a
+         transitive-only reference lands on the range's FLOOR and the build fails
+         with CS1705. That trap is documented at length in
+         tests/Jobkeep.Tests/Jobkeep.Tests.csproj; it is now six csprojs to bump
+         in lockstep rather than one, which is the honest cost of the split.
+
+         The Npgsql PROVIDER is here too, and the reason is migrations rather
+         than queries. A module that owns tables owns their migrations, and a
+         migration is provider-specific by nature: the generated snapshot and
+         designer files name NpgsqlValueGenerationStrategy directly, so they do
+         not compile without it. The five table-owning modules carry it and
+         Analytics, which owns no tables, does not.
+
+         That is a real statement about the boundary rather than a build detail.
+         A module that can be lifted out takes its own schema with it, and a
+         schema it can create on its own means knowing which database it is. The
+         choice of provider for the RUNTIME connection is still made once, in
+         Jobkeep.Api; this is only the compile-time half.
+    -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.11" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.11" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Jobkeep.SharedKernel/Jobkeep.SharedKernel.csproj" />
+    <ProjectReference Include="../Jobkeep.Contracts/Jobkeep.Contracts.csproj" />
+    <ProjectReference Include="../Jobkeep.Persistence/Jobkeep.Persistence.csproj" />
+
+    <!-- There is NO reference to Jobkeep.Modules.Applications, and its absence is
+         the deliverable of Phase 13.2c. CommitImport.cs used to call
+         CreateApplicationHandler and AddRequirementToPostingHandler directly so
+         that Applications' own rules ran on a committed draft rather than being
+         re-implemented here; architecture.md decision 15 accepted that
+         compile-time coupling openly, on the condition that it was temporary.
+         The rules still run, through IApplicationContract.CommitPostingAsync.
+         Do not add the reference back: the boundary test names no exceptions any
+         more, so there is no allowlist entry left to hide behind. -->
+  </ItemGroup>
+
+</Project>

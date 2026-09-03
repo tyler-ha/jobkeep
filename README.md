@@ -24,11 +24,20 @@ while building demonstrable C# + AWS + AI integration experience.
 | 2.4 | Analytics endpoints (skill demand, status funnel, company rollup) | Done — three `GROUP BY`s, on both surfaces |
 | 2.5 | Enforce the application status lifecycle | Done — one rule, both surfaces, no schema change |
 | 2.6 | Upgrade to .NET 10 (LTS) — .NET 8 EOL 10 Nov 2026 | Done — no C# changed; caught a critical CVE in a transitive package |
-| 3 | Deploy to AWS Lambda (Function URL) + Neon Postgres | **Parked** (plan done, $0/month) |
 | 4 | AI job-description analyzer (local Ollama) | Done — behind `IChatClient`, local model only |
 | 4.5 | Document import (PDF/DOCX/text) with a confirm step | Done — upload → parse → review → confirm → rows |
 | 5 | ATS compatibility check | Done — deterministic skill gap + one model call; no score, on purpose |
-| 6 | Front end | Not started |
+| 6 | Front end (React + Vite, eight screens) | In progress — screens built and tested; visual pass + README remain |
+| 7 | Data integrity, audit baseline & the case-insensitive dedup key | **Done** — one migration; F7/F8/F11/F12/F13/F14 closed, 239 tests |
+| 8 | Soft delete / archive | Planned — rides Phase 7's index migration |
+| 9 | The three reads the front end could not get | Planned — found by building the screens |
+| 10 | Deploy to AWS Lambda (Function URL) + Neon Postgres | Parked (plan done, $0/month) |
+| 11 | Authentication & owner scoping | Planned — tied to the deploy |
+| 12 | Feature expansion | Placeholder — pulls from `docs/backlog.md` |
+
+Phases 1–6 keep the numbers they shipped under; 7 onward were renumbered on
+2026-09-01 into build order, ranked by which work gets *more expensive the longer
+it waits*. Phase 10 was formerly "Phase 3" and Phase 12 formerly "Phase 7".
 
 Full detail for each phase, including cost notes and interview talking
 points, is in [`docs/`](docs/README.md) — start with the index there.
@@ -50,20 +59,33 @@ enforced on one and missed on the other. There used to be a second path — the
 Phase 2 repository, drawn dashed here because it was retiring. Phase 2.3 deleted
 it; every use case is now a slice under `Modules/`.
 
-## Quick start (Phase 2.3, current state)
+## Quick start
 
-**The whole stack, one command** — Postgres, the API and the front end:
+**The whole stack, one command** — Postgres, the API and the front end, with
+nothing installed but Docker:
 
-```powershell
-.\run.cmd                 # -NoFrontend for backend only, -NoBrowser, -Stop to tear down
+```bash
+docker compose up --build   # down to stop; down -v to drop the database too
+docker compose logs -f api  # follow one service
 ```
 
-It brings each layer up only once the one below it answers, so a failure is
-reported against the thing that failed rather than as a fetch error in the
-browser. Ctrl+C stops what it started; the Postgres container is deliberately
-left running, because it holds your data and costs nothing idle. If a launcher
-is ever killed from outside, `.\run.cmd -Stop` cleans up after it — including
-the stray `Jobkeep.exe` that otherwise makes the next build fail with MSB3027.
+The API answers on `http://localhost:5080` (Swagger at `/swagger`, the GraphQL
+IDE at `/graphql`) and the front end on `http://localhost:5173`. The front end is
+the real Vite dev server with `./web` bind-mounted, so hot reload works; the API
+is a published build, so **a C# edit costs `docker compose up --build api`**.
+
+There used to be a second launcher — a `run.cmd` that started the same three
+layers as native Windows processes, which was a faster inner loop for C#. It was
+removed on 2026-09-01 so there is one way to start the app rather than two that
+bind the same three ports. One thing went with it: it used to kill the stray
+`Jobkeep.exe` that makes the next build fail with MSB3027, so if you run
+`dotnet run` by hand, stop it yourself before rebuilding.
+
+**Ollama is not in the compose stack, on purpose** — it is a multi-GB model
+server with no business being rebuilt and restarted with the app, so the API
+container reaches it on the host at `host.docker.internal:11434`. Everything
+works without it except the three features that call a model; see
+[Where the model runs](#where-the-model-runs).
 
 By hand, if you'd rather. Storage is **PostgreSQL via EF Core**; in Development
 the app talks to a local Postgres container and auto-applies EF migrations on
@@ -137,17 +159,60 @@ REST, `INTERVIEWING` over GraphQL — not as an int.
 
 ### The schema those migrations build
 
-![Entity relationship diagram of the eight-table JobKeep schema, with
+![Entity relationship diagram of the thirteen-table JobKeep schema, with
 job_postings at the centre. Solid edges are ON DELETE RESTRICT, dashed edges
 are ON DELETE CASCADE.](docs/diagrams/schema-erd.svg)
 
-Eight normalized tables with `job_postings` — the job ad — at the centre. Your
+Thirteen normalized tables with `job_postings` — the job ad — at the centre. Your
 record of applying is a separate row, so one posting can carry several
 applications. Delete behaviour is chosen per relationship: derived data
 cascades, shared rows (a company, a skill) refuse to disappear underneath you.
 
 Redraw both diagrams after a schema change with the `schema-diagram` skill; it
 generates the DDL from EF rather than reading the model classes.
+
+## Where the model runs
+
+**Not in Docker.** The compose stack is three containers — Postgres, the API, Vite
+— and Ollama is not one of them. It is a multi-GB model server that has no
+business being rebuilt or restarted with the app, so it runs natively on the host
+and the API container reaches it through `host.docker.internal:11434`
+(`compose.yaml`, `Ai__Endpoint`). On a bare `docker compose up` with no Ollama
+installed, every model call fails with a connection refused that reads like a
+model problem and isn't one.
+
+```bash
+ollama serve                 # on the host, not in a container
+ollama pull llama3.2:3b      # the model the app asks for by name
+```
+
+One model does all of it: **`llama3.2:3b`**, configured in `appsettings.json`
+under `Ai` and bound to `ModelOptions` in `src/Shared/ModelClient.cs`. It is
+registered once as an `IChatClient` (OllamaSharp implements the interface
+directly) and injected wherever a module wants it — `Ai` does not own the
+technology, it owns the `ai_analyses` table.
+
+Three callers, and **they are not equally dependent on it**:
+
+| Caller | What it asks the model for | What happens with Ollama down |
+|---|---|---|
+| `Modules/Ai/AnalyzePosting.cs` — "Analyse the ad" | Seniority, a 2–3 sentence summary, and **every technology named in the ad**, from `job_postings.Description` | 500, with a message naming the endpoint. Nothing is stored. |
+| `Modules/Documents/DocumentStructurer.cs` — the upload pipeline | Structure for an uploaded PDF/DOCX/text: a résumé's roles and education, or a job ad's title, company, skills and requirements | The import blocks for up to 180s and then fails. Text extraction itself never touches the model. |
+| `Modules/Ats/CheckAts.cs` — the ATS check | **Only free-text requirement coverage.** | **Degrades, does not fail** — three of the four stages need no model. The warning is stored, so a later read cannot mistake an empty `UnmetRequirements` for "every requirement met". |
+
+The ATS row is the one worth reading twice. **The skill gap is a SQL set
+difference, not a model call** — a posting's skills and a résumé's skills are rows
+in the same `skills` table joined on the same `SkillId`, so "what does this ad ask
+for that this CV does not have" is a join. Exact, instant, free, and it cannot
+hallucinate. The plan for Phase 5 said to prompt the model for it; the
+implementation refused, and that is the decision in the phase doc.
+
+Timeouts are generous on purpose: `TimeoutSeconds = 180`, because a 3B model on
+CPU is slow and the first request after boot also pays for loading the weights.
+The `Ai` config section is committed rather than kept in a secret store, which is
+only acceptable because none of it is a credential — Ollama is local and has no
+API key. A hosted provider's key would come from an environment variable, the way
+the connection string does.
 
 ## Project structure
 
@@ -169,20 +234,30 @@ Jobkeep/
 │   └── diagrams/           # committed schema ERD + architecture SVGs
 ├── scripts/
 │   └── token-usage.py     # totals Claude Code session tokens for docs/token-log.md
-└── src/                   # The actual .NET project
-    ├── Jobkeep.csproj
-    ├── Program.cs                   # wiring only: DI, middleware, Map* calls
-    ├── Modules/                     # vertical slices — one file per use case
-    │   └── Applications/            #   ListApplications, CreateApplication, ...
-    ├── Shared/                      # SliceResult + the two edge translations
-    ├── appsettings.json             # empty Postgres conn (set in deploy)
-    ├── appsettings.Development.json # points at local Postgres
-    ├── Models/                      # relational domain model + enums
-    ├── Data/                        # AppDbContext (EF Core mapping)
-    ├── Migrations/                  # EF migrations
-    ├── GraphQL/                     # HotChocolate Query + Mutation
-    └── Properties/
+└── src/                   # The actual .NET solution — nine projects since Phase 13.1
+    ├── Jobkeep.slnx                    # names all nine + the test project
+    ├── Directory.Build.props           # the TFM, shared by all of them
+    ├── Jobkeep.SharedKernel/           # SliceResult, NaturalKey, IAuditable, ModelOptions
+    ├── Jobkeep.Contracts/              # how one module talks to another: interfaces + DTOs
+    ├── Jobkeep.Infrastructure.Data/    # TEMPORARY — the pre-split entities, DbContext
+    │                                   #   and migrations; deleted in Phase 13.3
+    ├── Jobkeep.Modules.Applications/   # a module = Domain/ + Application/ + Infrastructure/
+    ├── Jobkeep.Modules.Analytics/      #   read-only reporting
+    ├── Jobkeep.Modules.Ai/             #   owns ai_analyses
+    ├── Jobkeep.Modules.Ats/            #   owns ats_results
+    ├── Jobkeep.Modules.Documents/      #   owns document_imports + the résumé tables
+    └── Jobkeep.Api/                    # the only project that knows about HTTP
+        ├── Program.cs                  #   wiring only: DI, middleware, Map* calls
+        ├── Endpoints/                  #   REST routes (controllers replace these at 13.5)
+        ├── GraphQL/                    #   HotChocolate Query + Mutation
+        ├── appsettings.json            #   empty Postgres conn (set in deploy)
+        └── appsettings.Development.json
 ```
+
+**A module never references another module** — it goes through `Jobkeep.Contracts`.
+That rule is what makes extracting one into its own service a directory move rather
+than a redesign, and `tests/Jobkeep.Tests/Architecture/` fails the build if it slips.
+See `docs/phases/phase-13-clean-architecture.md`.
 
 ## STAR log
 

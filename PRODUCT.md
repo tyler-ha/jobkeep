@@ -19,7 +19,7 @@ The **front end is greenfield**, and the stack was confirmed with the user:
 - **Vite** + **react-router** — confirmed 2026-08-29. Vite because
   `src/appsettings.Development.json` already allows `http://localhost:5173` in
   `Cors:AllowedOrigins`, and because it builds to static files, which keeps the
-  parked Phase 3 plan (S3 static hosting, $0) viable unchanged. Accepted
+  parked deploy plan (S3 static hosting, $0; now Phase 10) viable unchanged. Accepted
   trade-off: no SSR, and routing is an explicit dependency rather than free.
 - **dnd-kit** for drag and drop, **lucide-react** for icons, and **no component
   kit** — CSS is hand-rolled.
@@ -93,7 +93,7 @@ let any copy imply otherwise.
   free. The app auto-migrates on startup in Development only.
 - Backend on `http://localhost:5080`; Swagger at `/swagger` and the GraphQL Nitro
   IDE at `/graphql`, both Development-only. Front end will serve on `:5173`.
-- **Deployment is parked, not blocked** (Phase 3). The plan is complete, costs
+- **Deployment is parked, not blocked** (Phase 10, formerly Phase 3). The plan is complete, costs
   $0/month, and nothing about it expires. The front end therefore ships running
   locally; a public URL is gated behind un-parking the deploy.
 - Work proceeds in **phases that each end in something runnable**, because the
@@ -112,7 +112,7 @@ reads, and the ATS check. 228 tests green.
 **Constraints that bind future work:**
 
 - **Cost stays near-zero. Nothing in the deployed architecture may bill per
-  hour.** This is a hard rule, produced by the Phase 3 decision to drop RDS for
+  hour.** This is a hard rule, produced by the deploy phase's decision to drop RDS for
   Neon's free tier. Never propose always-on infrastructure without flagging cost
   explicitly. The AWS account has **no free tier left**, so "t3.micro is free"
   advice does not apply.
@@ -130,9 +130,10 @@ reads, and the ATS check. 228 tests green.
 - A module may **read** another module's tables; only a **write** needs a
   contract (architecture decision 17).
 
-**Known and recorded — do not re-discover:** no auth, no health check, no
-docker-compose; skill/company/résumé-label dedup is case-sensitive; no index on
-`Status` or `DateApplied`. All are in the gap register in `docs/architecture.md`.
+**Known and recorded — do not re-discover:** no auth, no health check. Three
+items that used to sit on this line are fixed: case-sensitive dedup and the
+missing `Status` / `DateApplied` indexes went in Phase 7, and `compose.yaml`
+landed 2026-09-01. The rest are in the gap register in `docs/architecture.md`.
 
 ## Brand Commitments
 

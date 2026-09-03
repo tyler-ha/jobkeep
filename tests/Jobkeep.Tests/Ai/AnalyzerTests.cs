@@ -65,11 +65,15 @@ public class AnalyzerTests(PostgresFixture fixture) : IntegrationTestBase(fixtur
             Assert.Contains("payment services", stored.Summary);
             Assert.Equal("llama3.2:3b", stored.ModelUsed);
 
-            var links = await db.PostingSkills.Include(ps => ps.Skill).ToListAsync(Ct);
+            // 13.3b: the link no longer carries a Skill navigation, so the name
+            // is resolved separately — the same two-step ISkillCatalog gives the
+            // application.
+            var names = await SkillNamesAsync(db);
+            var links = await db.PostingSkills.ToListAsync(Ct);
             Assert.Equal(2, links.Count);
             Assert.All(links, l => Assert.Equal(SkillSource.AiExtracted, l.Source));
-            Assert.True(links.Single(l => l.Skill.Name == "C#").IsRequired);
-            Assert.False(links.Single(l => l.Skill.Name == "Kubernetes").IsRequired);
+            Assert.True(links.Single(l => names[l.SkillId] == "C#").IsRequired);
+            Assert.False(links.Single(l => names[l.SkillId] == "Kubernetes").IsRequired);
         });
     }
 
@@ -131,11 +135,12 @@ public class AnalyzerTests(PostgresFixture fixture) : IntegrationTestBase(fixtur
 
         await WithDbAsync(async db =>
         {
-            var links = await db.PostingSkills.Include(ps => ps.Skill).ToListAsync(Ct);
+            var names = await SkillNamesAsync(db);
+            var links = await db.PostingSkills.ToListAsync(Ct);
             // Provenance is not downgraded by a later extraction: a row the user
             // entered stays Parsed even though the model named the same skill.
-            Assert.Equal(SkillSource.Parsed, links.Single(l => l.Skill.Name == "C#").Source);
-            Assert.Equal(SkillSource.AiExtracted, links.Single(l => l.Skill.Name == "Kubernetes").Source);
+            Assert.Equal(SkillSource.Parsed, links.Single(l => names[l.SkillId] == "C#").Source);
+            Assert.Equal(SkillSource.AiExtracted, links.Single(l => names[l.SkillId] == "Kubernetes").Source);
         });
     }
 

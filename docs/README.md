@@ -11,6 +11,8 @@ disagree, the order below is the precedence order.
 | [`security-and-data-audit.md`](security-and-data-audit.md) | What the schema and config expose, what's missing, and the phased remediation plan (F1–F18). |
 | [`user-journeys.md`](user-journeys.md) | **What the user actually does**, step by step, and where that procedure has holes. The counterpart to `architecture.md`: that one describes the system from the code's side, this one from the user's. |
 | [`backlog.md`](backlog.md) | Considered-but-not-committed features. |
+| [`agent-log.md`](agent-log.md) | **Every subagent exploration run on this repo, with its findings compacted.** Read it *before* spawning an agent — if an entry covers your ground, the answer is already bought. Add a row when a new one returns. |
+| [`tool-usage.md`](tool-usage.md) | Which tool is right for which job here, and the traps that have already cost a turn. Read before a bulk edit or a schema derivation. |
 | [`token-log.md`](token-log.md) | What each phase cost to build, in tokens. Generated from session transcripts by `scripts/token-usage.py`. |
 
 ## Phase plans — a record of intent, then of what happened
@@ -30,12 +32,25 @@ phase doc is a historical record, not a description of the current tree.
 | 2.4 | [Analytics endpoints](phases/phase-2.4-analytics.md) | Done |
 | 2.5 | [Enforce the status lifecycle](phases/phase-2.5-status-rules.md) | Done |
 | 2.6 | [Upgrade to .NET 10 (LTS)](phases/phase-2.6-dotnet10-upgrade.md) | Done |
-| 3 | [Deploy to AWS Lambda (Function URL)](phases/phase-3-aws-deploy.md) | **Parked** — plan done, $0/month, deferred behind local feature work |
 | 4 | [AI job-description analyzer](phases/phase-4-ai-analyzer.md) | **Done** — tests verified during Phase 4.5, all 10 passed unchanged |
 | 4.5 | [Document import: upload, parse, confirm, save](phases/phase-4.5-resume-import.md) | **Done** — PDF/DOCX/text → draft → human confirm → rows |
 | 5 | [ATS compatibility check](phases/phase-5-ats-check.md) | **Done** — skill gap is a SQL join, not a model call; degrades when the model is down |
-| 6 | [Front end](phases/phase-6-frontend.md) | **In progress** — staged 6.1–6.4; 6.1 (backend unblock: CORS, résumé reads) done, scaffold next |
-| 7 | [Feature expansion after the front end](phases/phase-7-feature-expansion.md) | **Placeholder** — not a feature list; what changes about *building* one once there are two halves |
+| 6 | [Front end](phases/phase-6-frontend.md) | **In progress** — 6.1–6.3 done (eight screens); the visual pass on the other seven screens and 6.4 (README) remain |
+| 6.5 | [The upload experience](phases/phase-6.5-upload-experience.md) | **In progress** — the rename, the drop zone, the progress bar and the spacing are done; group 4 (paste text, the only backend half) is not started |
+| 6.6 | [The ad goes somewhere](phases/phase-6.6-the-ad-goes-somewhere.md) | **Done** (2026-09-01) — the add form collected the ad into `Notes`, which nothing reads; the job post told you to paste the ad in and offered nowhere to do it |
+| 7 | [Data integrity & the dedup key](phases/phase-7-data-integrity.md) | **Done** (2026-09-01) — one migration; ERD redraw still outstanding. Formerly "Phase 2.7" |
+| 8 | [Soft delete / archive](phases/phase-8-soft-delete.md) | **Planned.** Rides Phase 7's index migration; highest front-end blast radius on the roadmap |
+| 9 | [The three reads the front end could not get](phases/phase-9-api-gaps.md) | **Planned.** Found by building the screens in 6.3 |
+| 10 | [Deploy to AWS Lambda (Function URL)](phases/phase-10-aws-deploy.md) | **Parked** — plan done, $0/month. Formerly "Phase 3" |
+| 11 | [Authentication & owner scoping](phases/phase-11-auth.md) | **Planned.** Gated on the deploy and on confirming decision 9 |
+| 12 | [Feature expansion after the front end](phases/phase-12-feature-expansion.md) | **Placeholder** — not a feature list; what changes about *building* one once there are two halves. Formerly "Phase 7" |
+| 13 | [Module-owned Clean Architecture](phases/phase-13-clean-architecture.md) | **In progress** — 13.1, 13.2a–e and 13.3a–c done (2026-09-01 to 09-02). Ten projects, six modules, five schemas; 13.4 dispatch, 13.5 controllers and 13.6 namespaces/docs remain. Reverses decisions 5, 7 and 17. **Started before Phase 6.5 group 4, not after** — the microservice destination was confirmed 2026-09-01 and this became the boundary that group 4 waits on |
+
+**Numbers are build order for unbuilt work, and history for built work.**
+Phases 1–6 keep the numbers they shipped under. The remaining work was
+renumbered on 2026-09-01 so the table reads top-to-bottom as the order it will
+actually be built in — see `architecture.md` decision 18 for the ordering rule
+(compounding cost first) and for what was deliberately *not* rewritten.
 
 **If a phase doc contradicts `architecture.md`, follow `architecture.md` and fix
 the phase doc as part of the work.** The phase docs were written before the

@@ -31,7 +31,8 @@ can. Prefer the defensible choice over the impressive-sounding one.
    DynamoDB) without flagging the cost tradeoff explicitly. Note: storage is
    PostgreSQL (see Architecture). Local dev uses Postgres in Docker (free);
    the deployed DB is **Neon's free tier** (serverless Postgres, scales to
-   zero, $0). This replaced RDS free-tier in Phase 3 — see that doc for why,
+   zero, $0). This replaced RDS free-tier in the deploy phase (now Phase 10, see
+   `docs/phases/phase-10-aws-deploy.md`) — see that doc for why,
    and for the rule it produced: **nothing in the deployed architecture may
    bill per hour.**
 2. **Each phase should end in something runnable.** The person has a
@@ -155,7 +156,8 @@ drawn now so services can be extracted later if a real trigger appears.**
 Full reasoning, the extraction triggers, and the decision record are in
 `docs/architecture.md`.
 
-- **Backend**: ASP.NET Core 8 (`src/`). See "Framework deadline" below.
+- **Backend**: ASP.NET Core on `net10.0` (`src/`). See "Conventions" for the
+  TFM and why it moved.
 - **API surfaces**: REST (minimal-API endpoints) **and** GraphQL
   (HotChocolate, `src/GraphQL/`, served at `/graphql`). Both sit on the same
   data layer — GraphQL didn't replace REST. Added in Phase 2b. This dual
@@ -172,11 +174,24 @@ Full reasoning, the extraction triggers, and the decision record are in
   **`Ai` owns the `ai_analyses` table, not the technology**. `IChatClient` is a
   shared dependency any module may inject, like `AppDbContext`.
 - **Deployment target**: AWS Lambda behind a **Function URL** (no API Gateway
-  — see Phase 3 doc), with PostgreSQL on **Neon's free tier**. The Lambda
+  — see the Phase 10 doc), with PostgreSQL on **Neon's free tier**. The Lambda
   deliberately stays *out* of a VPC, so no NAT Gateway is ever needed. Both the
   REST and GraphQL endpoints ride the same Lambda.
 
 ### Where new code goes
+
+> **PHASE 13 IS IN PROGRESS AND THIS SECTION IS OUT OF DATE.** As of 13.3c
+> (2026-09-02) `src/` is **ten projects**: six modules, plus SharedKernel,
+> Contracts, Persistence and Api. (This said "nine" from 13.1 until 13.3c counted
+> the `.csproj` files — the Skills promotion was never added to the total.) Each module now holds its own entities
+> (`<Module>/Domain/`), its own EF configuration and `DbContext`
+> (`<Module>/Persistence/`) and its own migrations, in its own Postgres schema — see
+> `docs/phases/phase-13-clean-architecture.md` for the
+> target shape and the reference rule (*a module never references another module*),
+> which `tests/Jobkeep.Tests/Architecture/ModuleBoundaryTests.cs` enforces. The
+> vertical-slice rules below still describe how a **use case** is written, and that
+> has not changed; only the paths have. This section is rewritten in full at 13.6,
+> deliberately last, so it is rewritten once rather than after every step.
 
 New feature work goes in a **module**, as a **slice per use case**:
 
@@ -208,6 +223,13 @@ Modules: `Applications` (core), `Analytics` (read-only), `Ai` (Phase 4),
   module's tables") is superseded.
 
 ### Migration state (read this before editing `src/`)
+
+> **Superseded in part by Phase 13.** The Phase 2.1-2.3 migration described below
+> did finish, and its rules about *how a slice is written* still hold. What has
+> changed is where the files live: since 13.1 each module is its own project, and
+> since 13.3b each module holds its own entities and its own `DbContext`. The
+> quarantine project those things passed through, `Jobkeep.Infrastructure.Data`, is
+> **deleted**, and so is `AppDbContext`.
 
 **The migration is finished.** It ran incrementally across Phases 2.1-2.3 so each
 phase stayed runnable, and as of Phase 2.3 (2026-08-26) `src/` has **one** shape:
@@ -295,7 +317,7 @@ Prefer putting the detail in the **phase doc** — one accurate place beats four
 half-synchronised ones.
 
 **On a cadence, never per feature.** Doc audits and consistency sweeps run at
-phase-group boundaries only — before Phase 3 (the AWS deploy) and before Phase 6
+phase-group boundaries only — before the AWS deploy (Phase 10) and before Phase 6
 — and **always in a fresh session**. The cadence and the session boundary do the
 saving together: the same sweep late in a long session costs roughly 3x what it
 costs early.
@@ -305,14 +327,81 @@ the code does. That is tolerable because the ones that would be actively *wrong*
 get fixed immediately, and because a stale sentence is cheaper than the sweep
 that would have prevented it.
 
+### Frozen until 1.0 ships on master
+
+**Adopted 2026-09-02, at the user's instruction, after Phase 13.3c spent a
+meaningful slice of a session redrawing two SVGs.** Until **1.0 is merged to
+master**, do not spend tokens on regenerated or re-rendered artefacts. Then redraw
+once, deliberately, and only what is actually needed.
+
+Frozen — do NOT produce these mid-phase, even when a change makes them wrong, and
+even when a phase doc or a skill says to:
+
+- **`docs/diagrams/*.svg`.** Both of them. The `schema-diagram` skill is not to be
+  invoked; a migration or a module-boundary move is no longer a trigger.
+- **Any other picture, chart or rendering** — no ASCII diagrams "to illustrate", no
+  Mermaid, no artifacts, nothing generated to be looked at rather than run.
+- **Re-reading or re-syncing standing docs a change did not touch.** This was
+  already the rule (decision 12); it is restated here because it is the same money.
+
+Still done in the same change, unchanged — these are near-free and they are the
+evidence:
+
+- In-code comments explaining a tradeoff.
+- The phase doc's Status and its real deviations.
+- Tests.
+- A doc sentence that the change made **factually wrong** — a one-line fix, not a
+  sweep.
+
+**When a change would have triggered a redraw, write one line in the phase doc
+saying so** (e.g. *"schema moved; diagrams deliberately not redrawn — frozen until
+1.0"*). That keeps the debt visible and makes the eventual redraw a list rather than
+an investigation.
+
+**1.0 is the trigger, and it is a merge to master, not a phase number.** At that
+point the accumulated list gets redrawn in one fresh session — which is also the
+cheapest place to do it, per the cost table above.
+
 ## Commands
 
-**`.\run.cmd` starts the whole local stack** — Docker, Postgres, the API, the
-front end — waiting for each layer to answer before starting the next, so a
-failure names the layer that failed. `-NoFrontend` for backend only, `-Stop` to
-tear a stack down (it also kills the stray `Jobkeep.exe` that makes the next
-build fail with MSB3027). Logs land in `logs/`. The script is
-`scripts/run.ps1`; read its header before changing ports or the container name.
+**`docker compose up --build` starts the whole local stack** — Postgres, the API
+and the front end, three containers, `compose.yaml` at the root plus
+`src/Dockerfile` and `web/Dockerfile`. It needs nothing installed but Docker.
+`docker compose down` stops it, `down -v` drops the database, `logs -f api`
+follows one service.
+
+- The front end is the **real Vite dev server** with `./web` bind-mounted, so hot
+  reload survives. The API is a **published build**, so a C# edit costs
+  `docker compose up --build api`. That asymmetry is deliberate — `dotnet watch`
+  over a bind mount would drag the host's Windows `obj/` into a Linux container.
+- Adding an npm dependency also needs `up --build`: an anonymous volume masks
+  `node_modules` so the container keeps its Linux packages.
+
+**There was a second launcher, `run.cmd` / `scripts/run.ps1`, and it was deleted
+on 2026-09-01** at the user's instruction — one way to start the app instead of
+two that bind the same three ports (:5432, :5080, :5173). Don't reintroduce it,
+and don't look for it in docs that predate the removal. Two things it used to do
+now have to be done by hand:
+
+- It killed the stray `Jobkeep.exe` that makes the next build fail with **MSB3027**
+  ("Exceeded retry count of 10 … locked by Jobkeep"). That trap is still live for
+  anyone running `dotnet run` directly — stop the process before rebuilding.
+- It waited for each layer to answer before starting the next, so a failure named
+  the layer that failed. Compose has a `pg_isready` healthcheck on `db` and
+  `depends_on: service_healthy` on `api`, which covers the race that actually
+  mattered; the front end has ordering only, deliberately, since the browser is
+  what calls the API.
+
+The compose stack keeps its rows in the `pgdata` volume. **The old `jobkeep-db`
+container from `run.cmd` may still exist on this machine with different data in
+it** — `docker rm -f jobkeep-db` if it gets in the way of :5432. The test suite is
+in neither: it starts its own throwaway Postgres via Testcontainers.
+
+**Ollama is deliberately NOT in compose.** It runs on the host; the API container
+reaches it at `host.docker.internal:11434` (`Ai__Endpoint` in `compose.yaml`).
+`ollama serve` + `ollama pull llama3.2:3b` are prerequisites for the three model
+callers, and nothing else in the app needs them. See "Where the model runs" in
+the root `README.md` for which caller degrades and which fails.
 
 By hand:
 
@@ -321,11 +410,16 @@ By hand:
 docker run -d -p 5432:5432 -e POSTGRES_PASSWORD=dev -e POSTGRES_DB=jobkeep postgres:16-alpine
 
 cd src
-dotnet build
-dotnet run
+dotnet build Jobkeep.slnx
+dotnet run --project Jobkeep.Api
 ```
 
-App listens on `http://localhost:5080` (`Properties/launchSettings.json`).
+Since Phase 13.1 there are several projects under `src/` (nine, as of 13.3b), so a
+bare `dotnet build` / `dotnet run` in that directory fails with **MSB1011** — name the
+solution or the project, as above. `docker compose up --build` is unaffected and remains the
+normal way to start the stack.
+
+App listens on `http://localhost:5080` (`Jobkeep.Api/Properties/launchSettings.json`).
 Swagger UI at `/swagger` and the GraphQL Nitro IDE at `/graphql` — both
 Development-only.
 
@@ -333,7 +427,26 @@ EF migrations (tool pinned to 10.0.11 in `src/dotnet-tools.json`, `rollForward: 
 — bump it in lockstep with `Microsoft.EntityFrameworkCore.Design`):
 ```bash
 dotnet tool restore
-dotnet ef migrations add <Name>
+
+# Since Phase 13.1 the model lives in one project and the connection string and
+# provider are resolved through another, so both have to be named. Since 13.3b there
+# are FIVE models — one per table-owning module, each with its own schema and its own
+# __EFMigrationsHistory — so the context has to be named too. Without all three flags
+# the command fails in a way that reads like a broken tool install.
+dotnet ef migrations add <Name> \
+  --project Jobkeep.Modules.Documents \
+  --startup-project Jobkeep.Api \
+  --context DocumentsDbContext
+
+# The five, with their schemas: ApplicationsDbContext (applications),
+# SkillsDbContext (skills), DocumentsDbContext (documents), AiDbContext (ai),
+# AtsDbContext (ats). AnalyticsDbContext owns no tables and has no migrations.
+
+# The cheap check that a refactor did not move the schema. Run it per context.
+dotnet ef migrations has-pending-model-changes \
+  --project Jobkeep.Modules.Documents \
+  --startup-project Jobkeep.Api \
+  --context DocumentsDbContext
 ```
 
 Tests (Phase 2.2) — xUnit v3 + Testcontainers, in `tests/Jobkeep.Tests/`:
@@ -357,6 +470,20 @@ can pass `--no-restore`.
 is MTP, and the .NET 10 SDK refuses the old VSTest bridge. Pass the project as
 `--project <path>`, not positionally. No SDK version is pinned in `global.json`,
 so the `dotnet-ef` tool pin is independent of it.
+
+Front end (Phase 6) — Vite + React in `web/`, and `npm` is run from there:
+
+```bash
+cd web
+npm run dev     # http://localhost:5173 — expects the API already up on 5080
+npm test        # Vitest, 35 tests, ~2s. No container, no API needed
+npm run build   # tsc -b && vite build
+npm run lint    # oxlint
+```
+
+`npm run dev` makes a **genuine cross-origin request** to the API — there is no
+dev-server proxy, deliberately, so the CORS policy is exercised from day one
+rather than first met on deploy. Nothing in `web/` needs Docker.
 
 You can still exercise endpoints by hand via Swagger, the Nitro IDE, or
 `src/Jobkeep.http` (works in VS / VS Code / Rider, no account needed).
@@ -399,23 +526,22 @@ You can still exercise endpoints by hand via Swagger, the Nitro IDE, or
 
 ## Known gaps (don't re-discover these)
 
-No `docker-compose`, no health check, no auth. These are **recorded**, not
-forgotten — see the gap register in `docs/architecture.md`.
+No health check, no auth. These are **recorded**, not forgotten — see the gap
+register in `docs/architecture.md`. (`docker-compose` used to be on this line;
+`compose.yaml` landed 2026-09-01.)
 
 Tests and CI landed in **Phase 2.2**, scheduled straight after 2.1 because the gap
 register called them the highest-value missing items. Findings still **recorded, not
 fixed** — don't re-discover them:
-- **Skill dedup is case-sensitive**, so `C#` and `c#` are two rows in the table whose
-  purpose is deduplication. Company dedup has the same defect, and since Phase 4.5
-  so does `resumes.Label` — deliberately, to keep all three consistent rather than
-  fixing one and making them disagree. Both need a
-  case-insensitive natural key, which is a migration and so its own phase. Note the
-  *filters* added in 2.3 are case-insensitive (ILIKE), so searching finds both rows —
-  which hides the problem without fixing it. Phase 2.4 is where it actually costs
-  something: a duplicate row splits one skill's count in `/stats/skill-demand`. It is
-  now pinned by a test that asserts the defect
-  (`SkillDemand_SplitsSkillsDifferingOnlyInCase_WhichIsTheKnownDedupGap`), so the fix
-  announces itself by breaking that test.
+- ~~**Skill dedup is case-sensitive**~~ — **FIXED in Phase 7.** All three tables
+  (`skills.Name`, `companies.Name`, `resumes.Label`) now carry a STORED generated
+  column, `lower(...)`, and the unique index sits on that. Use
+  `Jobkeep.Shared.NaturalKey.Of(name)` before any find-or-create — **the C# side and
+  the generated column must agree**, or a lookup misses a row the index then refuses
+  to insert, and the user gets a 500 on an ordinary name. Two tests asserted the
+  defect and both broke on the migration, which is exactly what writing defects down
+  as tests is for; both were flipped in place. Résumés are **not** merged — duplicate
+  labels were suffixed, because two documents are two documents.
 - **The EF version asymmetry survived Phase 2.6 — it was never about the major
   version.** The app resolves EF 10.0.11 throughout, but the Npgsql provider
   declares a *range* (`[10.0.4, 11.0.0)`) while EF Design pins an *exact* 10.0.11.
@@ -423,26 +549,65 @@ fixed** — don't re-discover them:
   `Jobkeep.Tests.csproj` must keep naming `Microsoft.EntityFrameworkCore` and
   `.Relational` explicitly; removing them fails with CS1705. Bump those two in
   lockstep with EF Design. Reasons are in the csproj comment — read it first.
-- **No index on `Status` or `DateApplied`** even though 2.3 filters and sorts on
-  both. Deliberate — see F14 — and parked in Phase 2.7 with the rest of the audit
-  migration.
+- ~~**No index on `Status` or `DateApplied`**~~ — **FIXED in Phase 7**, along with
+  F7 (`xmin` concurrency), F8 (the audit interceptor), F11 (DB-side defaults), F12
+  (CHECK constraints) and F13 (bounded text). The one rule worth carrying out of it:
+  **`UpdatedAtUtc` records when THAT ROW changed, not when anything beneath it did.**
+  Adding a skill to a posting does not bump the posting — the interceptor only sees
+  entities EF marks `Added`/`Modified`, and stamping parents would need an aggregate
+  definition this codebase has never written down.
 
 **Fixed in Phase 2.3, so don't re-report them:** A2 (entities as the API contract),
 A3 (the repository), A4 (surface-specific validation) and A7 (EF entities reachable
 through the GraphQL schema). A1 is *partly* fixed — read decision 11 before
 "finishing" it, because the obvious fix reopens A7.
 
+## Before you explore
+
+Two logs exist so that work already paid for is not paid for twice. **Read them
+before spawning a subagent or picking a tool**, not after:
+
+- `docs/agent-log.md` — every subagent exploration run on this repo, with its
+  findings compacted. **Check it before spawning an agent.** If an entry covers
+  your ground, read it and verify only the specific facts your change depends on
+  — a `grep` for one symbol costs a thousandth of an agent. Spawn only for ground
+  no entry covers, and **add a row when it returns.** The standing rule is
+  unchanged: do not spawn subagents unless the user asks.
+- `docs/tool-usage.md` — which tool is right for which job here, and the traps
+  that have already cost a turn (heredocs through Bash, non-persistent `cd`,
+  escaped backslashes in the markdown, CRLF+BOM in EF's SQL, `pg_dump` over
+  `migrations script`). **Check it before a bulk edit or a schema derivation.**
+
+Both carry dates. A finding that names a file, a line or a constant is a claim
+about that date — verify it before relying on it.
+
 ## Where things are
 
 - `docs/README.md` — the index: what each doc is for, and which wins.
+- `docs/agent-log.md` — subagent runs and their compacted findings. Read before
+  spawning one.
+- `docs/tool-usage.md` — tool selection and the known traps. Read before a bulk
+  edit.
 - `docs/architecture.md` — how the code is shaped, why, and the decision
   record. **Check this before proposing structural changes.**
 - `docs/phases/phase-N-*.md` — the plan and status for each build phase, in
   order. Check the current phase's doc before making changes so new
   work matches the intended scope for that stage.
+- `docs/phases/phase-6.5-upload-experience.md` — **read this before touching the
+  upload flow instead of re-exploring it.** It already records the 180-second
+  synchronous model block, the server-side filename label default, the drop zone
+  the screen never had, the `stubFetch` throw, the `Description` cap that 500s,
+  and the design pass's eight defects.
+- `docs/phases/phase-6.6-the-ad-goes-somewhere.md` — **read this before touching
+  the add form, the Job post screen or anything that asks where the ad text
+  lives.** The one fact worth having in advance: **`job_postings.Description` is
+  the ad and `job_applications.Notes` is your commentary, and only `Description`
+  is read by anything.** The analyser, the ATS check and the extractor all read
+  `Description`; nothing reads `Notes`. Phase 6.3 wired the add form's only
+  textarea to `Notes`, which is why a pasted advertisement produced no skills.
 - `docs/security-and-data-audit.md` — schema/config exposure, F1-F18, and the
   phased remediation plan. **Refresh on a cadence, not per phase:** once before
-  Phase 3 ships to AWS, and once before auth lands. Those are the points where a
+  the AWS deploy ships (Phase 10), and once before auth lands (Phase 11). Those are the points where a
   stale finding would actually cost something.
 - `docs/user-journeys.md` — what the user actually does, step by step, and where
   that procedure has holes. The counterpart to `architecture.md`: that one
@@ -453,54 +618,274 @@ through the GraphQL schema). A1 is *partly* fixed — read decision 11 before
   with `python scripts/token-usage.py`; see "When asked to move to the next
   phase" below.
 - `docs/diagrams/` — `schema-erd.svg` and `architecture.svg`, embedded in
-  `README.md` and `docs/architecture.md`. **Committed artefacts that go stale
-  silently** — nothing fails a build when the schema moves and the picture
-  doesn't. Redraw them with the `schema-diagram` skill
-  (`.claude/skills/schema-diagram/`) in the same change that moves the schema.
-  This trigger stays per-change because it fires rarely — only on a migration or
-  a module-boundary move. Phase 2.3 had no migration and correctly left
-  `schema-erd.svg` untouched while redrawing `architecture.svg`.
-  That skill derives the schema from `dotnet ef migrations script`, not from
-  reading `Models/*.cs` — column types, precision, delete behaviour and index
-  uniqueness live in Fluent API config and the Npgsql provider, so inferring
-  them from the model classes produces a diagram that is wrong in exactly the
-  places an interviewer would probe.
+  `README.md` and `docs/architecture.md`. **DO NOT REDRAW THESE UNTIL 1.0 IS ON
+  MASTER** — see "Frozen until 1.0" below. The per-change trigger that used to live
+  here is suspended, deliberately; both files will lag the code and that is the
+  accepted cost.
+  When they are eventually redrawn, use the `schema-diagram` skill
+  (`.claude/skills/schema-diagram/`) and note the one method rule worth keeping:
+  derive the schema from `pg_dump --schema-only` against the migrated database, not
+  from `dotnet ef migrations script` (a sequence, not a final state) and never from
+  reading the entity classes — column types, precision, delete behaviour and index
+  uniqueness live in Fluent API config and the Npgsql provider.
 - `scripts/token-usage.py` — reads Claude Code's session transcripts and totals
   tokens per session, or per task within a session (`--task <prefix>`). The
   source for `docs/token-log.md`.
 - `src/` — the actual .NET project.
+- `web/` — the React front end (Phase 6). Its own `README.md` covers the layout;
+  the rules for where front-end code goes are in
+  `docs/phases/phase-12-feature-expansion.md`.
+- `PRODUCT.md` — the binding brand commitments and the measured contrast table.
+  **Read before touching UI**; the palette and the tone rules are decided there,
+  not re-derived per screen.
 - Root `README.md` — status table and quick start.
 
 ## When asked to move to the next phase
 
-**Currently up next: Phase 6 step 6.2** (`docs/phases/phase-6-frontend.md`) —
-scaffold the React app. The phase is **staged 6.1-6.4** because it is too big to be
-one runnable unit, and step **6.1 is done** (2026-08-29): CORS, `GET /resumes`,
-`GET /resumes/{id}` and the `DELETE /resumes/{id}/skills/{skillName}` inverse. Read
-the phase doc rather than the sub-step list here; `docs/README.md` has the full
-table. A doc/security-audit sweep is still due (see "Documenting as you go" —
-cadence, and in a fresh session). **The stack is already decided and the design is
-already approved** — React, dnd-kit, lucide-react, no component kit, eight approved
-screens; the build tool is the one open choice and 6.2 asks about it. Don't re-open
-any of the rest; the user asked to be asked before any new dependency is added.
+**Currently up next: Phase 13.4 — dispatch.** Read
+`docs/phases/phase-13-clean-architecture.md` §13.4; it is the live plan, rewritten on
+2026-09-01 when the user confirmed **microservices is the destination**. **13.3 is
+DONE — all three sub-steps.**
+
+**13.4 needs a decision before any code:** 33 requests become `IRequest<T>` and 53
+call sites become `Send(...)`, and the mediator library is chosen *at that step*.
+MediatR went commercial (free below a revenue threshold; a personal portfolio sits
+under it — **confirm and record the finding**), `martinothamar/Mediator` is MIT and
+source-generated. **Either needs the user's approval before it is added.** 13.3c
+already built the notification half by hand — `Jobkeep.SharedKernel/DomainEvents.cs`,
+three types, ~30 lines — deliberately so that 13.4 swaps the types and leaves every
+call site alone.
+
+**13.3c LANDED 2026-09-02** (suite 256 → 266, no migration, no `web/` change). It is
+application code and diagrams only, and four things from it change how new code is
+written:
+
+- **A cross-module CASCADE is now a NOTIFICATION and a cross-module RESTRICT is a
+  CONTRACT CHECK.** That is the rule, and the asymmetry is the point: a cascade is a
+  consequence, announced after the publisher commits; a restrict is a question, asked
+  before. `Applications` publishes `ApplicationDeleted` and `PostingDeleted` and
+  names no subscriber; `Ats` and `Ai` subscribe. Do not add a contract method that
+  deletes another module's rows — that inverts the direction on purpose chosen here,
+  and `SharedKernel/DomainEvents.cs` argues why at length.
+- **Publish AFTER `SaveChangesAsync`, never before.** On failure that leaves an
+  invisible orphan rather than destroying work on a row that survived. Same call
+  `ISkillCatalog.FindOrCreateAsync` makes about its own save. There is **no outbox**,
+  so a crash between commit and publish loses the event; that is written down, not
+  forgotten, and it is Phase 14's.
+- **A delete-side contract check is WEAKER than the RESTRICT it replaced, and the
+  gap is a TOCTOU race** — a foreign key refuses inside the transaction, two counts
+  and a delete do not. Accepted with reasons in `DeleteResume.cs`; the read paths
+  already tolerate the residue (`ApplicationDetail` leaves `ResumeLabel` null,
+  `GetAtsResult` the same). Do not "fix" that tolerance — it is the safety net.
+- **Two routes now exist that never did: `DELETE /postings/{id}` and
+  `DELETE /resumes/{id}`.** Both were built because a replacement with no publisher
+  or no caller is a replacement nobody can verify. The posting refusal is still
+  enforced by a live FK (same schema) and the check only buys a 400 instead of a 500;
+  the résumé refusals are the whole protection.
+
+**Also corrected at 13.3c, having been wrong since 13.3b: SIX foreign keys were
+dropped, not five.** `posting_skills.SkillId → skills` was missed because it is a
+link table's second key that no module's *code* mentions. Counted out of
+`pg_dump --schema-only`: 13 before, **7 after** (5 CASCADE / 2 RESTRICT), all
+intra-schema. Both diagrams were redrawn from that dump and `schema-erd.svg` gained
+a dotted edge style meaning *"a relationship Postgres no longer knows about"*.
+
+Two questions from the 13.3b handoff are **closed, not built**: a skill id with no
+catalog row and an `ats_results.ResumeId` pointing at a deleted résumé are both now
+unreachable through the app (nothing deletes a skill; a résumé delete is refused
+while either table points at one), so they got no warning field. Don't re-open them.
+
+**13.3b LANDED 2026-09-02** (suite 254 → 256, five schemas, compose stack up from a
+dropped volume). It is the physical split, so most of what this file said about the
+data layer changed with it:
+
+- **`Jobkeep.Infrastructure.Data` is deleted** and `src/` is **nine** projects. The
+  thirteen entities live in the five modules that own their tables (`<Module>/Domain/`),
+  their configurations beside them (`<Module>/Persistence/`), and the six
+  `I<X>DbContext` interfaces are **gone**, replaced by six real contexts. `AppDbContext`
+  no longer exists — do not look for it, and do not reintroduce anything like it.
+- **Five schemas, five migration histories:** `applications`, `skills`, `documents`,
+  `ai`, `ats`. Analytics has a context and neither, because it owns no tables; it reads
+  three views that live in `applications`. `Program.cs` migrates five contexts, not six.
+- **Entities kept `namespace Jobkeep.Models`.** Deliberate: the boundary is the project
+  reference graph, and **13.6 renames every namespace in one pass**. The two shared
+  enums in `Jobkeep.Contracts/Shared/SharedEnums.cs` are in that namespace too, which
+  reads oddly on purpose.
+- **`ApplicationStatus` and `SkillSource` are in Contracts, not copied.** Both appear in
+  two modules' response DTOs, so both reach the GraphQL schema, and two CLR enums of one
+  name is a schema-**build** failure. `PostingRequirementKind` and `ResumeSourceFormat`
+  stay copies because their entity half is never published. That is the test: **copy
+  only when one side is unpublished.**
+- **The six contexts are six units of work.** `ISkillCatalog.FindOrCreateAsync` saves in
+  its own transaction now, genuinely — its "call me before adding rows of your own"
+  ordering rule was belt-and-braces before and is the entire safeguard since.
+- **`dotnet ef` needs `--context` as well as both project flags**, e.g.
+  `dotnet ef migrations add X --project Jobkeep.Modules.Documents --startup-project
+  Jobkeep.Api --context DocumentsDbContext`.
+- **Raw SQL must name its schema.** Unqualified names resolve through `search_path` to
+  `public`, which now holds nothing. This bit eight tests, `::regclass` included.
+- **Dropping an FK silently drops its indexes**, including the UNIQUE index that made a
+  one-to-one "one". Four indexes had to be restated by hand; if you drop another
+  relationship, check what went with it.
+
+**13.3c did all of the above and is done** — see its own section higher up. The one
+correction it made to this block: the FK count was **six**, not five.
+
+**The dev database was dropped at 13.3b**, as agreed. Asked and answered; do not re-ask.
+
+
+**13.2 IS DONE** (2026-09-01, all five sub-steps, suite 244 → 246 → 249 → 253 → 253).
+The property it bought, and the one 13.3b then made physical: **no module names another
+module's table.** 13.2 did it logically, with nothing moving in Postgres, which is what
+let 13.3 be a schema change and nothing else.
+
+Six things from 13.2 still change how new code is written:
+
+- **A module takes its OWN `DbContext` and no other.** 13.2's six `I<X>DbContext`
+  interfaces did this by omission; since 13.3b there are six real contexts and the
+  property is structural — another module's tables are not in the model.
+  `ModuleBoundaryTests.No_module_takes_a_context_it_does_not_own` enforces it (rewritten
+  at 13.3b, because the old version looked for `AppDbContext` by name and would have
+  gone vacuous when that type was deleted). Its allowlist, the conditional that read it
+  and the canary that guarded it were all **deleted in 13.2e** when the list emptied —
+  as the list's own comment instructed. Don't reintroduce one.
+- **Every cross-module crossing is a contract call, in `src/Jobkeep.Contracts/`.**
+  Four interfaces: `IApplicationContract` (2 methods), `IPostingContract` (4),
+  `IResumeContract` (3), `ISkillCatalog` (3). Implementations sit in
+  `<OwningModule>/Infrastructure/`.
+- **`IPostingContract`'s two-method cap was LIFTED in 13.2e and its reasoning
+  rewritten in place.** The cap argued from decision 17 — cross-module reads are
+  ordinary, so only writes need a contract — which Phase 13 reverses. **The rule that
+  replaced the number is the test `ISkillCatalog` already carried: does a method name
+  a fact about the thing, or a question the caller has about its own feature?** The
+  second kind stays with the caller. That is why the ATS skill gap did not become a
+  fifth method on `IPostingContract`.
+- **`ISkillCatalog` is finished at three verbs** — `GetAsync` (ids → names, batched),
+  `FindByNameAsync` (one name → row, on the natural key), `FindOrCreateAsync`
+  (batched, keyed by the name you passed in). Since 13.2c, `NaturalKey.Of` is called
+  in exactly ONE file in `src/`. Do not reach for it near a skill name; that is the bug.
+- **`FindOrCreateAsync` SAVES — call it before adding anything of your own to the
+  change tracker.** Until 13.3b all six interfaces resolved one scoped `AppDbContext`,
+  so the catalog's save flushed your pending changes too; since 13.3b it is simply a
+  different context and a different transaction. The rule is unchanged and the reason is
+  now the plain one: a failure after that save leaves the skill rows committed and yours
+  not. `CommitImport.CommitResumeAsync` gets the order right and says why at length. The
+  accepted cost is an orphan skill row when a link fails; it is harmless and is written
+  down, not to be re-discovered.
+- **A contract that writes must report a PARTIAL write, not throw.**
+  `IApplicationContract.CommitPostingAsync` returns the ids alongside the error
+  (`PostingCommitResult.Incomplete`) because the one thing a caller needs after a
+  half-finished write is what an exception cannot carry: what got created. **13.2e
+  showed the other half of the rule** — Ats writes only its own table and every
+  contract call it makes is a read that happens *before* the first row reaches the
+  change tracker, so no partial write is possible. Ordering is what buys that, and
+  `CheckAts.cs` says so above the store block.
+- **Two rules in this file were knowingly broken, both argued in code.** The ATS
+  skill gap is an in-memory `Except` over two contract calls rather than a SQL set
+  difference ("aggregate in SQL, not in memory") — justified because both sets are
+  tens of items bounded by what a human typed, and because the alternative is a join
+  that will not exist. And skill-name sorting left the database collation for
+  `StringComparer.OrdinalIgnoreCase`, matching `GetResume` and `ListApplications`;
+  a test pins it.
+
+**Phase 6.5 group 4 (paste text) is parked**, by decision, until the 13.3 boundary —
+**which 13.3c reached on 2026-09-02.** It is unblocked; it is not scheduled. 13.4-13.6
+are the rest of Phase 13, and group 4 touches `src/`, so doing it mid-phase means
+writing a slice that 13.4 and 13.5 then rewrite twice.
+
+**13.2c is the one sub-step that touched the front end**, and only as a widened type:
+`ImportStatus` gained `CommitFailed` in `web/src/lib/api.ts`, plus a fourth queue tab
+and a banner on the Upload screen. No URL moved. It needed no migration — the column
+is `varchar(20)` with no CHECK constraint — but a closed TypeScript union is a wire
+contract, so leaving it would have been a lie in a type.
+
+**Phase 6.5** (`docs/phases/phase-6.5-upload-experience.md`) is the Upload screen,
+opened 2026-09-01 by the first real feedback the front end has had. Groups 1-3 and
+5 are done — the import → upload rename (**UI wording only; the wire keeps
+`/imports`**), the drop zone, the timer-driven progress bar and the spacing.
+**Group 4 is what remains**: paste an ad's text through the same pipeline as a
+parsed file. It is the only group that touches `src/`. The phase doc has the whole
+plan; do not re-derive it, and do not re-argue the URL scraper — it is refused
+with reasons in `docs/backlog.md`.
+
+**That refusal is about the SERVER fetching a URL, and it is not the last word on
+intake.** On 2026-09-01 the user named the real gap — *"we are missing the aspect that
+where can we get those data for job ad"* — and `docs/backlog.md` gained an **intake
+question** section for it. The short version worth having before touching this area: a
+**browser extension** reads a page the user already opened, so it answers every one of
+the scraper refusal's objections rather than reviving them, and this app is unusually
+well placed for one because it already turns unstructured text into a draft (Phase 4.5
+`DocumentStructurer`) and so needs **no CSS selectors to break on a redesign**. It is
+blocked on Phase 11 for any public ship, and paste-the-ad (group 4) is its backend
+either way.
+
+Phase 6 itself has two things left: the **visual pass on the other seven screens**
+(the user has seen the app and says there are problems, but has not said which —
+ask directly, screen by screen; all eight were built on the same patterns, so a
+systemic problem is eightfold) and **step 6.4**, the README. Steps 6.1-6.3 are done (2026-08-29 to 2026-08-31): CORS
+and the résumé reads, the Vite scaffold and the token system, then all eight
+screens plus a Vitest suite of 35. **The stack and the design are decided** —
+React, Vite, react-router, dnd-kit, lucide-react, no component kit. Don't re-open
+any of it; the user asked to be asked before any new dependency is added.
+
+**Phase 7 is DONE** (2026-09-01) — one migration, `DataIntegrityAndNaturalKeys`,
+suite 228 → 239 green. `docs/diagrams/schema-erd.svg` was redrawn on 2026-09-01,
+in the session after the one that moved the schema, so that trigger is discharged.
+Final state **as at Phase 7**, if you need it without re-deriving: 13 tables, 13 FKs
+(7 CASCADE / 6 RESTRICT), 5 unique indexes, 12 plain. **Phase 13.3b changed this and
+the numbers above are history, not the current schema** — it is now 13 tables in five
+schemas, **7** FKs (5 CASCADE / 2 RESTRICT), 5 unique and **10** plain, with the six
+dropped keys enforced in application code since 13.3c. One method note worth keeping — the
+redraw derived the schema from `pg_dump --schema-only` against the migrated
+database rather than from `dotnet ef migrations script`, because an *idempotent*
+script is a sequence of migrations and later `ALTER`s silently correct earlier
+`CREATE`s; reading the final state out of that text is guesswork, and the dump is
+the applied result.
+
+**Then Phase 8** (`docs/phases/phase-8-soft-delete.md`) — soft delete, which needs
+the filtered unique indexes Phase 7's natural-key work created. Note its cost is
+overwhelmingly *front-end*: five list routes, five empty states, an undo.
+
+**The roadmap was reordered and renumbered on 2026-09-01** (architecture.md
+decision 18). Read `docs/README.md` for the table; what matters here is the rule
+that produced it and the two traps it leaves:
+
+- **Phases are now ordered by *compounding* cost, not by appeal.** The test is
+  "does deferring this make the later work bigger?" Almost nothing passes it —
+  reminders, contacts, export, interview rounds, a target profile and the
+  HotChocolate major all cost the same in six months, so they are P3/P4 and wait.
+  Three items pass and are now Phases 7, 8 and 11.
+- **Numbers are history for built work and build order for unbuilt work.** Phases
+  1-6 keep the numbers they shipped under. **Phase 3 is now Phase 10** and
+  **"Phase 2.7" is now Phase 7**; the old placeholder Phase 7 is now Phase 12.
+- **Done phase docs still say "Phase 3" and "Phase 2.7", deliberately.** They are
+  dated records of what was decided then. Do not sweep them — that is exactly the
+  re-reading-unchanged-markdown cost decision 12 exists to stop. Forward-looking
+  docs and `src/` comments were updated; both renamed docs carry a "formerly" note.
 
 **The commit before any front-end code exists is tagged `checkpoint/backend-complete`**,
 and `docs/phases/phase-6-frontend.md` freezes the API surface as at that point. From
 here **a feature has two halves** — a slice *and* a screen — so estimates carried
 over from Phases 2-5 are about half the real cost. That, and the checklist it
-implies, is `docs/phases/phase-7-feature-expansion.md`; it is deliberately not a
-feature list, because `docs/backlog.md` already is one.
+implies, is `docs/phases/phase-12-feature-expansion.md`; it is deliberately not a
+feature list, because `docs/backlog.md` already is one. It also records the **three
+backend gaps the front end found**, which are now Phase 9.
 
 Phase 5 is done (2026-08-28): `Modules/Ats/`, two slices, both surfaces. Four
 things from it are worth carrying forward, and the first two change how new work
 should be written:
 
-- **Decision 17 narrowed rule 2: the boundary is about writes, not reads.** A
-  module may read another module's tables; only a write needs a contract. This
-  supersedes rule 2's old wording and generalises decision 13, so a new
-  cross-module *reader* needs no exception and no contract. Do not add a third
-  method to `IPostingContract` for posting skills — decision 17 exists so that
-  you do not have to.
+- **Decision 17 narrowed rule 2 to writes — and Phase 13 REVERSES it. Do not
+  follow it for new code.** Decision 17 said a module may read another module's
+  tables and only a write needs a contract, which is why Ats read five tables it did
+  not own for five phases. It answers *"is this safe?"*, and it still answers it
+  correctly: a reader cannot leave anyone's data in a state they did not choose.
+  Phase 13 asks a different question — *"can this module be lifted out?"* — and
+  against that one read-only buys nothing, because a `SELECT` across a boundary is
+  precisely what stops working when the boundary becomes a network. **Every crossing
+  needs a contract now, reads included.** 13.2e duly added the `GetPostingSkills`
+  method this bullet used to say was unnecessary. Decision 17 is superseded in
+  `architecture.md` at 13.6, along with 6, 7 and 13.
 - **Use a model only where a query cannot answer.** The plan said to prompt the
   model for the keyword match; it shipped as a SQL set difference over the shared
   `skills` table, which is exact, instant and free. The model now answers only
@@ -527,19 +912,22 @@ were written but **never executed** — Docker was down that session — and wer
 for the first time during Phase 4.5, passing 10/10 unchanged. Don't repeat the
 pattern: a phase whose tests have not run is not verified, whatever the doc says.
 
-**Phase 3 is parked, not blocked** (2026-08-27). Its plan is complete, researched
-and costs $0/month; the decision was that *time* is better spent on local feature
-work first, and that deploying is only worth doing once there is enough tool to
-justify clicking the link. Nothing about it expires — the always-free grants have
-no clock. Read `docs/phases/phase-3-aws-deploy.md` before reopening it; the Aurora
+**The deploy — now Phase 10, formerly Phase 3 — is parked, not blocked**
+(2026-08-27). Its plan is complete, researched and costs $0/month; the decision
+was that *time* is better spent on local feature work first, and that deploying is
+only worth doing once there is enough tool to justify clicking the link. Nothing
+about it expires — the always-free grants have no clock. Read
+`docs/phases/phase-10-aws-deploy.md` before reopening it; the Aurora
 and API Gateway alternatives are already rejected there with reasons, and the
 account has **no free tier left**, so "t3.micro is free" style advice does not
-apply.
+apply. Being built past by four phases is what triggered the 2026-09-01 renumber:
+the number said "third" and the schedule said "tenth".
 
-Two things are due **when Phase 3 unparks**, not on a calendar: the
+Two things are due **when the deploy unparks**, not on a calendar: the
 **doc/security-audit sweep** (see "Documenting as you go" — cadence, and in a
 fresh session) and the audit's **transport & secrets hardening**. Both were tied
-to "before Phase 3 ships to AWS", so the trigger moved with the phase.
+to "before Phase 3 ships to AWS", so the trigger moved with the phase — and moved
+again with its number, to Phase 10.
 
 Phase 2.6 is done (2026-08-26): `net10.0` everywhere, EF/Npgsql/`dotnet-ef` on
 the 10.x line, CI down to one SDK. **No C# changed** — the whole upgrade is four
@@ -548,7 +936,7 @@ project/config files. Two things worth carrying forward:
   NU1904 on `HotChocolate.Language` 14.3.0 — an uncatchable stack-overflow DoS
   reachable from the unauthenticated `/graphql` endpoint, *before* validation
   runs. Fixed by 14.3.1 (patch, no API change). The 14 → 16 major jump was
-  refused and is in `backlog.md`, along with a parse-depth guard for Phase 3.
+  refused and is in `backlog.md`, along with a parse-depth guard for Phase 10.
 - **`net8.0` is gone from the build but not from the migrations.** The snapshot
   and initial designer file still say `ProductVersion "8.0.11"`. That is metadata,
   deliberately left; EF 10 reports no model drift from it. Don't regenerate

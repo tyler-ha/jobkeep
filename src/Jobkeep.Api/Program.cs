@@ -1,0 +1,292 @@
+using System.Text.Json.Serialization;
+// Phase 13.1: the Map*Module extensions moved here from each module's own
+// wiring file, so the module projects carry no ASP.NET dependency. The Add*
+// half still lives with its module. Both halves disappear into controllers
+// and a module DI extension in 13.5.
+using Jobkeep.Api.Endpoints;
+using Jobkeep.GraphQL;
+using Jobkeep.Modules.Ai;
+using Jobkeep.Modules.Analytics;
+using Jobkeep.Modules.Applications;
+using Jobkeep.Modules.Ats;
+using Jobkeep.Modules.Documents;
+using Jobkeep.Modules.Skills;
+using Jobkeep.Persistence;
+using Jobkeep.Shared;
+using Microsoft.EntityFrameworkCore;
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Storage is PostgreSQL via EF Core. The connection string comes from config:
+// appsettings.Development.json points at the local Docker container; a deployed
+// environment supplies it via an environment variable instead — so local vs cloud
+// is a config change, not a code change. (The deploy, Phase 10, is parked, and no longer names
+// RDS: the plan it holds is Neon over the public internet, which is still just a
+// connection string to everything below this line.)
+var connectionString = builder.Configuration.GetConnectionString("Postgres");
+
+// Phase 7 — the audit-timestamp interceptor (F8). Registered here rather than
+// inside a context, because a context's job is the schema, in one readable
+// place, and because a test needs to be able to swap the clock or leave the
+// interceptor off entirely to write a known timestamp and watch it change.
+//
+// Singleton: it holds a clock function and nothing else, so there is no state to
+// scope. AddDbContext is scoped, and a singleton dependency inside a scoped
+// service is the safe direction — the captive-dependency hazard runs the other
+// way.
+builder.Services.AddSingleton<AuditSaveChangesInterceptor>();
+
+// ---------------------------------------------------------------------------
+// PHASE 13.3b — six contexts, six schemas, six migration histories
+// ---------------------------------------------------------------------------
+// This block used to register ONE AppDbContext and then six interfaces over it,
+// each resolving that same scoped instance. It bought the 13.2 property — a
+// handler cannot name another module's table — while leaving Postgres untouched,
+// so nothing about behaviour changed in that step. This is the step that changes
+// it.
+//
+// What is the SAME: one connection string, one database, one Postgres server.
+// Nothing here is a second deployment, and nothing is meant to be yet.
+//
+// What is DIFFERENT, and it is the whole point:
+//
+//   * Each context maps only its own module's tables, in its own SCHEMA. A
+//     query cannot join across a boundary any more, because the other table is
+//     not in the model. That is the property that survives extraction: a join
+//     that does not exist cannot stop working when the boundary becomes a
+//     network.
+//
+//   * Each has its own __EFMigrationsHistory, in its own schema. Five contexts
+//     own tables and therefore migrations; Analytics owns neither. Separate
+//     histories mean a module's schema can be created, migrated and eventually
+//     MOVED without asking the other five for permission — which is exactly what
+//     extracting one would require.
+//
+//   * They are six units of work. Two of them in one handler is two change
+//     trackers and two transactions. Nothing in src/ holds two, but
+//     ISkillCatalog.FindOrCreateAsync is called from four modules and saves
+//     through the Skills context, so its "call me before adding rows of your
+//     own" ordering rule is now load-bearing rather than precautionary.
+//     CommitImport.CommitResumeAsync already gets it right and says why.
+//
+// The interceptor goes on all six. It stamps CreatedAtUtc/UpdatedAtUtc on
+// anything IAuditable, which is a rule about entities rather than about modules,
+// so leaving it off one context would be a silent inconsistency in the data
+// rather than a visible one in the code.
+void AddModuleContext<TContext>(string schema) where TContext : DbContext =>
+    builder.Services.AddDbContext<TContext>((sp, options) => options
+        .UseNpgsql(connectionString, npgsql => npgsql
+            // Same table name in six schemas, rather than six names in one. A
+            // module that is lifted out takes its schema whole, history included,
+            // and needs no rename on the way.
+            .MigrationsHistoryTable("__EFMigrationsHistory", schema))
+        .AddInterceptors(sp.GetRequiredService<AuditSaveChangesInterceptor>()));
+
+AddModuleContext<ApplicationsDbContext>("applications");
+AddModuleContext<SkillsDbContext>("skills");
+AddModuleContext<DocumentsDbContext>("documents");
+AddModuleContext<AiDbContext>("ai");
+AddModuleContext<AtsDbContext>("ats");
+
+// Analytics reads three views published by Applications and owns no tables, so
+// it gets a context but no migrations history — there is nothing for it to
+// create, and giving it a history table would imply otherwise.
+builder.Services.AddDbContext<AnalyticsDbContext>((sp, options) => options
+    .UseNpgsql(connectionString));
+
+// PHASE 13.3c. The in-process publisher behind the two delete notifications that
+// replaced the cascades 13.3b dropped. Registered in the composition root rather
+// than by a module, because it belongs to no module: Applications publishes, Ats
+// and Ai subscribe, and none of the three may know the others exist.
+//
+// Scoped, matching the contexts the handlers hold. A singleton would capture the
+// root provider and resolve a scoped DbContext from it, which is the captive-
+// dependency trap this project's DI comments keep naming.
+//
+// SharedKernel/DomainEvents.cs is where the interfaces live and where the choice
+// of a publisher over a fifth contract method is argued. 13.4 replaces all three
+// types with the chosen mediator's equivalents; the call sites do not move.
+builder.Services.AddScoped<IDomainEventPublisher, DomainEventPublisher>();
+
+// Every use case is a vertical slice under Modules/ (docs/architecture.md §2).
+// Each slice handler takes its module's own DbContext directly, so this
+// registers them and nothing else — as of Phase 2.3 there is no repository layer
+// left to register.
+builder.Services.AddApplicationsModule();
+
+// Phase 13.2. The shared skill taxonomy, promoted out of Applications a step
+// early because ISkillCatalog needs an owner. No routes: a skill is never the
+// thing a user asks for (SkillsModule.cs).
+builder.Services.AddSkillsModule();
+
+// Phase 2.4. Read-only: three aggregate queries and no tables of its own. Since
+// Phase 13.2 it reads three PUBLISHED VIEWS rather than Applications' tables, so
+// the decision-13 exception it relied on is retired — Jobkeep.Contracts'
+// PublishedViews.cs has the argument. Since 13.3b those views live in the
+// `applications` schema and AnalyticsDbContext maps nothing else.
+builder.Services.AddAnalyticsModule();
+
+// Phase 4. Owns `ai_analyses`; reaches Applications-owned tables through
+// IPostingContract because it *writes* to them, which the read-only exception
+// Analytics uses does not cover (Modules/Applications/PostingContract.cs).
+// Takes IConfiguration because the model endpoint and tag are config, not code —
+// that is the whole point of putting the analyzer behind IChatClient.
+builder.Services.AddAiModule(builder.Configuration);
+
+// The language model client itself, shared by every module that wants one.
+// Registered here rather than inside AddAiModule since Phase 4.5, because
+// Documents also calls a model and the Ai module owns a table, not a technology
+// (Shared/ModelClient.cs has the full argument).
+builder.Services.AddModelClient(builder.Configuration);
+
+// Phase 4.5. Owns `document_imports` and the four resume tables. Turns an
+// uploaded PDF/DOCX/text file into a draft, and — only once a human confirms it —
+// into real rows. Since 13.2c it names no other module: Applications is reached
+// through IApplicationContract and the shared taxonomy through ISkillCatalog,
+// both in Jobkeep.Contracts, and its csproj carries no module reference at all.
+builder.Services.AddDocumentsModule(builder.Configuration);
+
+// Phase 5. Owns `ats_results` and, since 13.2e, names nothing else. It used to
+// read five tables it did not own; all five are now contract calls, which is what
+// AtsModule.cs argues at length. Still no IConfiguration: the two limits this
+// module imposes on its one model call are constants rather than settings.
+builder.Services.AddAtsModule();
+
+// ---------------------------------------------------------------------------
+// CORS, for the Phase 6 front end
+// ---------------------------------------------------------------------------
+// The front end's dev server and this API are different origins — :5173 and
+// :5080 — so every fetch from a screen is a cross-origin request. Without a
+// policy the browser refuses them all, and it refuses them *client*-side, which
+// is why this is the kind of gap that gets misdiagnosed as a broken front end.
+//
+// Three choices here, each of which would be wrong to make differently:
+//
+//   * A NAMED policy with an explicit origin list, not AllowAnyOrigin. A
+//     permissive policy that reaches production is a genuine finding, and
+//     "temporary" wildcards are exactly the ones that ship. It is also not a
+//     choice that stays available: AllowAnyOrigin and AllowCredentials are
+//     mutually exclusive in ASP.NET Core, so writing the wildcard now would
+//     have to be undone the moment auth lands and requests start carrying a
+//     credential. Better to be in the shape that survives that.
+//
+//   * Origins from CONFIG, not from code — the same argument the connection
+//     string above makes. The dev server's port is a local fact, a deployed
+//     front end's origin is a deployment fact, and neither is a code change.
+//     appsettings.Development.json holds the default.
+//
+//   * Registered always, APPLIED only in Development (see UseCors below).
+//     AddCors here is inert; nothing happens until middleware runs. A deployed
+//     environment therefore has no CORS at all until someone deliberately adds
+//     its front-end origin, which is the right default for an API that is about
+//     to sit on a public Function URL with no authentication in front of it.
+//
+// What auth will have to revisit: AllowCredentials is deliberately NOT set. Add
+// it only alongside the origin list staying explicit, and re-read the
+// antiforgery paragraph in DocumentsModule.cs at the same time — that one is
+// switched off precisely because there are no cookies for a browser to attach
+// yet, and both decisions change together.
+const string DevCorsPolicy = "localdev";
+var allowedOrigins = builder.Configuration
+    .GetSection("Cors:AllowedOrigins").Get<string[]>()
+    ?? ["http://localhost:5173"];
+
+builder.Services.AddCors(options => options.AddPolicy(DevCorsPolicy, policy => policy
+    .WithOrigins(allowedOrigins)
+    .AllowAnyHeader()
+    .AllowAnyMethod()));
+
+builder.Services.ConfigureHttpJsonOptions(o =>
+{
+    // Serialize/accept enums by name ("Interviewing", "FullTime") instead of by
+    // int, so REST payloads are readable and match what GraphQL exposes.
+    o.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
+
+    // ReferenceHandler.IgnoreCycles used to be set here, and it was load-bearing:
+    // the endpoints returned EF entities whose navigation properties cycle
+    // (posting <-> its skills), and without the flag System.Text.Json threw.
+    // That was a symptom of leaking the database schema out as the API contract,
+    // not a serialization preference (architecture.md A2). Phase 2.3 finished
+    // moving every route onto response DTOs, which have no cycles, so the flag
+    // came out. If it ever needs to come back, something is returning an entity.
+});
+
+// GraphQL (HotChocolate). Runs in-process on the same ASP.NET app, so it rides
+// the same Lambda deployment in Phase 10 — no separate service. Resolvers pull
+// slice handlers from DI, so GraphQL and REST share one code path.
+builder.Services
+    .AddGraphQLServer()
+    .AddQueryType<Query>()
+    .AddMutationType<Mutation>();
+
+// AddEndpointsApiExplorer discovers minimal-API endpoints; AddSwaggerGen
+// turns that into an OpenAPI document Swagger UI can render.
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
+var app = builder.Build();
+
+// Local-only convenience: apply migrations on startup so `dotnet run` works right
+// after the Postgres container comes up. In a deployed environment migrations
+// should be applied deliberately (a release step), not automatically on boot.
+if (app.Environment.IsDevelopment())
+{
+    using var scope = app.Services.CreateScope();
+
+    // PHASE 13.3b — five contexts, five migration histories, and the ORDER
+    // matters exactly once. Applications' initial migration creates the three
+    // views Analytics reads; the other four are independent of each other,
+    // because the split removed every foreign key that crossed a schema. That
+    // independence is the deliverable: five migrations that can run in any order
+    // are five modules that could be deployed separately.
+    //
+    // Analytics is absent because it owns nothing to create.
+    scope.ServiceProvider.GetRequiredService<ApplicationsDbContext>().Database.Migrate();
+    scope.ServiceProvider.GetRequiredService<SkillsDbContext>().Database.Migrate();
+    scope.ServiceProvider.GetRequiredService<DocumentsDbContext>().Database.Migrate();
+    scope.ServiceProvider.GetRequiredService<AiDbContext>().Database.Migrate();
+    scope.ServiceProvider.GetRequiredService<AtsDbContext>().Database.Migrate();
+}
+
+// Only expose the interactive docs in Development — no reason to ship
+// the UI to a deployed environment (and it keeps the Lambda in Phase 10 lean).
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+
+    // Development-only, and before the Map* calls below — CORS has to run early
+    // enough to answer the preflight OPTIONS itself, which never reaches an
+    // endpoint. See the AddCors block above for why a deployed environment gets
+    // no policy until one is added on purpose.
+    app.UseCors(DevCorsPolicy);
+}
+
+// Every /applications route, REST side. One call, because the module owns its
+// own routing (Modules/Applications/ApplicationsModule.cs).
+app.MapApplicationsModule();
+
+// Every /stats route (Modules/Analytics/AnalyticsModule.cs).
+app.MapAnalyticsModule();
+
+// The analyzer's two routes. They live under /applications/{id}/... even though
+// the module is Ai — AiModule.cs explains why the URL follows the resource while
+// the code follows the owner.
+app.MapAiModule();
+
+// Every /imports route: upload, review, correct, confirm, discard.
+app.MapDocumentsModule();
+
+// The ATS check, GET and POST, under /applications/{id}/ats-check.
+app.MapAtsModule();
+
+// Serves POST /graphql for queries + the Nitro (Banana Cake Pop) IDE at GET /graphql.
+app.MapGraphQL();
+
+app.Run();
+
+// Top-level statements compile to an *internal* Program class, which
+// WebApplicationFactory<Program> in tests/Jobkeep.Tests cannot name. This marker
+// makes that generated class public without changing any behaviour. Preferred over
+// InternalsVisibleTo because it exposes exactly one type instead of every internal.
+public partial class Program { }

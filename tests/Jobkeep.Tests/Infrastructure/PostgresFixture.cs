@@ -1,4 +1,4 @@
-using Jobkeep.Data;
+using Jobkeep.Modules.Applications;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
@@ -22,6 +22,21 @@ public sealed class PostgresFixture : IAsyncLifetime
     private readonly PostgreSqlContainer _container = new PostgreSqlBuilder("postgres:16-alpine")
         .WithDatabase("jobkeep_test")
         .Build();
+
+    /// <summary>
+    /// The five schemas that hold tables, in the order Program.cs migrates them.
+    ///
+    /// <para>
+    /// Analytics is absent because it owns nothing: its three views live in
+    /// `applications`, which is already here. A schema listed but empty would be
+    /// harmless; a schema MISSING is the failure this list exists to prevent, so it
+    /// is kept beside the Respawner that reads it rather than derived from the
+    /// module assemblies. Deriving it would be cleverer and would fail the same way,
+    /// quietly, if a module were ever added without a schema.
+    /// </para>
+    /// </summary>
+    public static readonly string[] ModuleSchemas =
+        ["applications", "skills", "documents", "ai", "ats"];
 
     private Respawner? _respawner;
     private NpgsqlConnection? _connection;
@@ -48,9 +63,23 @@ public sealed class PostgresFixture : IAsyncLifetime
         _respawner = await Respawner.CreateAsync(_connection, new RespawnerOptions
         {
             DbAdapter = DbAdapter.Postgres,
-            SchemasToInclude = ["public"],
-            // Wiping this would make EF think the database is unmigrated.
-            TablesToIgnore = [new Table("__EFMigrationsHistory")],
+
+            // PHASE 13.3b. This said `["public"]` with one unqualified
+            // __EFMigrationsHistory ignored, and both halves had to change on the
+            // same day the schemas split. Getting it wrong is SILENT: Respawn
+            // would find no tables in `public`, truncate nothing, and every test
+            // would inherit the previous test's rows. That fails as unexplained
+            // cross-test flakiness rather than as an error, which is the
+            // expensive kind, so ResetAsync is asserted directly in
+            // RespawnTests rather than trusted.
+            SchemasToInclude = ModuleSchemas,
+
+            // Six histories now, one per table-owning context plus none for
+            // Analytics — and each has to be named WITH its schema, because an
+            // unqualified Table() means the default schema and would leave the
+            // other five to be truncated. Wiping any of them makes EF think that
+            // module is unmigrated.
+            TablesToIgnore = [.. ModuleSchemas.Select(s => new Table(s, "__EFMigrationsHistory"))],
         });
     }
 
@@ -85,7 +114,7 @@ public sealed class PostgresFixture : IAsyncLifetime
     {
         using var scope = App.Services.CreateScope();
         var resolved = scope.ServiceProvider
-            .GetRequiredService<AppDbContext>()
+            .GetRequiredService<ApplicationsDbContext>()
             .Database.GetConnectionString();
 
         var expected = new NpgsqlConnectionStringBuilder(ConnectionString);

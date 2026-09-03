@@ -1,0 +1,8 @@
+# node_modules is the important one: the host's packages are Windows builds, and
+# esbuild/rollup ship platform-specific binaries that will not run on Alpine.
+# `npm ci` installs the Linux ones inside the image instead.
+node_modules
+dist
+
+Dockerfile
+.dockerignore

@@ -92,6 +92,7 @@ GET                   /applications/{id}/analysis
 POST   GET            /applications/{id}/ats-check        (Phase 5)
 GET                   /stats/skill-demand | /stats/funnel | /stats/companies
 POST   GET            /imports                            (POST is multipart)
+POST                  /imports/text                       (6.5 — JSON, a pasted ad)
 GET    PUT   DELETE   /imports/{id}
 POST                  /imports/{id}/reparse
 POST                  /imports/{id}/confirm
@@ -148,7 +149,7 @@ No migration, no schema change, so `docs/diagrams/` is untouched.
 
 `web/` at the repo root: Vite 8, React 19, TypeScript 6, react-router 7. Vite
 because `Cors:AllowedOrigins` already named `:5173`, and because it builds to
-static files, which keeps the parked Phase 3 S3 plan viable unchanged. The dev
+static files, which keeps the parked S3 plan (now Phase 10) viable unchanged. The dev
 port is pinned with `strictPort` — a silent fallback to 5174 would fail every
 preflight and read like a React bug.
 
@@ -497,7 +498,7 @@ link **if** there is one to give.
 ### On hosting
 
 An earlier draft of this plan said "host the front end on S3 as a static site".
-That is still the right answer, but it is **Phase 3 work, and Phase 3 is parked**
+That is still the right answer, but it is **deploy work (now [Phase 10](phase-10-aws-deploy.md)), and the deploy is parked**
 by a deliberate decision. So Phase 6 ships a front end that runs locally; a public
 URL is gated behind un-parking the deploy, not behind anything in this phase.
 Don't let the README promise a link the deployment story hasn't earned.
@@ -516,5 +517,8 @@ Don't let the README promise a link the deployment story hasn't earned.
 
 ## Next
 
-[Phase 7](phase-7-feature-expansion.md) — not a feature list, but the record of
+[Phase 7](phase-7-data-integrity.md) — data integrity and the case-insensitive
+dedup key. One migration, and the only roadmap item already producing wrong
+output. The methodology doc that used to sit at this number is now
+[Phase 12](phase-12-feature-expansion.md) — not a feature list, but the record of
 what changes about *building* a feature once there are two halves to build.

@@ -69,7 +69,10 @@ public class ResumeReadTests(PostgresFixture fixture) : IntegrationTestBase(fixt
                     db.Skills.Add(skill);
                 }
 
-                resume.ResumeSkills.Add(new ResumeSkill { Skill = skill, Source = SkillSource.Parsed });
+                // 13.3b: the link carries the id, not the row. Skill.Id is assigned
+                // by the property initialiser, so this works for a skill that has
+                // not been saved yet exactly as the navigation used to.
+                resume.ResumeSkills.Add(new ResumeSkill { SkillId = skill.Id, Source = SkillSource.Parsed });
             }
 
             if (withRecords)
@@ -193,6 +196,65 @@ public class ResumeReadTests(PostgresFixture fixture) : IntegrationTestBase(fixt
         Assert.Equal(["Owns the platform"], detail.Experiences[0].Highlights);
     }
 
+    /// <summary>
+    /// Phase 13.2c. The détail read no longer joins <c>skills</c> — the projection
+    /// stops at <c>SkillId</c> and the names arrive through <c>ISkillCatalog</c>,
+    /// which is the seam that survives the schema split.
+    ///
+    /// <para>
+    /// What this pins is that the boundary is invisible from outside: the names are
+    /// still there, still carry their category, and are still alphabetical. The sort
+    /// moved out of SQL and into memory, so it is the thing most likely to be lost
+    /// silently — a list that comes back in insertion order looks fine until you
+    /// seed it out of order, which is what this does.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task GetResume_StillNamesItsSkills_AndStillSortsThemAlphabetically()
+    {
+        var id = await SeedResumeAsync("mine", skills: ["Rust", "AWS", "postgresql"]);
+
+        var detail = await Client.GetFromJsonAsync<ResumeDetailItem>($"/resumes/{id}", Json, Ct);
+
+        Assert.NotNull(detail);
+        Assert.Equal(["AWS", "postgresql", "Rust"], detail!.Skills.Select(x => x.SkillName));
+        Assert.All(detail.Skills, x => Assert.Equal(SkillSource.Parsed, x.Source));
+    }
+
+    /// <summary>
+    /// Phase 13.2c, and a deliberate behaviour CHANGE rather than a preserved one.
+    ///
+    /// <para>
+    /// The old query matched <c>rs.Skill.Name == name</c> exactly, and the comment
+    /// above it argued for that: a loose match on the way out could delete a row the
+    /// caller did not name, while <c>C#</c> and <c>c#</c> could both exist. Phase 7's
+    /// unique index on <c>lower("Name")</c> made that impossible, so the objection
+    /// expired and the strictness was left behind as a wart — asking to remove
+    /// <c>c#</c> from a résumé that has <c>C#</c> on it returned 404.
+    /// </para>
+    ///
+    /// <para>
+    /// Routing the lookup through <c>ISkillCatalog</c>, which owns the natural key,
+    /// fixed it as a side effect. Pinned here so it is a decision rather than an
+    /// accident.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task RemoveSkill_MatchesTheNaturalKey_SoCaseDoesNotDecideWhetherItWorks()
+    {
+        var id = await SeedResumeAsync("mine", skills: ["C#"]);
+
+        var response = await Client.DeleteAsync($"/resumes/{id}/skills/c%23", Ct);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        await WithDbAsync(async db =>
+        {
+            Assert.Equal(0, await db.ResumeSkills.CountAsync(rs => rs.ResumeId == id, Ct));
+            // The shared row is untouched, and it kept the spelling it was stored with.
+            Assert.Equal(1, await db.Skills.CountAsync(s => s.Name == "C#", Ct));
+        });
+    }
+
     [Fact]
     public async Task UnknownResume_Is404OverRest_AndNOT_FOUNDOverGraphQL()
     {
@@ -312,8 +374,11 @@ public class ResumeReadTests(PostgresFixture fixture) : IntegrationTestBase(fixt
         Guid Id,
         string Label,
         string SourceText,
+        List<ResumeSkillItem> Skills,
         List<ExperienceItem> Experiences,
         List<EducationItem> Educations);
+
+    private sealed record ResumeSkillItem(string SkillName, string? Category, SkillSource Source);
 
     private sealed record ExperienceItem(string Employer, string? Title, List<string> Highlights, int Ordinal);
 

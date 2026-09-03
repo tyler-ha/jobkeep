@@ -1,8 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 760" width="1280" height="760" role="img" aria-labelledby="erdTitle erdDesc" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif">
-  <title id="erdTitle">JobKeep database schema, as of migration AtsCheckPhase5</title>
-  <desc id="erdDesc">Entity-relationship diagram of 13 PostgreSQL tables. companies feeds job_postings, which feeds job_applications, ai_analyses, job_requirements and posting_skills. resumes feeds resume_skills, resume_experiences, resume_educations, and is referenced by both job_applications and ats_results. The shared skills table is joined from both posting_skills and resume_skills. document_imports stands alone with no foreign keys. Solid dark-green edges are ON DELETE RESTRICT; dashed rust edges are ON DELETE CASCADE.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1300 935" width="1300" height="935" role="img" aria-labelledby="erdTitle erdDesc" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif">
+  <title id="erdTitle">JobKeep database schema, as of Phase 13.3b — thirteen tables across five PostgreSQL schemas</title>
+  <desc id="erdDesc">Entity-relationship diagram of 13 PostgreSQL tables, split across five schemas that match the five table-owning modules: applications (companies, job_postings, job_applications, job_requirements, posting_skills), skills (skills), documents (document_imports, resumes, resume_experiences, resume_educations, resume_skills), ai (ai_analyses) and ats (ats_results). Seven foreign keys remain, all of them inside a single schema: two ON DELETE RESTRICT, drawn as solid dark-green arrows, and five ON DELETE CASCADE, drawn as dashed rust arrows. Six further relationships cross a schema boundary and no longer have a foreign key at all — Phase 13.3b dropped them so that a module can be extracted as a service, and Phase 13.3c replaced each one with application code: two delete notifications, two contract checks at delete time, and two find-or-create orderings through the shared skill catalog. Those six are drawn as dotted grey arrows. The applications schema also holds three views that the Analytics module reads. Since Phase 7 the uniqueness of companies, skills and resumes is enforced on a STORED generated column holding the lower-cased name, not on the name itself.</desc>
 
-  <rect x="0" y="0" width="1280" height="760" fill="#FBFCFB"/>
+  <rect x="0" y="0" width="1300" height="935" fill="#FBFCFB"/>
 
   <defs>
     <marker id="restrictArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
@@ -11,230 +11,233 @@
     <marker id="cascadeArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M 0 0 L 10 5 L 0 10 z" fill="#A8402F"/>
     </marker>
+    <marker id="codeArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#5B6C68"/>
+    </marker>
   </defs>
 
   <style>
     .tbl   { fill:#FFFFFF; stroke:#C9D2CE; stroke-width:1.5; }
     .hdr   { fill:#E8EEEB; }
-    .name  { fill:#16211F; font-size:15px; font-weight:600; }
-    .col   { fill:#16211F; font-size:12px; }
-    .type  { fill:#5B6C68; font-size:12px; }
-    .card  { fill:#5B6C68; font-size:11.5px; }
+    .grp   { fill:#F2F5F4; stroke:#C9D2CE; stroke-width:1; stroke-dasharray:4 4; }
+    .glbl  { fill:#5B6C68; font-size:12px; font-weight:600; letter-spacing:0.6px; }
+    .name  { fill:#16211F; font-size:14.5px; font-weight:600; }
+    .col   { fill:#16211F; font-size:11.5px; }
+    .type  { fill:#5B6C68; font-size:11.5px; }
+    .card  { fill:#5B6C68; font-size:11px; }
     .rule  { stroke:#0E5F58; stroke-width:2; fill:none; }
     .casc  { stroke:#A8402F; stroke-width:2; fill:none; stroke-dasharray:7 4; }
+    .code  { stroke:#5B6C68; stroke-width:1.8; fill:none; stroke-dasharray:2 5; }
     .h1    { fill:#16211F; font-size:20px; font-weight:600; }
     .sub   { fill:#5B6C68; font-size:12.5px; }
     .tag   { fill:#0E5F58; font-size:10.5px; font-weight:600; }
   </style>
 
   <text class="h1" x="40" y="42">JobKeep — database schema</text>
-  <text class="sub" x="40" y="63">13 tables · derived from `dotnet ef migrations script`, not from the model classes · migration AtsCheckPhase5 (Phase 5)</text>
+  <text class="sub" x="40" y="64">13 tables in 5 schemas, one per table-owning module. Read from `pg_dump --schema-only`, Phase 13.3c.</text>
 
-  <!-- ============ row 1 (y=100) ============ -->
+  <!-- ================= schema groups ================= -->
+  <rect class="grp" x="30"  y="95"  width="400" height="630" rx="8"/>
+  <text class="glbl" x="44" y="115">SCHEMA  applications  —  module: Applications</text>
+
+  <rect class="grp" x="470" y="110" width="280" height="130" rx="8"/>
+  <text class="glbl" x="484" y="130">SCHEMA  ai  —  Ai</text>
+
+  <rect class="grp" x="470" y="440" width="280" height="160" rx="8"/>
+  <text class="glbl" x="484" y="460">SCHEMA  ats  —  Ats</text>
+
+  <rect class="grp" x="470" y="690" width="280" height="140" rx="8"/>
+  <text class="glbl" x="484" y="710">SCHEMA  skills  —  Skills</text>
+
+  <rect class="grp" x="800" y="95"  width="440" height="565" rx="8"/>
+  <text class="glbl" x="814" y="115">SCHEMA  documents  —  Documents</text>
+
+  <!-- ================= edges (drawn under the boxes) ================= -->
+
+  <!-- surviving foreign keys, all within one schema -->
+  <path class="rule" d="M230,208 V250" marker-end="url(#restrictArrow)"/>
+  <text class="card" x="238" y="233">1 : N</text>
+
+  <path class="rule" d="M230,338 V390" marker-end="url(#restrictArrow)"/>
+  <text class="card" x="238" y="368">1 : N</text>
+
+  <path class="casc" d="M70,294 H50 V562 H70" marker-end="url(#cascadeArrow)"/>
+  <path class="casc" d="M70,294 H50 V662 H70" marker-end="url(#cascadeArrow)"/>
+  <text class="card" x="54" y="508">1 : N</text>
+
+  <path class="casc" d="M1025,328 V380" marker-end="url(#cascadeArrow)"/>
+  <text class="card" x="1033" y="358">1 : N</text>
+
+  <path class="casc" d="M840,300 H820 V502 H840" marker-end="url(#cascadeArrow)"/>
+  <path class="casc" d="M840,300 H820 V592 H840" marker-end="url(#cascadeArrow)"/>
+  <text class="card" x="804" y="458">1 : N</text>
+
+  <!-- boundary crossings: no foreign key since 13.3b, replaced in code at 13.3c -->
+  <path class="code" d="M390,285 H445 V185 H500" marker-end="url(#codeArrow)"/>
+  <text class="card" x="452" y="176">1 : 1</text>
+
+  <path class="code" d="M390,455 H440 V520 H500" marker-end="url(#codeArrow)"/>
+  <text class="card" x="446" y="512">1 : 1</text>
+
+  <path class="code" d="M840,280 H780 V430 H390" marker-end="url(#codeArrow)"/>
+  <text class="card" x="470" y="423">1 : N</text>
+
+  <path class="code" d="M840,315 H770 V520 H750" marker-end="url(#codeArrow)"/>
+  <text class="card" x="756" y="342">1 : N</text>
+
+  <path class="code" d="M500,765 H450 V662 H390" marker-end="url(#codeArrow)"/>
+  <text class="card" x="458" y="702">1 : N</text>
+
+  <path class="code" d="M750,765 H790 V592 H840" marker-end="url(#codeArrow)"/>
+  <text class="card" x="796" y="700">1 : N</text>
+
+  <!-- ================= tables: applications ================= -->
   <g>
-    <rect class="tbl" x="280" y="100" width="200" height="86" rx="4"/>
-    <rect class="hdr" x="280" y="100" width="200" height="26" rx="4"/>
-    <rect class="hdr" x="280" y="118" width="200" height="8"/>
-    <text class="name" x="292" y="119">ai_analyses</text>
-    <text class="col"  x="292" y="143">Id <tspan class="tag">PK</tspan></text>
-    <text class="col"  x="292" y="161">PostingId <tspan class="tag">FK · UNIQUE</tspan></text>
-    <text class="type" x="292" y="178">Seniority text · Summary text</text>
+    <rect class="tbl" x="70" y="140" width="320" height="68" rx="4"/>
+    <path class="hdr" d="M70,144 a4,4 0 0 1 4,-4 h312 a4,4 0 0 1 4,4 v22 h-320 z"/>
+    <rect x="70" y="140" width="320" height="68" rx="4" fill="none" stroke="#C9D2CE" stroke-width="1.5"/>
+    <text class="name" x="82" y="161">companies</text>
+    <text class="col"  x="82" y="185">Id</text><text class="tag" x="118" y="185">PK</text>
+    <text class="col"  x="82" y="202">NameNormalized</text><text class="type" x="192" y="202">generated, lower(Name)</text><text class="tag" x="338" y="202">UNIQUE</text>
   </g>
 
   <g>
-    <rect class="tbl" x="520" y="100" width="200" height="86" rx="4"/>
-    <rect class="hdr" x="520" y="100" width="200" height="26" rx="4"/>
-    <rect class="hdr" x="520" y="118" width="200" height="8"/>
-    <text class="name" x="532" y="119">ats_results</text>
-    <text class="col"  x="532" y="141">ApplicationId <tspan class="tag">FK · UNIQUE</tspan></text>
-    <text class="col"  x="532" y="159">ResumeId <tspan class="tag">FK?</tspan></text>
-    <text class="type" x="532" y="177">5 × text[] · Warning text</text>
-  </g>
-
-  <!-- ============ row 2 (y=250) ============ -->
-  <g>
-    <rect class="tbl" x="40" y="250" width="200" height="86" rx="4"/>
-    <rect class="hdr" x="40" y="250" width="200" height="26" rx="4"/>
-    <rect class="hdr" x="40" y="268" width="200" height="8"/>
-    <text class="name" x="52" y="269">companies</text>
-    <text class="col"  x="52" y="293">Id <tspan class="tag">PK</tspan></text>
-    <text class="col"  x="52" y="311">Name <tspan class="tag">UNIQUE</tspan></text>
-    <text class="type" x="52" y="328">varchar(200)</text>
+    <rect class="tbl" x="70" y="250" width="320" height="88" rx="4"/>
+    <path class="hdr" d="M70,254 a4,4 0 0 1 4,-4 h312 a4,4 0 0 1 4,4 v22 h-320 z"/>
+    <rect x="70" y="250" width="320" height="88" rx="4" fill="none" stroke="#C9D2CE" stroke-width="1.5"/>
+    <text class="name" x="82" y="271">job_postings</text>
+    <text class="col"  x="82" y="295">Id</text><text class="tag" x="118" y="295">PK</text>
+    <text class="col"  x="82" y="312">CompanyId</text><text class="tag" x="158" y="312">FK</text><text class="type" x="182" y="312">restrict</text>
+    <text class="type" x="82" y="329">SalaryMin/Max numeric(12,2) · 2 CHECKs</text>
   </g>
 
   <g>
-    <rect class="tbl" x="280" y="250" width="200" height="86" rx="4"/>
-    <rect class="hdr" x="280" y="250" width="200" height="26" rx="4"/>
-    <rect class="hdr" x="280" y="268" width="200" height="8"/>
-    <text class="name" x="292" y="269">job_postings</text>
-    <text class="col"  x="292" y="293">Id <tspan class="tag">PK</tspan></text>
-    <text class="col"  x="292" y="311">CompanyId <tspan class="tag">FK</tspan></text>
-    <text class="type" x="292" y="328">Salary numeric(12,2)</text>
+    <rect class="tbl" x="70" y="390" width="320" height="88" rx="4"/>
+    <path class="hdr" d="M70,394 a4,4 0 0 1 4,-4 h312 a4,4 0 0 1 4,4 v22 h-320 z"/>
+    <rect x="70" y="390" width="320" height="88" rx="4" fill="none" stroke="#C9D2CE" stroke-width="1.5"/>
+    <text class="name" x="82" y="411">job_applications</text>
+    <text class="col"  x="82" y="435">Id</text><text class="tag" x="118" y="435">PK</text>
+    <text class="col"  x="82" y="452">PostingId</text><text class="tag" x="152" y="452">FK</text><text class="type" x="176" y="452">restrict · indexed</text>
+    <text class="col"  x="82" y="469">ResumeId</text><text class="type" x="152" y="469">→ documents.resumes, no FK</text>
   </g>
 
   <g>
-    <rect class="tbl" x="520" y="250" width="200" height="86" rx="4"/>
-    <rect class="hdr" x="520" y="250" width="200" height="26" rx="4"/>
-    <rect class="hdr" x="520" y="268" width="200" height="8"/>
-    <text class="name" x="532" y="269">job_applications</text>
-    <text class="col"  x="532" y="293">Id <tspan class="tag">PK</tspan></text>
-    <text class="col"  x="532" y="311">PostingId <tspan class="tag">FK</tspan> · ResumeId <tspan class="tag">FK?</tspan></text>
-    <text class="type" x="532" y="328">Status text · DateApplied date</text>
+    <rect class="tbl" x="70" y="530" width="320" height="64" rx="4"/>
+    <path class="hdr" d="M70,534 a4,4 0 0 1 4,-4 h312 a4,4 0 0 1 4,4 v22 h-320 z"/>
+    <rect x="70" y="530" width="320" height="64" rx="4" fill="none" stroke="#C9D2CE" stroke-width="1.5"/>
+    <text class="name" x="82" y="551">job_requirements</text>
+    <text class="col"  x="82" y="575">Id</text><text class="tag" x="118" y="575">PK</text>
+    <text class="col"  x="152" y="575">PostingId</text><text class="tag" x="222" y="575">FK</text><text class="type" x="246" y="575">cascade</text>
   </g>
 
   <g>
-    <rect class="tbl" x="760" y="250" width="200" height="86" rx="4"/>
-    <rect class="hdr" x="760" y="250" width="200" height="26" rx="4"/>
-    <rect class="hdr" x="760" y="268" width="200" height="8"/>
-    <text class="name" x="772" y="269">resumes</text>
-    <text class="col"  x="772" y="291">Id <tspan class="tag">PK</tspan> · Label <tspan class="tag">UNIQUE</tspan></text>
-    <text class="col"  x="772" y="309">SourceText text</text>
-    <text class="type" x="772" y="327">SourceFormat text — detected, not the extension</text>
+    <rect class="tbl" x="70" y="630" width="320" height="64" rx="4"/>
+    <path class="hdr" d="M70,634 a4,4 0 0 1 4,-4 h312 a4,4 0 0 1 4,4 v22 h-320 z"/>
+    <rect x="70" y="630" width="320" height="64" rx="4" fill="none" stroke="#C9D2CE" stroke-width="1.5"/>
+    <text class="name" x="82" y="651">posting_skills</text>
+    <text class="col"  x="82" y="675">PostingId, SkillId</text><text class="tag" x="200" y="675">PK</text>
+    <text class="type" x="228" y="675">SkillId → skills, no FK</text>
+  </g>
+
+  <!-- ================= ai ================= -->
+  <g>
+    <rect class="tbl" x="500" y="150" width="220" height="68" rx="4"/>
+    <path class="hdr" d="M500,154 a4,4 0 0 1 4,-4 h212 a4,4 0 0 1 4,4 v22 h-220 z"/>
+    <rect x="500" y="150" width="220" height="68" rx="4" fill="none" stroke="#C9D2CE" stroke-width="1.5"/>
+    <text class="name" x="512" y="171">ai_analyses</text>
+    <text class="col"  x="512" y="195">Id</text><text class="tag" x="548" y="195">PK</text>
+    <text class="col"  x="512" y="212">PostingId</text><text class="tag" x="582" y="212">UNIQUE</text><text class="type" x="632" y="212">no FK</text>
+  </g>
+
+  <!-- ================= ats ================= -->
+  <g>
+    <rect class="tbl" x="500" y="480" width="220" height="86" rx="4"/>
+    <path class="hdr" d="M500,484 a4,4 0 0 1 4,-4 h212 a4,4 0 0 1 4,4 v22 h-220 z"/>
+    <rect x="500" y="480" width="220" height="86" rx="4" fill="none" stroke="#C9D2CE" stroke-width="1.5"/>
+    <text class="name" x="512" y="501">ats_results</text>
+    <text class="col"  x="512" y="525">Id</text><text class="tag" x="548" y="525">PK</text>
+    <text class="col"  x="512" y="542">ApplicationId</text><text class="tag" x="600" y="542">UNIQUE</text>
+    <text class="col"  x="512" y="559">ResumeId</text><text class="type" x="582" y="559">nullable, no FK</text>
+  </g>
+
+  <!-- ================= skills ================= -->
+  <g>
+    <rect class="tbl" x="500" y="730" width="220" height="68" rx="4"/>
+    <path class="hdr" d="M500,734 a4,4 0 0 1 4,-4 h212 a4,4 0 0 1 4,4 v22 h-220 z"/>
+    <rect x="500" y="730" width="220" height="68" rx="4" fill="none" stroke="#C9D2CE" stroke-width="1.5"/>
+    <text class="name" x="512" y="751">skills</text>
+    <text class="col"  x="512" y="775">Id</text><text class="tag" x="548" y="775">PK</text>
+    <text class="col"  x="512" y="792">NameNormalized</text><text class="tag" x="622" y="792">UNIQUE</text>
+  </g>
+
+  <!-- ================= documents ================= -->
+  <g>
+    <rect class="tbl" x="840" y="140" width="370" height="86" rx="4"/>
+    <path class="hdr" d="M840,144 a4,4 0 0 1 4,-4 h362 a4,4 0 0 1 4,4 v22 h-370 z"/>
+    <rect x="840" y="140" width="370" height="86" rx="4" fill="none" stroke="#C9D2CE" stroke-width="1.5"/>
+    <text class="name" x="852" y="161">document_imports</text>
+    <text class="col"  x="852" y="185">Id</text><text class="tag" x="888" y="185">PK</text>
+    <text class="type" x="852" y="202">no foreign keys, in or out · Status indexed</text>
+    <text class="type" x="852" y="219">CommittedEntityId — résumé or application, so unkeyed</text>
   </g>
 
   <g>
-    <rect class="tbl" x="1000" y="250" width="200" height="86" rx="4"/>
-    <rect class="hdr" x="1000" y="250" width="200" height="26" rx="4"/>
-    <rect class="hdr" x="1000" y="268" width="200" height="8"/>
-    <text class="name" x="1012" y="269">resume_experiences</text>
-    <text class="col"  x="1012" y="293">Id <tspan class="tag">PK</tspan></text>
-    <text class="col"  x="1012" y="311">ResumeId <tspan class="tag">FK</tspan></text>
-    <text class="type" x="1012" y="328">Highlights text[]</text>
-  </g>
-
-  <!-- ============ row 3 (y=400) ============ -->
-  <g>
-    <rect class="tbl" x="40" y="400" width="200" height="86" rx="4"/>
-    <rect class="hdr" x="40" y="400" width="200" height="26" rx="4"/>
-    <rect class="hdr" x="40" y="418" width="200" height="8"/>
-    <text class="name" x="52" y="419">job_requirements</text>
-    <text class="col"  x="52" y="443">Id <tspan class="tag">PK</tspan></text>
-    <text class="col"  x="52" y="461">PostingId <tspan class="tag">FK</tspan></text>
-    <text class="type" x="52" y="478">Kind text · IsMustHave bool</text>
+    <rect class="tbl" x="840" y="260" width="370" height="68" rx="4"/>
+    <path class="hdr" d="M840,264 a4,4 0 0 1 4,-4 h362 a4,4 0 0 1 4,4 v22 h-370 z"/>
+    <rect x="840" y="260" width="370" height="68" rx="4" fill="none" stroke="#C9D2CE" stroke-width="1.5"/>
+    <text class="name" x="852" y="281">resumes</text>
+    <text class="col"  x="852" y="305">Id</text><text class="tag" x="888" y="305">PK</text>
+    <text class="col"  x="852" y="322">LabelNormalized</text><text class="type" x="962" y="322">generated, lower(Label)</text><text class="tag" x="1108" y="322">UNIQUE</text>
   </g>
 
   <g>
-    <rect class="tbl" x="280" y="400" width="200" height="86" rx="4"/>
-    <rect class="hdr" x="280" y="400" width="200" height="26" rx="4"/>
-    <rect class="hdr" x="280" y="418" width="200" height="8"/>
-    <text class="name" x="292" y="419">posting_skills</text>
-    <text class="col"  x="292" y="443">(PostingId, SkillId) <tspan class="tag">PK</tspan></text>
-    <text class="col"  x="292" y="461">both <tspan class="tag">FK</tspan></text>
-    <text class="type" x="292" y="478">Source text · IsRequired bool</text>
+    <rect class="tbl" x="840" y="380" width="370" height="64" rx="4"/>
+    <path class="hdr" d="M840,384 a4,4 0 0 1 4,-4 h362 a4,4 0 0 1 4,4 v22 h-370 z"/>
+    <rect x="840" y="380" width="370" height="64" rx="4" fill="none" stroke="#C9D2CE" stroke-width="1.5"/>
+    <text class="name" x="852" y="401">resume_experiences</text>
+    <text class="col"  x="852" y="425">Id</text><text class="tag" x="888" y="425">PK</text>
+    <text class="col"  x="922" y="425">ResumeId</text><text class="tag" x="992" y="425">FK</text><text class="type" x="1016" y="425">cascade</text>
   </g>
 
   <g>
-    <rect class="tbl" x="520" y="400" width="200" height="86" rx="4"/>
-    <rect class="hdr" x="520" y="400" width="200" height="26" rx="4"/>
-    <rect class="hdr" x="520" y="418" width="200" height="8"/>
-    <text class="name" x="532" y="419">skills</text>
-    <text class="col"  x="532" y="443">Id <tspan class="tag">PK</tspan></text>
-    <text class="col"  x="532" y="461">Name <tspan class="tag">UNIQUE</tspan></text>
-    <text class="type" x="532" y="478">shared — owned by no module</text>
+    <rect class="tbl" x="840" y="470" width="370" height="64" rx="4"/>
+    <path class="hdr" d="M840,474 a4,4 0 0 1 4,-4 h362 a4,4 0 0 1 4,4 v22 h-370 z"/>
+    <rect x="840" y="470" width="370" height="64" rx="4" fill="none" stroke="#C9D2CE" stroke-width="1.5"/>
+    <text class="name" x="852" y="491">resume_educations</text>
+    <text class="col"  x="852" y="515">Id</text><text class="tag" x="888" y="515">PK</text>
+    <text class="col"  x="922" y="515">ResumeId</text><text class="tag" x="992" y="515">FK</text><text class="type" x="1016" y="515">cascade</text>
   </g>
 
   <g>
-    <rect class="tbl" x="760" y="400" width="200" height="86" rx="4"/>
-    <rect class="hdr" x="760" y="400" width="200" height="26" rx="4"/>
-    <rect class="hdr" x="760" y="418" width="200" height="8"/>
-    <text class="name" x="772" y="419">resume_skills</text>
-    <text class="col"  x="772" y="443">(ResumeId, SkillId) <tspan class="tag">PK</tspan></text>
-    <text class="col"  x="772" y="461">both <tspan class="tag">FK</tspan></text>
-    <text class="type" x="772" y="478">Source text</text>
+    <rect class="tbl" x="840" y="560" width="370" height="64" rx="4"/>
+    <path class="hdr" d="M840,564 a4,4 0 0 1 4,-4 h362 a4,4 0 0 1 4,4 v22 h-370 z"/>
+    <rect x="840" y="560" width="370" height="64" rx="4" fill="none" stroke="#C9D2CE" stroke-width="1.5"/>
+    <text class="name" x="852" y="581">resume_skills</text>
+    <text class="col"  x="852" y="605">ResumeId, SkillId</text><text class="tag" x="970" y="605">PK</text>
+    <text class="type" x="998" y="605">SkillId → skills, no FK</text>
   </g>
 
+  <!-- ================= legend ================= -->
   <g>
-    <rect class="tbl" x="1000" y="400" width="200" height="86" rx="4"/>
-    <rect class="hdr" x="1000" y="400" width="200" height="26" rx="4"/>
-    <rect class="hdr" x="1000" y="418" width="200" height="8"/>
-    <text class="name" x="1012" y="419">resume_educations</text>
-    <text class="col"  x="1012" y="443">Id <tspan class="tag">PK</tspan></text>
-    <text class="col"  x="1012" y="461">ResumeId <tspan class="tag">FK</tspan></text>
-    <text class="type" x="1012" y="478">YearText varchar(50)</text>
+    <rect x="470" y="250" width="280" height="160" rx="6" fill="#FFFFFF" stroke="#C9D2CE" stroke-width="1"/>
+    <text class="name" x="484" y="272" font-size="13">Edges</text>
+
+    <path class="rule" d="M486,290 H520" marker-end="url(#restrictArrow)"/>
+    <text class="col" x="532" y="294">FK · ON DELETE RESTRICT</text>
+    <text class="type" x="532" y="309">2 remain, both intra-schema</text>
+
+    <path class="casc" d="M486,330 H520" marker-end="url(#cascadeArrow)"/>
+    <text class="col" x="532" y="334">FK · ON DELETE CASCADE</text>
+    <text class="type" x="532" y="349">5 remain, all intra-schema</text>
+
+    <path class="code" d="M486,370 H520" marker-end="url(#codeArrow)"/>
+    <text class="col" x="532" y="374">no FK — crosses a schema</text>
+    <text class="type" x="532" y="389">6, enforced in code since 13.3c</text>
   </g>
 
-  <!-- ============ detached ============ -->
-  <g>
-    <rect class="tbl" x="40" y="560" width="290" height="100" rx="4" stroke-dasharray="5 4"/>
-    <rect class="hdr" x="40" y="560" width="290" height="26" rx="4"/>
-    <rect class="hdr" x="40" y="578" width="290" height="8"/>
-    <text class="name" x="52" y="579">document_imports</text>
-    <text class="col"  x="52" y="603">Id <tspan class="tag">PK</tspan> · Status <tspan class="tag">INDEX</tspan></text>
-    <text class="col"  x="52" y="621">ExtractedText text · DraftJson jsonb</text>
-    <text class="type" x="52" y="639">CommittedEntityId uuid — deliberately NOT a FK:</text>
-    <text class="type" x="52" y="654">it points at resumes OR job_applications.</text>
-  </g>
-  <text class="sub" x="352" y="600">The review queue. An upload writes one row here and</text>
-  <text class="sub" x="352" y="618">nothing else; the rows above come into existence only</text>
-  <text class="sub" x="352" y="636">when a human confirms the draft (Phase 4.5).</text>
-
-  <!-- ============ edges ============ -->
-
-  <!-- companies -> job_postings : RESTRICT -->
-  <path class="rule" d="M 240 293 H 280" marker-end="url(#restrictArrow)"/>
-  <text class="card" x="243" y="286">1 : N</text>
-
-  <!-- job_postings -> ai_analyses : CASCADE, 1:1 (unique FK) -->
-  <path class="casc" d="M 380 250 V 186" marker-end="url(#cascadeArrow)"/>
-  <text class="card" x="388" y="222">1 : 1</text>
-
-  <!-- job_postings -> job_applications : RESTRICT -->
-  <path class="rule" d="M 480 293 H 520" marker-end="url(#restrictArrow)"/>
-  <text class="card" x="483" y="286">1 : N</text>
-
-  <!-- job_postings -> posting_skills : CASCADE -->
-  <path class="casc" d="M 380 336 V 400" marker-end="url(#cascadeArrow)"/>
-  <text class="card" x="388" y="372">1 : N</text>
-
-  <!-- job_postings -> job_requirements : CASCADE -->
-  <path class="casc" d="M 300 336 V 368 H 140 V 400" marker-end="url(#cascadeArrow)"/>
-  <text class="card" x="150" y="362">1 : N</text>
-
-  <!-- job_applications -> ats_results : CASCADE, 1:1 -->
-  <path class="casc" d="M 620 250 V 186" marker-end="url(#cascadeArrow)"/>
-  <text class="card" x="628" y="222">1 : 1</text>
-
-  <!-- resumes -> ats_results : RESTRICT (Phase 5 — which resume was judged) -->
-  <path class="rule" d="M 860 250 V 212 H 730 V 186" marker-end="url(#restrictArrow)"/>
-  <text class="card" x="770" y="206">1 : N</text>
-
-  <!-- resumes -> job_applications : RESTRICT (job_applications holds ResumeId) -->
-  <path class="rule" d="M 760 311 H 720" marker-end="url(#restrictArrow)"/>
-  <text class="card" x="722" y="304">1 : N</text>
-
-  <!-- resumes -> resume_skills : CASCADE -->
-  <path class="casc" d="M 860 336 V 400" marker-end="url(#cascadeArrow)"/>
-  <text class="card" x="868" y="372">1 : N</text>
-
-  <!-- resumes -> resume_experiences : CASCADE -->
-  <path class="casc" d="M 960 293 H 1000" marker-end="url(#cascadeArrow)"/>
-  <text class="card" x="962" y="286">1 : N</text>
-
-  <!-- resumes -> resume_educations : CASCADE -->
-  <path class="casc" d="M 940 336 V 368 H 1100 V 400" marker-end="url(#cascadeArrow)"/>
-  <text class="card" x="1040" y="362">1 : N</text>
-
-  <!-- skills -> posting_skills : RESTRICT -->
-  <path class="rule" d="M 520 443 H 480" marker-end="url(#restrictArrow)"/>
-  <text class="card" x="484" y="436">1 : N</text>
-
-  <!-- skills -> resume_skills : RESTRICT -->
-  <path class="rule" d="M 720 443 H 760" marker-end="url(#restrictArrow)"/>
-  <text class="card" x="722" y="436">1 : N</text>
-
-  <!-- ============ legend ============ -->
-  <g>
-    <rect x="700" y="560" width="540" height="100" rx="4" fill="#FFFFFF" stroke="#C9D2CE" stroke-width="1.5"/>
-    <text class="name" x="716" y="586">Delete behaviour — the one genuine decision in this schema</text>
-
-    <path class="rule" d="M 720 610 H 770" marker-end="url(#restrictArrow)"/>
-    <text class="col" x="782" y="614">ON DELETE RESTRICT — 6 edges</text>
-    <text class="type" x="782" y="630">never destroy a shared row or a record of what you did</text>
-
-    <path class="casc" d="M 720 646 H 770" marker-end="url(#cascadeArrow)"/>
-    <text class="col" x="782" y="650">ON DELETE CASCADE — 7 edges (children of an aggregate)</text>
-  </g>
-
-  <text class="sub" x="40" y="706">13 tables · 13 foreign keys (6 RESTRICT, 7 CASCADE) · 15 indexes, of which 5 are UNIQUE · enums stored as text, so rows read plainly in psql</text>
-  <text class="sub" x="40" y="726">Boxes show keys only. Full column lists live in src/Data/AppDbContext.cs, where the reasoning for each delete rule is written beside it.</text>
+  <!-- ================= footer ================= -->
+  <text class="sub" x="40" y="862">13 tables · 3 views (applications, read by Analytics) · 7 foreign keys (5 cascade / 2 restrict) · 5 unique indexes · 10 plain indexes</text>
+  <text class="sub" x="40" y="884">Phase 13.3b dropped the 6 foreign keys that crossed a module boundary. 13.3c replaced each: 2 delete notifications</text>
+  <text class="sub" x="40" y="902">(ApplicationDeleted → ats_results, PostingDeleted → ai_analyses), 2 contract checks before a résumé delete, and 2 find-or-create</text>
+  <text class="sub" x="40" y="920">orderings through ISkillCatalog. A dotted edge is a rule Postgres no longer knows about — that is the price of a service boundary.</text>
 </svg>

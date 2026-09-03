@@ -210,7 +210,7 @@ function Board({ applicationId }: { applicationId: string }) {
         <h2>No résumé to check against</h2>
         <p>
           The check compares a résumé's skills against what the ad asks for, so it needs
-          one first. Import a CV and it becomes available here.
+          one first. Upload a CV and it becomes available here.
         </p>
       </div>
     );

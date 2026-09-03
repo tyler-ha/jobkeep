@@ -19,9 +19,12 @@ public sealed class MappingTests(PostgresFixture fixture) : IntegrationTestBase(
     {
         await Client.CreateApplicationAsync("Canva", "Backend Engineer", Ct);
 
-        var status = await ScalarAsync("select \"Status\" from job_applications limit 1");
-        var employmentType = await ScalarAsync("select \"EmploymentType\" from job_postings limit 1");
-        var salaryPeriod = await ScalarAsync("select \"SalaryPeriod\" from job_postings limit 1");
+        // 13.3b: every raw-SQL table name in this suite is schema-qualified now.
+        // An unqualified name resolves through search_path, which is `public` — the
+        // one schema that no longer holds a table.
+        var status = await ScalarAsync("select \"Status\" from applications.job_applications limit 1");
+        var employmentType = await ScalarAsync("select \"EmploymentType\" from applications.job_postings limit 1");
+        var salaryPeriod = await ScalarAsync("select \"SalaryPeriod\" from applications.job_postings limit 1");
 
         // Reading these through EF would return ApplicationStatus.Applied either way.
         // Only the raw column proves HasConversion<string>() is actually in effect.
@@ -36,7 +39,8 @@ public sealed class MappingTests(PostgresFixture fixture) : IntegrationTestBase(
         var statusType = await ScalarAsync(
             "select data_type || '(' || coalesce(character_maximum_length::text, '?') || ')' " +
             "from information_schema.columns " +
-            "where table_name = 'job_applications' and column_name = 'Status'");
+            "where table_schema = 'applications' and table_name = 'job_applications' "
+            + "and column_name = 'Status'");
 
         Assert.Equal("character varying(20)", statusType);
     }
@@ -58,8 +62,8 @@ public sealed class MappingTests(PostgresFixture fixture) : IntegrationTestBase(
 
         // numeric(12,2) rounds at the database, so the value read back is not the value
         // written. Money silently losing precision is worth a test.
-        var min = await ScalarAsync("select \"SalaryMin\" from job_postings limit 1");
-        var max = await ScalarAsync("select \"SalaryMax\" from job_postings limit 1");
+        var min = await ScalarAsync("select \"SalaryMin\" from applications.job_postings limit 1");
+        var max = await ScalarAsync("select \"SalaryMax\" from applications.job_postings limit 1");
 
         Assert.Equal(123456.79m, min);
         Assert.Equal(150000.00m, max);
@@ -72,7 +76,8 @@ public sealed class MappingTests(PostgresFixture fixture) : IntegrationTestBase(
 
         var columnType = await ScalarAsync(
             "select data_type from information_schema.columns " +
-            "where table_name = 'job_applications' and column_name = 'DateApplied'");
+            "where table_schema = 'applications' and table_name = 'job_applications' "
+            + "and column_name = 'DateApplied'");
 
         Assert.Equal("date", columnType);
 
@@ -104,7 +109,8 @@ public sealed class MappingTests(PostgresFixture fixture) : IntegrationTestBase(
 
         var columnType = await ScalarAsync(
             "select udt_name from information_schema.columns " +
-            "where table_name = 'ats_results' and column_name = 'MatchedKeywords'");
+            "where table_schema = 'ats' and table_name = 'ats_results' "
+            + "and column_name = 'MatchedKeywords'");
         Assert.Equal("_text", columnType);
 
         var result = await WithDbAsync(db => db.AtsResults.SingleAsync(Ct));
@@ -125,7 +131,9 @@ public sealed class MappingTests(PostgresFixture fixture) : IntegrationTestBase(
             "select string_agg(a.attname, ',' order by a.attname) " +
             "from pg_index i " +
             "join pg_attribute a on a.attrelid = i.indrelid and a.attnum = any(i.indkey) " +
-            "where i.indrelid = 'posting_skills'::regclass and i.indisprimary");
+            // regclass resolves through search_path too, so it needs the schema just
+            // as much as a FROM clause does — and fails at runtime rather than parse.
+            "where i.indrelid = 'applications.posting_skills'::regclass and i.indisprimary");
 
         Assert.Equal("PostingId,SkillId", keyColumns);
     }

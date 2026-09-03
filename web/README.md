@@ -10,9 +10,14 @@ npm run dev     # http://localhost:5173
 The API must be running on `http://localhost:5080`:
 
 ```bash
-docker start zen_agnesi        # dev Postgres
+docker start jobkeep-db        # dev Postgres
 cd ../src && dotnet run
 ```
+
+Or skip both and let Docker run the whole stack, this front end included —
+`docker compose up --build` from the repo root. It runs this same dev server
+(hot reload intact) with `./web` bind-mounted; the one difference is that
+`node_modules` lives in the image, so adding a dependency needs `--build`.
 
 ## Why there is no dev-server proxy
 
@@ -40,4 +45,4 @@ Two rules worth knowing before editing:
 - **On a tinted surface the label is the `-dark` token, never the base.** That is
   what holds WCAG 2.2 AA without auditing components one at a time.
 
-The full rules are in `docs/phases/phase-7-feature-expansion.md`.
+The full rules are in `docs/phases/phase-12-feature-expansion.md`.

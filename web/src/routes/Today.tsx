@@ -108,7 +108,7 @@ export default function Today() {
           <h2>Nothing here yet</h2>
           <p>
             JobKeep tracks what you have applied for, what each ad asked for, and how your CV
-            reads against it. Start by <Link to="/import">importing an ad or a CV</Link>, or{' '}
+            reads against it. Start by <Link to="/upload">uploading an ad or a CV</Link>, or{' '}
             <Link to="/applications">add an application by hand</Link>.
           </p>
         </div>
@@ -165,7 +165,7 @@ export default function Today() {
             <ul className="brief">
               {queue!.map((d) => (
                 <li key={d.id}>
-                  <Link to={`/import/${d.id}`} className="brief-row">
+                  <Link to={`/upload/${d.id}`} className="brief-row">
                     <span className="queue-kind" data-kind={d.kind}>
                       {d.kind === 'Resume' ? 'CV' : 'Job ad'}
                     </span>

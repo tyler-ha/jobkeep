@@ -68,10 +68,10 @@ export default function Resumes() {
 
       {shelf?.length === 0 && (
         <div className="state">
-          <h2>No résumé imported yet</h2>
+          <h2>No résumé uploaded yet</h2>
           <p>
             The ATS check compares a job ad against a résumé's skills, so it needs one first.{' '}
-            <Link to="/import">Import a CV</Link> — a PDF, a Word file or plain text — and
+            <Link to="/upload">Upload a CV</Link> — a PDF, a Word file or plain text — and
             confirm what the parser read.
           </p>
         </div>

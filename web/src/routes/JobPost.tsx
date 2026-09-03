@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ChevronRight, ExternalLink, Plus, Sparkles, X } from 'lucide-react';
+import { ChevronRight, ClipboardPaste, ExternalLink, Plus, Sparkles, X } from 'lucide-react';
 
 import { Failure } from '../components/Failure';
 import {
@@ -43,7 +43,13 @@ export default function JobPost() {
   const [analysis, setAnalysis] = useState<AnalysisSummaryResponse | null>(null);
   const [check, setCheck] = useState<AtsCheckResponse | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
-  const [refusal, setRefusal] = useState<string | null>(null);
+  /* Two things now refuse: the status lifecycle, and the analyser with no ad to
+   * read. Both are 400s and both are rules rather than faults, so the banner
+   * carries its own lead rather than hard-coding the status one. */
+  const [refusal, setRefusal] = useState<{ lead: string; message: string } | null>(null);
+  const [editingAd, setEditingAd] = useState(false);
+  const [adText, setAdText] = useState('');
+  const [savingAd, setSavingAd] = useState(false);
 
   const reload = useCallback(
     () => getApplication(id).then(setApp).catch((e) => setError(asApiError(e))),
@@ -105,21 +111,52 @@ export default function JobPost() {
       /* A 400 here is the status lifecycle refusing the move — an Offer can
        * only be reached from an active application. That is a rule, not a
        * fault, so it is explained in place and the select snaps back. */
-      if (err.isRuleRefusal) setRefusal(err.message);
+      if (err.isRuleRefusal)
+        setRefusal({ lead: 'Not a move this application can make.', message: err.message });
       else setError(err);
     }
   }
 
   async function analyse() {
+    setRefusal(null);
     setAnalyzing(true);
     try {
       await analyzePosting(id);
       setAnalysis(await getAnalysis(id));
       await reload();
     } catch (e) {
-      setError(asApiError(e));
+      /* AnalyzePosting refuses with a 400 when the posting has no description,
+       * which is an ordinary state on this screen and not a fault. Before this
+       * it went to setError, and setError replaces the WHOLE screen with a
+       * failure card — so an application logged by hand lost its entire detail
+       * view the first time anyone pressed Analyse. setStatus already routed
+       * refusals correctly; this one did not. */
+      const err = asApiError(e);
+      if (err.isRuleRefusal)
+        setRefusal({ lead: 'The analyser had nothing to read.', message: err.message });
+      else setError(err);
     } finally {
       setAnalyzing(false);
+    }
+  }
+
+  /* The repair path for every application logged before the form had an ad box,
+   * and for every one logged without pasting it. PATCH accepts `description`;
+   * it always did — the screen simply never offered it while telling the reader
+   * to "paste the ad in". */
+  async function saveAd() {
+    setSavingAd(true);
+    setRefusal(null);
+    try {
+      setApp(await updateApplication(id, { description: adText.trim() || null }));
+      setEditingAd(false);
+    } catch (e) {
+      const err = asApiError(e);
+      if (err.isRuleRefusal)
+        setRefusal({ lead: 'That ad could not be saved.', message: err.message });
+      else setError(err);
+    } finally {
+      setSavingAd(false);
     }
   }
 
@@ -167,7 +204,7 @@ export default function JobPost() {
 
       {refusal && (
         <p className="refusal" role="status">
-          <strong>Not a move this application can make.</strong> {refusal}
+          <strong>{refusal.lead}</strong> {refusal.message}
         </p>
       )}
 
@@ -206,16 +243,71 @@ export default function JobPost() {
             onChanged={reload}
           />
 
+          {/* The ad, and the one place it can be corrected.
+              Until Phase 6.6 this panel said "Paste the ad in and the analyser
+              has something to read" and offered nothing to paste into — the
+              empty state instructed an action the screen did not provide, and
+              `description` was reachable only through a hand-written PATCH or
+              through the upload pipeline. The edit box below is that half. */}
           <section className="panel">
             <div className="panel-head">
               <h2>The ad</h2>
-              {posting.sourceUrl && (
-                <a href={posting.sourceUrl} target="_blank" rel="noreferrer" className="quiet-link">
-                  Open the original <ExternalLink size={13} aria-hidden />
-                </a>
-              )}
+              <div className="ad-head-actions">
+                {posting.sourceUrl && (
+                  <a href={posting.sourceUrl} target="_blank" rel="noreferrer" className="quiet-link">
+                    Open the original <ExternalLink size={13} aria-hidden />
+                  </a>
+                )}
+                {!editingAd && (
+                  <button
+                    type="button"
+                    className="btn btn-quiet"
+                    onClick={() => {
+                      setAdText(posting.description ?? '');
+                      setEditingAd(true);
+                    }}
+                  >
+                    <ClipboardPaste size={15} aria-hidden />
+                    {posting.description ? 'Edit the ad' : 'Paste the ad'}
+                  </button>
+                )}
+              </div>
             </div>
-            {posting.description ? (
+
+            {editingAd ? (
+              <>
+                <label className="field">
+                  <span className="sr-only">The advertisement text</span>
+                  <textarea
+                    rows={14}
+                    value={adText}
+                    onChange={(e) => setAdText(e.target.value)}
+                    placeholder="Paste the advertisement here — the whole thing, boilerplate and all."
+                  />
+                </label>
+                {/* The count is the honest signal about what the model will get.
+                    A 3B model reading 5,000 characters of company history to
+                    find ten technologies in the last paragraph is the case that
+                    started this, so saying the size out loud is worth a line. */}
+                <p className="quiet field-hint">
+                  <span className="num">{adText.trim().length.toLocaleString()}</span> characters.
+                  The analyser reads this and nothing else.
+                </p>
+                <div className="add-actions">
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() => void saveAd()}
+                    disabled={savingAd}
+                  >
+                    {savingAd ? 'Saving…' : 'Save the ad'}
+                  </button>
+                  <button type="button" className="btn" onClick={() => setEditingAd(false)}>
+                    Cancel
+                  </button>
+                </div>
+              </>
+            ) : posting.description ? (
               <div className="prose">
                 {posting.description.split(/\n{2,}/).map((para, i) => (
                   <p key={i}>{para}</p>
@@ -223,8 +315,9 @@ export default function JobPost() {
               </div>
             ) : (
               <p className="quiet">
-                No description was saved with this one. Paste the ad in and the analyser has
-                something to read.
+                No ad text was saved with this one, so there is nothing for the analyser to
+                read. Paste it in above, or <Link to="/upload">upload the ad as a file</Link>{' '}
+                and let the parser fill it in.
               </p>
             )}
           </section>

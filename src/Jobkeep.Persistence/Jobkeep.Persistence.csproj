@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Phase 13.3a. The EF rules that are true of EVERY entity, and the
+       interceptor that enforces one of them at save time.
+
+       Why this is a project and not a folder in a module: the two conventions
+       below run over the whole model, so every one of the six contexts arriving
+       in 13.3b needs them. Six copies of a rule is how a rule stops being one
+       rule, which is the same argument AuditSaveChangesInterceptor itself
+       makes about remembering to stamp timestamps by hand.
+
+       Why not SharedKernel: that project has ZERO package references on
+       purpose, and this one needs EF Core. Keeping the two apart is what stops
+       SharedKernel becoming the "Common" assembly that cannot be split.
+
+       IT HOLDS NO ENTITIES, and must not start to. An entity belongs to the
+       module that owns its table; this project is about rules that outlive any
+       particular table.
+
+       REFERENCE RULE, enforced by tests/Jobkeep.Tests/Architecture/: this
+       project may reference SharedKernel and nothing else of ours. -->
+  <PropertyGroup>
+    <RootNamespace>Jobkeep.Persistence</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Relational, not the Npgsql provider: nothing here is Postgres-specific
+         except two SQL default expressions, which are strings. The provider is
+         chosen in Jobkeep.Api. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.11" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Jobkeep.SharedKernel/Jobkeep.SharedKernel.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,12 @@
+<Project>
+
+  <!-- Shared by every project under src/. Phase 13.1 split one csproj into nine,
+       and repeating the same four lines nine times is how they drift apart — the
+       TFM in particular, which Phase 2.6 had to move in lockstep with tests/. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+</Project>

@@ -1,0 +1,70 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The Skills module: the shared skill taxonomy, and nothing else.
+
+       PROMOTED EARLY. The Phase 13 plan created this project at 13.3, alongside the
+       schema split. It arrived at 13.2 instead because ISkillCatalog needs an owner
+       now — four modules find-or-create against `skills` today, and parking the
+       implementation inside Applications would mean moving the file again one step
+       later, for no gain in between.
+
+       Why `skills` is its own module at all: posting_skills (Applications) and
+       resume_skills (Documents) point at the SAME row, so the table is co-owned in
+       practice. That shared row is what the Phase 7 natural key and the Phase 5
+       skill gap both turn on. A table two modules both need to write is not owned
+       by either of them.
+
+       It has no routes and no slices — the taxonomy is never asked for on its own,
+       only resolved on the way to something else. If a "browse all skills" screen
+       ever lands, this is where it goes.
+
+       REFERENCE RULE, enforced by tests/Jobkeep.Tests/Architecture/: this project
+       may reference SharedKernel, Contracts and Persistence. It may NOT reference
+       another Jobkeep.Modules.* project.
+
+       Phase 13.3b deleted Jobkeep.Infrastructure.Data, which used to be on that
+       list and used to hold this module's entities, its EF mapping and the one
+       shared DbContext. All three now live here. -->
+  <PropertyGroup>
+    <RootNamespace>Jobkeep.Modules.Skills</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- PHASE 13.3b. Every module carries EF now, because every module owns a
+         DbContext and its own tables. Until this step they arrived transitively
+         through Jobkeep.Infrastructure.Data, which was the single project that
+         pinned them.
+
+         Both packages are named explicitly and both are pinned to the exact
+         10.0.11 the app compiles against. Npgsql declares a RANGE on EF Core
+         ([10.0.4, 11.0.0)) while EF Design pins an exact version, so a
+         transitive-only reference lands on the range's FLOOR and the build fails
+         with CS1705. That trap is documented at length in
+         tests/Jobkeep.Tests/Jobkeep.Tests.csproj; it is now six csprojs to bump
+         in lockstep rather than one, which is the honest cost of the split.
+
+         The Npgsql PROVIDER is here too, and the reason is migrations rather
+         than queries. A module that owns tables owns their migrations, and a
+         migration is provider-specific by nature: the generated snapshot and
+         designer files name NpgsqlValueGenerationStrategy directly, so they do
+         not compile without it. The five table-owning modules carry it and
+         Analytics, which owns no tables, does not.
+
+         That is a real statement about the boundary rather than a build detail.
+         A module that can be lifted out takes its own schema with it, and a
+         schema it can create on its own means knowing which database it is. The
+         choice of provider for the RUNTIME connection is still made once, in
+         Jobkeep.Api; this is only the compile-time half.
+    -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.11" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.11" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Jobkeep.SharedKernel/Jobkeep.SharedKernel.csproj" />
+    <ProjectReference Include="../Jobkeep.Contracts/Jobkeep.Contracts.csproj" />
+    <ProjectReference Include="../Jobkeep.Persistence/Jobkeep.Persistence.csproj" />
+  </ItemGroup>
+
+</Project>

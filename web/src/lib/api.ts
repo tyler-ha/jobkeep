@@ -358,10 +358,18 @@ export interface ResumeDetail {
 
 export type DocumentKind = 'Resume' | 'JobPosting';
 
-/** ImportStatus. `AwaitingReview` is the only state in which the draft can be
- *  edited; `Committed` is terminal — a committed import is a receipt. Discarded
- *  rows are kept rather than deleted so a bad parse stays diagnosable. */
-export type ImportStatus = 'AwaitingReview' | 'Committed' | 'Discarded';
+/** ImportStatus. `Committed` is terminal — a committed import is a receipt.
+ *  Discarded rows are kept rather than deleted so a bad parse stays diagnosable.
+ *
+ *  `CommitFailed` arrived with backend Phase 13.2c, when confirming a job ad
+ *  stopped being one database transaction: the application is created by another
+ *  module, so a commit can now stop half-way. It means "this was attempted and
+ *  did not finish, confirm it again" — the server knows whether a retry starts
+ *  over or only closes the import out, so the screen does not have to.
+ *
+ *  It is EDITABLE, like AwaitingReview, and for the same reason: the user's next
+ *  move is to fix something and press the button again. */
+export type ImportStatus = 'AwaitingReview' | 'Committed' | 'Discarded' | 'CommitFailed';
 
 /** ListImports.cs. Deliberately WITHOUT the extracted text or the draft — a
  *  résumé is personal information and a list endpoint is the wrong place to
@@ -542,6 +550,21 @@ export const removeResumeSkill = (id: string, skillName: string) =>
   api.delete<void>(`/resumes/${id}/skills/${encodeURIComponent(skillName)}`);
 
 /* ---- Imports ------------------------------------------------------------ */
+
+/* THE SCREEN IS CALLED UPLOAD; EVERYTHING BELOW IS STILL CALLED IMPORT, AND
+ * THAT SPLIT IS DELIBERATE (Phase 6.5).
+ *
+ * The route renamed to /upload because the screen was calling itself three
+ * different things at once — "Import" in the nav, "Upload a CV or a job ad" in
+ * the lede, "Upload a document" on the panel. The wire did not follow it. These
+ * names — ImportResponse, ImportStatus, ImportDraft, uploadImport,
+ * confirmImport — mirror the backend records they deserialize (`/imports`,
+ * `DocumentImport`, `ImportStatus`), and a type that lies about the shape it
+ * came off the network as is worse than one that disagrees with a nav label.
+ *
+ * So: if you are renaming these, you are renaming the API too, and that is a
+ * different change. If you are adding a route, it goes under /imports.
+ */
 
 /** The queue: what is still waiting on you. Passing a status widens it; there
  *  is no "everything" option, because the committed rows are receipts and the

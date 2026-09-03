@@ -1,4 +1,5 @@
 import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -103,13 +104,13 @@ describe('every screen renders', () => {
     expect(await screen.findByText('alex.demo@example.com')).toBeTruthy();
   });
 
-  it('Import shows the review queue', async () => {
-    at('/import');
+  it('Upload shows the review queue', async () => {
+    at('/upload');
     expect(await screen.findByText('alex-demo-cv.pdf')).toBeTruthy();
   });
 
-  it('Import review puts the draft beside the extracted text', async () => {
-    at(`/import/${IMPORT_ID}`);
+  it('Upload review puts the draft beside the extracted text', async () => {
+    at(`/upload/${IMPORT_ID}`);
     expect(await screen.findByRole('heading', { name: 'Is this your CV?' })).toBeTruthy();
     expect(await screen.findByRole('heading', { name: 'What was extracted' })).toBeTruthy();
   });
@@ -127,6 +128,106 @@ describe('every screen renders', () => {
       .map((n) => Number(n.textContent!.replace('%', '')));
     expect(percents).toHaveLength(5);
     expect(percents.reduce((a, b) => a + b, 0)).toBe(100);
+  });
+
+  /* The uploader had no test at all until Phase 6.5, which is how it kept a
+   * `required` attribute that would have made the form unsubmittable the moment
+   * the input was visually hidden. These two pin the only behaviour on it that
+   * is a decision rather than markup. */
+  it('Upload names the version after the file, until you say otherwise', async () => {
+    const user = userEvent.setup();
+    at('/upload');
+    await screen.findByRole('heading', { name: 'Upload a document' });
+
+    const label = screen.getByRole('textbox', { name: 'Call this version' });
+    expect((label as HTMLInputElement).value).toBe('');
+
+    /* The extension goes, because that is exactly what the server's own
+       fallback does (ImportDocument.cs). Showing a different default from the
+       one that would actually be stored is worse than showing none. */
+    await user.upload(
+      screen.getByLabelText(/Drop a file here/i),
+      new File(['a cv'], 'tyler-cv-2025.pdf', { type: 'application/pdf' }),
+    );
+    expect((label as HTMLInputElement).value).toBe('tyler-cv-2025');
+
+    /* And typing wins for good: swapping the file afterwards must not overwrite
+       a name the user chose. This is the whole reason `labelTouched` exists. */
+    await user.clear(label);
+    await user.type(label, 'backend-focused');
+    await user.upload(
+      screen.getByLabelText(/tyler-cv-2025\.pdf/i),
+      new File(['another'], 'generalist.docx', { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }),
+    );
+    expect((label as HTMLInputElement).value).toBe('backend-focused');
+  });
+
+  it('Upload will not submit until a file is chosen', async () => {
+    at('/upload');
+    const submit = await screen.findByRole('button', { name: /Upload and read/ });
+    /* Disabled, and NOT `required` on the input. The input is visually hidden
+       inside the drop zone, and Chrome refuses to submit a form holding an
+       invalid control it cannot scroll to — silently, in the console. */
+    expect((submit as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  /* The three below are Phase 6.6. They exist because the app shipped a screen
+   * that told the reader to "paste the ad in" and gave them nowhere to do it,
+   * while the only textarea on the add form was wired to a field nothing reads.
+   * None of that is visible to a renders-without-throwing test, which is why
+   * these assert the wiring rather than the markup. */
+  it('the add form offers the ad, and sends it as the description', async () => {
+    const user = userEvent.setup();
+    at('/applications');
+    await user.click(await screen.findByRole('button', { name: /Add application/ }));
+
+    await user.type(screen.getByRole('textbox', { name: 'Company' }), 'Airwallex');
+    await user.type(screen.getByRole('textbox', { name: 'Role' }), 'Backend Engineer');
+    await user.type(screen.getByRole('textbox', { name: /^The ad/ }), 'Kubernetes and Spring Boot.');
+    /* Notes must NOT collect this. It is a different field on a different
+       table, and the analyser has never read it. */
+    await user.type(screen.getByRole('textbox', { name: /^Your notes/ }), 'referred by a friend');
+    await user.click(screen.getByRole('button', { name: 'Save application' }));
+
+    const post = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.find(
+      ([, init]) => init?.method === 'POST',
+    );
+    expect(post).toBeTruthy();
+    const body = JSON.parse(post![1].body as string);
+    expect(body.description).toBe('Kubernetes and Spring Boot.');
+    expect(body.notes).toBe('referred by a friend');
+  });
+
+  it('the job post can be given an ad, and PATCHes it as the description', async () => {
+    const user = userEvent.setup();
+    at(`/applications/${APP_ID}`);
+    await user.click(await screen.findByRole('button', { name: /Edit the ad/ }));
+
+    const box = screen.getByRole('textbox', { name: 'The advertisement text' });
+    /* Prefilled from what is stored, so editing is editing and not retyping. */
+    expect((box as HTMLTextAreaElement).value).toContain('backend engineer');
+
+    await user.clear(box);
+    await user.type(box, 'Go, Kubernetes, Grafana.');
+    await user.click(screen.getByRole('button', { name: 'Save the ad' }));
+
+    const patch = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.find(
+      ([, init]) => init?.method === 'PATCH',
+    );
+    expect(patch).toBeTruthy();
+    expect(JSON.parse(patch![1].body as string).description).toBe('Go, Kubernetes, Grafana.');
+  });
+
+  it('an analyser refusal is explained in place, not as a dead screen', async () => {
+    const user = userEvent.setup();
+    at(`/applications/${APP_ID}`);
+    await user.click(await screen.findByRole('button', { name: /Analyse the ad/ }));
+
+    expect(await screen.findByText(/nothing for it to read|no description to analyze/i)).toBeTruthy();
+    /* The screen survives. Before this, a 400 went to setError and the whole
+       detail view was replaced by a failure card — the heading below is what
+       proves the difference. */
+    expect(screen.getByRole('heading', { name: 'The ad' })).toBeTruthy();
   });
 
   it('an unknown address says so rather than rendering nothing', async () => {

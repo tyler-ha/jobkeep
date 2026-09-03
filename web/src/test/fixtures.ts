@@ -258,6 +258,11 @@ export function stubFetch() {
       });
 
     if (path === '/applications' && method === 'GET') return ok(listPage);
+    /* Phase 6.6 added a description box to the add form, so creating is now a
+       path the screen tests walk. The body is echoed back inside the detail
+       shape, which is enough for the caller and keeps the fixture honest about
+       what the API returns (ApplicationDetail, not the request). */
+    if (path === '/applications' && method === 'POST') return ok(detail);
     if (path === '/stats/funnel') return ok(funnel);
     if (path === '/stats/skill-demand') return ok(skillDemand);
     if (path === '/stats/companies') return ok(companies);
@@ -269,6 +274,15 @@ export function stubFetch() {
     /* 404 is a real answer here, not a failure: GetAnalysis returns it for "not
      * analysed yet" and the Job post screen renders that as an invitation. */
     if (path === `/applications/${APP_ID}/analysis`) return new Response(null, { status: 404 });
+    /* AnalyzePosting.cs refuses with a 400 when the posting has no description.
+       That is a rule, not a fault, and the Job post screen must explain it in
+       place — before Phase 6.6 it went to setError, which replaced the entire
+       screen with a failure card. */
+    if (path === `/applications/${APP_ID}/analyze` && method === 'POST')
+      return new Response(
+        JSON.stringify({ detail: 'This posting has no description to analyze. Add one first.' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } },
+      );
     if (path === `/applications/${APP_ID}`) return ok(detail);
 
     throw new Error(`No fixture for ${method} ${path}`);

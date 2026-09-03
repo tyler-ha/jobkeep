@@ -1,17 +1,29 @@
 ---
 name: schema-diagram
-description: Redraw the JobKeep database ERD and architecture diagram as committed SVG files in docs/diagrams/. Use when the schema changes (a new entity, a new migration, a changed delete rule or index), when a module boundary moves, or when the user asks to visualise/diagram/redraw the database, schema, ERD, or architecture. Derives the schema from EF Core rather than by reading model classes.
+description: Redraw the JobKeep database ERD and architecture diagram as committed SVG files in docs/diagrams/. FROZEN until 1.0 ships on master (2026-09-02) - a schema change or a module-boundary move is NO LONGER a trigger. Invoke ONLY when the user explicitly asks to redraw or visualise the schema, ERD or architecture. Derives the schema from the applied database rather than by reading model classes.
 allowed-tools: Bash, Read, Write, Edit, Grep, Glob
 ---
 
 # Schema & architecture diagrams
 
+> ## STOP — frozen until 1.0 ships on master
+>
+> **Adopted 2026-09-02 at the user's instruction.** Redrawing these SVGs is not
+> cheap, and until 1.0 is merged to master the project is shipping, not
+> illustrating. **A schema change or a module-boundary move is no longer a reason
+> to run this skill.** If you got here from a phase doc, a migration, or your own
+> judgement that the picture is now wrong: stop, write one line in the phase doc
+> saying the diagrams were deliberately not redrawn, and carry on.
+>
+> Run this **only** when the user asks for it in so many words. See "Frozen until
+> 1.0" in `CLAUDE.md`.
+
 Redraws `docs/diagrams/schema-erd.svg` and `docs/diagrams/architecture.svg`.
 
 These are **committed artefacts referenced from README.md and
-`docs/architecture.md`.** They go stale silently — nothing fails a build when
-the schema moves and the picture doesn't. Redraw them in the same change that
-moves the schema, not later.
+`docs/architecture.md`.** They go stale silently — nothing fails a build when the
+schema moves and the picture doesn't. **That staleness is now accepted on purpose**
+and gets paid off in one pass after 1.0.
 
 ## The rule that makes this skill worth having
 
@@ -36,6 +48,22 @@ dotnet ef migrations script --idempotent -o <scratch>/schema.sql
 `-o` is **not optional**. Without it EF writes to the current directory and
 fails with `UnauthorizedAccessException: Access to the path '...\src' is denied`.
 Write it to a scratch path, never into the repo.
+
+**If a database is already running, dump it instead — it is the better source.**
+
+```bash
+docker compose up -d db          # just the database; the API is not needed here
+docker compose exec -T db pg_dump -U postgres -d jobkeep --schema-only --no-owner > <scratch>/live.sql
+```
+
+The reason is that `--idempotent` produces a *sequence of migrations*, not a
+picture of the result: a `CREATE TABLE` three migrations back is corrected by
+`ALTER`s further down, and every statement is wrapped in a `DO $EFMigrationsSql$`
+block, so counting tables or indexes out of that text gives the wrong answer.
+Phase 7 is the live case — it drops three unique indexes and adds three others,
+and both sets appear in the script. `pg_dump` shows the applied schema, which is
+what the diagram claims to be. Generate the migration script anyway when there is
+no database to dump; just do not count from it.
 
 ## Step 2 — confirm the model and the migrations agree
 
