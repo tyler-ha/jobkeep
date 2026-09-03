@@ -37,6 +37,11 @@ public record ResumeDraft(
     string? Location,
     string? Headline,
     List<string> Skills,
+    // PHASE 14. Additive on the wire: `skills` keeps its meaning (technical) and
+    // this appears beside it, so nothing reading the draft today breaks. Both
+    // lists become resume_skills rows at commit — the split exists to carry Kind
+    // into the catalogue, not to store two kinds of link.
+    List<string> SoftSkills,
     List<DraftExperience> Experience,
     List<DraftEducation> Education);
 
@@ -65,7 +70,7 @@ public record PostingDraft(
     List<DraftPostingSkill> Skills,
     List<DraftRequirement> Requirements);
 
-public record DraftPostingSkill(string Name, bool Required);
+public record DraftPostingSkill(string Name, bool Required, SkillKind Kind = SkillKind.Unknown);
 
 // PHASE 13.3b — Kind is the CONTRACT enum, not the entity one.
 //
@@ -113,9 +118,28 @@ internal sealed class ResumeExtraction
                + "An empty string if the resume has no summary section.")]
     public string Headline { get; set; } = "";
 
-    [Description("Every technology, programming language, framework, tool or cloud service "
-               + "named anywhere in the resume.")]
+    [Description("Every technology, programming language, framework, tool, cloud service "
+               + "or database named anywhere in the resume.")]
     public List<string> Skills { get; set; } = new();
+
+    // PHASE 14 — a SECOND LIST rather than a kind tag on each item, and the
+    // asymmetry with PostingSkillExtraction below is deliberate.
+    //
+    // Two reasons, in order of weight. First, this is what the model already does
+    // well: asked directly, llama3.2:3b separates soft from technical of its own
+    // accord, and giving it the shape it naturally produces is cheaper than
+    // fighting it into a per-item enum on a bare string list. Second, `Skills`
+    // reaches the wire as ResumeDraft.skills: string[], so a second list is
+    // ADDITIVE where changing the element type would break every reader.
+    //
+    // Posting skills carry a per-item Required flag and are therefore already
+    // objects, so the enum costs nothing there. Same information, two shapes,
+    // because the two sides genuinely differ.
+    [Description("Every soft skill, working style or interpersonal strength the resume claims — "
+               + "for example: communication, stakeholder management, mentoring, problem solving. "
+               + "These are ways of working, not technologies. An empty list if the resume "
+               + "mentions none.")]
+    public List<string> SoftSkills { get; set; } = new();
 
     [Description("Every job held, most recent first.")]
     public List<ExperienceExtraction> Experience { get; set; } = new();
@@ -173,14 +197,37 @@ internal sealed class PostingExtraction
     [Description("The individual requirements, responsibilities and benefits the advertisement lists.")]
     public List<RequirementExtraction> Requirements { get; set; } = new();
 
-    [Description("Every technology, programming language, framework or tool named in the advertisement.")]
+    [Description("Every skill named in the advertisement — both technologies "
+               + "(languages, frameworks, tools, cloud services, databases) and soft skills "
+               + "(communication, stakeholder management, teamwork and the like).")]
     public List<PostingSkillExtraction> Skills { get; set; } = new();
 }
 
 internal sealed class PostingSkillExtraction
 {
-    [Description("The name of the technology, for example: C#, PostgreSQL, Kubernetes.")]
+    // "The skill itself, not the phrase" earns its place the way the date
+    // descriptions above do. Measured against llama3.2:3b on a real-shaped ad: the
+    // first version of this field returned "Excellent communication skills",
+    // "Proven stakeholder management" and "CI/CD pipelines" — the advertisement's
+    // own wording, adjectives and all. Each became its own row, because a
+    // catalogue cannot alias its way out of an open set of sentence fragments.
+    // Naming the failure and showing the pair fixes it at the source.
+    [Description("The name of the skill itself, not the sentence it appears in. "
+               + "Write \"Communication\", not \"Excellent communication skills\"; "
+               + "\"CI/CD\", not \"CI/CD pipelines\". "
+               + "For example: C#, PostgreSQL, Kubernetes, Stakeholder Management.")]
     public string Name { get; set; } = "";
+
+    // PHASE 14. An ENUM property, not a string, and that is the whole mechanism:
+    // StructuringSchema.Json carries JsonStringEnumConverter, so this emits a
+    // JSON Schema `enum` of NAMES and constrained decoding makes an invalid
+    // answer unrepresentable. The model cannot reply "hard skill" or "n/a" here.
+    // Same trick the file already relies on for RequireAllProperties — see
+    // DocumentStructurer.StructuringSchema, which explains why the schema does
+    // more work than the prompt.
+    [Description("Technical for a technology, language, framework, tool or database. "
+               + "Soft for a way of working or an interpersonal strength.")]
+    public SkillKind Kind { get; set; } = SkillKind.Unknown;
 
     [Description("True if the advertisement lists it as required or essential; "
                + "false if it is nice to have.")]
@@ -272,6 +319,7 @@ internal static class DraftSanitiser
     private static ResumeDraft? Sanitise(ResumeDraft? d) => d is null ? null : d with
     {
         Skills = d.Skills ?? [],
+        SoftSkills = d.SoftSkills ?? [],
         Experience = (d.Experience ?? []).Select(x => x with { Highlights = x.Highlights ?? [] }).ToList(),
         Education = d.Education ?? []
     };
@@ -297,6 +345,19 @@ internal static class DraftMapper
     private static string? Clean(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
+    // PHASE 14 — the same trim/drop-empty/dedup the résumé skill list always did,
+    // lifted out because there are two such lists now and they must behave
+    // identically. Ordinal dedup, matching what it replaced; the catalogue does
+    // the case-insensitive collapsing a few steps later and doing it twice, two
+    // different ways, is how the halves come apart.
+    private static List<string> Clean(List<string> values) =>
+        values
+            .Select(s => s?.Trim())
+            .Where(s => !string.IsNullOrEmpty(s))
+            .Select(s => s!)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
     public static ResumeDraft ToDraft(ResumeExtraction e, string label) => new(
         label,
         Clean(e.FullName),
@@ -304,12 +365,14 @@ internal static class DraftMapper
         Clean(e.Phone),
         Clean(e.Location),
         Clean(e.Headline),
-        e.Skills
-            .Select(s => s?.Trim())
-            .Where(s => !string.IsNullOrEmpty(s))
-            .Select(s => s!)
-            .Distinct(StringComparer.Ordinal)
-            .ToList(),
+        Clean(e.Skills),
+        // PHASE 14. Cleaned the same way and, importantly, deduped against the
+        // TECHNICAL list as well as itself: a model that lists "Problem Solving"
+        // in both places should not produce two entries the user has to remove
+        // twice. Technical wins the tie because it was asked for first — an
+        // arbitrary but stable rule, and the catalogue's own "first writer names
+        // the Kind" behaviour makes the choice harmless either way.
+        Clean(e.SoftSkills).Except(Clean(e.Skills), StringComparer.OrdinalIgnoreCase).ToList(),
         e.Experience
             // An entry with no employer is the model padding the array to satisfy
             // a schema that says the list must exist. Nothing useful can be
@@ -343,7 +406,7 @@ internal static class DraftMapper
         e.Skills
             .Where(s => !string.IsNullOrWhiteSpace(s.Name))
             .GroupBy(s => s.Name.Trim(), StringComparer.Ordinal)
-            .Select(g => new DraftPostingSkill(g.Key, g.First().Required))
+            .Select(g => new DraftPostingSkill(g.Key, g.First().Required, g.First().Kind))
             .ToList(),
         e.Requirements
             .Where(r => !string.IsNullOrWhiteSpace(r.Text))

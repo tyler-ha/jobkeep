@@ -18,6 +18,12 @@ public static class SkillsModule
         // scoped SkillsDbContext, which is the captive-dependency bug
         // ApplicationsModule.cs calls out.
         services.AddScoped<ISkillCatalog, SkillCatalog>();
+
+        // PHASE 14. Scoped for the same reason, and registered here rather than
+        // in Program.cs so that the seeder is this module's business: the API
+        // resolves it and calls it, but does not know what it reads or how it
+        // decides. Not an IHostedService — see the call site in Program.cs.
+        services.AddScoped<SkillSeeder>();
         return services;
     }
 }

@@ -503,6 +503,186 @@ by a deliberate decision. So Phase 6 ships a front end that runs locally; a publ
 URL is gated behind un-parking the deploy, not behind anything in this phase.
 Don't let the README promise a link the deployment story hasn't earned.
 
+## The app was SEEN for the first time (2026-09-03)
+
+Every visual judgement in this doc and in `phase-6.5-upload-experience.md` before
+this date was reasoned from CSS — the Chrome extension had been disconnected for
+fourteen sessions. It was connected on 2026-09-03 and five screens were walked at
+the user's real viewport: **Today, Applications, Pipeline, Upload, Insights.**
+
+The user had said, twice, that there were "lots of UI/UX gaps" without naming them,
+and confirmed on the same day that the problem is **systemic, not screen-specific.**
+It is. There is one root cause, it is measured below, and it is one line of CSS.
+
+### The finding: 904px of dead space on every screen
+
+Measured in the page, not eyeballed:
+
+| | |
+|---|---|
+| Viewport | **2560 × 1249** |
+| `.shell` | `display: grid`, `grid-template-columns: 216px 2334px`, `max-width: none` |
+| `main` | `max-width: 1440px`, **`margin-left: 0`, `margin-right: 0`** |
+| `main` occupies | x = 216 → 1656 |
+| **Dead space right** | **904px, every screen** |
+
+`--shell-max` is `1440px` — the width the artboards were drawn at — and `main` is
+capped there with **no auto margin**, inside a grid track of 2334px. So on a wide
+display the entire application is pinned to the left third of the screen with a
+900px void beside it, on all eight screens identically.
+
+That is what "lots of gaps" is. The screens are not individually broken; the app is
+sitting in the corner of the monitor it is being used on.
+
+### The fix, and the choice inside it
+
+`.shell { max-width: calc(var(--shell-max) + var(--nav-w)); margin-inline: auto; }`
+
+Cap and centre **the whole shell**, so the nav travels with the content as one
+1656px slab. Not `margin-inline: auto` on `main` alone — that centres the content
+column while leaving the nav pinned to the viewport edge, opening a second gap
+between them.
+
+The alternative is to keep the nav at the edge and let the content grow (raise or
+drop `--shell-max`). **Rejected as the default**, because the eight artboards were
+composed at 1440 and widening the column re-flows every one of them — that is a
+redesign, not a fix. Centring preserves the approved composition exactly. It also
+suits *"Marked Up"*: a centred slab on a warm ground reads as paper, which is the
+brand's own metaphor.
+
+### A wrong diagnosis, recorded so it is not repeated
+
+First impression from the screenshots was **"all the type is too small."** It is
+not. The screenshots are downscaled from a 2560-wide viewport to 1568 (≈61%), which
+makes correct type look undersized. Measured in the page: root `16px`, body `15px`,
+`h1` `28px` — exactly `--t-base` and `--t-xl` as `tokens.css` defines them. **Do not
+touch the type scale.** Anyone auditing from screenshots alone will reach the same
+wrong conclusion; measure in the page.
+
+Two other things checked and cleared, so they are not re-reported:
+
+- **The six ramp tokens are named.** `PRODUCT.md` recorded an obligation that
+  `tokens.css` name `--pri-dark` / `--pri-tint` / `--sec-*` / `--pop-*`, which were
+  otherwise raw hex 145 times. Done — raw hex across all four stylesheets is now
+  **16**.
+- **The amber nav marker is deliberate, not a brand-rule breach.** It looks like a
+  third amber use competing with the one-held-moment rule; `shell.css:60` carves it
+  out in a comment, and ink-on-amber is 11.25, so the active label gets *more*
+  legible. Leave it.
+
+### Applied and verified, same session
+
+`web/src/styles/shell.css` — `.shell` gained
+`max-width: calc(var(--shell-max) + var(--nav-w))` and `margin-inline: auto`, with
+the reasoning above as a comment. Measured in the page afterwards:
+
+| | before | after |
+|---|---|---|
+| `.shell` max-width | `none` | `1656px` |
+| `main` x → right | 216 → 1656 | 663 → 2103 |
+| **Dead space** | **904px, all on the right** | **457px, balanced both sides** |
+
+`npm run build` clean (`tsc -b && vite build`, 1846 modules, 808ms). The 35-test
+Vitest suite is unaffected — jsdom does no layout, so **the browser measurement
+above is the only real check on this change**, which is why it is recorded here as
+numbers rather than as "looks better".
+
+**A trap this cost three turns to find, now also in `CLAUDE.md`:** the CSS edit did
+not reach the browser and *survived a hard reload*. `./web` is bind-mounted, but the
+mount carries bytes, not inotify events, from Windows into the Linux container, and
+`vite.config.ts` sets no `server.watch.usePolling`. **Hot reload does not fire for
+host-side edits — `docker compose restart web` after editing anything in `web/`.**
+
+### Not yet assessed
+
+Résumés, ATS check and the application detail screen were not walked, and no
+narrow-viewport or keyboard pass was done. **Do the shell fix first and re-walk all
+eight** — a 904px void distorts the judgement of everything else, and some of what
+looks wrong now may simply be that.
+
+Vertical dead space is also real (content ends 30-45% down the page) but is partly
+an artefact of the dev database holding two applications. Re-judge it after the
+shell fix, with more data.
+
+
+## The re-walk after the shell fix (2026-09-03, next session)
+
+All seven remaining screens were walked at the real viewport (2560×1271), including
+the three the first look never reached — Résumés, ATS check and the ATS result. The
+shell fix was confirmed live first: `.shell` 1656px wide at x=447, so 447 left / 457
+right. Balanced, as designed.
+
+**The point of the re-walk was to find out how much of "lots of UI/UX gaps" was the
+void.** Most of it was. What survived the fix is a much shorter list, and only three
+items on it are defects rather than taste — all three in the shared layer, so each
+one moves every screen at once.
+
+### Three measured defects, fixed in this change
+
+Each was measured, not judged by eye. The measuring script is four lines of WCAG
+relative-luminance arithmetic; the numbers are reproducible from the token values.
+
+| Where | Was | Measured | Now |
+|---|---|---|---|
+| `.btn-primary:disabled` (`shell.css`) | white label on `color-mix(--pri 35%, --ground)` | **1.85:1** | rule deleted; falls through to `.btn:disabled`, **5.46:1** |
+| `.card-move select` (`screens.css`) | sole border `--rule` | **1.21:1** | `--rule-strong`, **3.05:1** |
+| Insights footnote (`Insights.tsx`) | *"C# and c# count as two … the fix is a case-insensitive key"* | — | deleted; Phase 7 shipped that key |
+
+**The disabled primary was the least legible text in the app**, and it was on the one
+control that most needs to say *"not yet"* rather than *"broken"* — the Upload
+screen's "Upload and read", which is the first button a new user meets. The fix is a
+deletion: a disabled button is not a primary button, so it should not have a primary
+button's rule. `.btn:disabled` already said the right thing.
+
+**The select border broke a rule the token file states in as many words.**
+`tokens.css` says of `--rule`: *"decorative hairline ONLY. Never an input's sole
+border."* `--rule-strong` exists precisely for this and every other control already
+uses it; the Pipeline "Move to…" select was the one that got missed. Checked
+exhaustively with an `awk` sweep over both stylesheets for rule blocks whose selector
+names a control and whose border is `--rule` — **exactly one live violation**, plus
+`.pill-add button:disabled`, which is left alone because WCAG exempts disabled
+controls.
+
+**The Insights footnote was a confession of a defect the product no longer has.**
+Verified against the migrated database, not the docs: `skills.NameNormalized` is
+`generated always as (lower("Name")) stored` with `IX_skills_NameNormalized` UNIQUE
+on it, so `C#` and `c#` **cannot** both exist. Removed rather than reworded — the
+caveat that does survive (the chart counts skill *rows*, so `SQL` and `PostgreSQL`
+are two) is about matching, not casing, and the Résumés screen already says it at the
+point where it costs the user something.
+
+### What was NOT changed, and why
+
+Two things look wrong and were deliberately left, because fixing either is a redesign
+rather than a fix and both are the user's call:
+
+- **Rows justify to the full 1440px column regardless of content.** On ATS check, two
+  rows of ~30 characters stretch the width of the screen with the company, status and
+  date flung to the far right — the eye travels a near-empty row to associate two
+  facts. Applications and Today's "Recently added" do the same. But the artboards were
+  composed at 1440 and drawn this way, so this is how the design was approved, not a
+  regression the shell fix introduced. Capping row width is a composition change to
+  five screens.
+- **Vertical emptiness is now the dominant void.** Every screen's content ends between
+  25% and 50% of the viewport height. The previous session flagged this and guessed it
+  was an artefact of a two-row dev database; walking it says it is only partly that —
+  Upload and ATS check are near-empty with no data at all to blame. Still, judging it
+  properly needs more rows than this database has.
+
+### Verified
+
+`npm test` 49 passed, `npm run build` clean, `oxlint` clean apart from one
+pre-existing `set-state-in-effect` warning in `AtsCheck.tsx:193` that predates this
+change. All three fixes then confirmed **in the running app** after
+`docker compose restart web`: the disabled button legible, the select border
+computing to `rgb(149,140,123)` (`--rule-strong`), and `count as two` absent from the
+Insights DOM.
+
+### Still not assessed
+
+No narrow-viewport pass and no keyboard pass. Both remain open.
+
+
 ## Interview talking points from this phase
 
 - Full-stack ownership: one person, one project, all layers — a strong "I built

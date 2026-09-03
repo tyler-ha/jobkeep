@@ -96,7 +96,15 @@ public sealed class ResetIsolationTests(PostgresFixture fixture) : IntegrationTe
             var applied = await ScalarAsync(
                 $"""SELECT COUNT(*)::int FROM "{schema}"."__EFMigrationsHistory";""");
 
-            Assert.Equal(1, Assert.IsType<int>(applied));
+            // NOT an exact count. This asserted `== 1` until Phase 14 gave the
+            // Skills module a second migration, and the failure was a false alarm:
+            // the property under test is that the history SURVIVES the reset, and
+            // the number of migrations a module has is nobody's business here. An
+            // exact count turns every future migration into a broken test in a file
+            // about Respawn configuration, which is how a test stops being read and
+            // starts being edited until it passes.
+            Assert.True(Assert.IsType<int>(applied) > 0,
+                $"{schema}.__EFMigrationsHistory was truncated by ResetAsync.");
         }
     }
 }

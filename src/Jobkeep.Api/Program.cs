@@ -266,6 +266,32 @@ if (app.Environment.IsDevelopment())
     scope.ServiceProvider.GetRequiredService<DocumentsDbContext>().Database.Migrate();
     scope.ServiceProvider.GetRequiredService<AiDbContext>().Database.Migrate();
     scope.ServiceProvider.GetRequiredService<AtsDbContext>().Database.Migrate();
+
+    // PHASE 14 — the starting skill vocabulary, immediately after the Skills
+    // migration that creates the two tables it writes to.
+    //
+    // Here rather than in an IHostedService, and the reason is the same one that
+    // keeps the migrations here: this must finish BEFORE the first request can
+    // resolve a skill name, and a hosted service starting concurrently with the
+    // server gives no such guarantee. It is two SELECTs and usually no write.
+    //
+    // Inside the Development block, which is the honest place for it TODAY and
+    // will be wrong on the deploy: migrations there are a deliberate release step
+    // (see the comment above), and the seed is reference data those migrated
+    // tables need. Phase 10 has to run this as part of that step. Noted here
+    // rather than pre-solved, because the shape of that step is not decided yet.
+    //
+    // THE SWITCH IS FOR THE TEST SUITE, and it is not a tuning knob — nothing
+    // outside JobkeepAppFactory ever sets it. The suite runs in Development (so
+    // that the real migration path is exercised) and Respawn truncates every
+    // table between tests, so without this the vocabulary re-materialises after
+    // every reset and 228 reference rows turn up inside every unrelated arrange.
+    // That breaks Respawn's contract — each test starts from empty — for every
+    // future test as well as the three it broke when this landed. The seeder is
+    // still covered: SkillVocabularyTests calls it directly, which is also the
+    // only way to assert idempotency.
+    if (app.Configuration.GetValue("Skills:SeedOnStartup", true))
+        await scope.ServiceProvider.GetRequiredService<SkillSeeder>().SeedAsync();
 }
 
 // Only expose the interactive docs in Development — no reason to ship

@@ -26,6 +26,13 @@ public class SkillsDbContext(DbContextOptions<SkillsDbContext> options)
 {
     public DbSet<Skill> Skills => Set<Skill>();
 
+    // PHASE 14. The second table this module owns, and it stays inside the
+    // module for the same reason the first one is shared through a contract:
+    // nobody outside Skills should know that resolving a name might involve a
+    // second lookup. SkillCatalog is where that happens and ISkillCatalog is
+    // unchanged in shape because of it.
+    public DbSet<SkillAlias> SkillAliases => Set<SkillAlias>();
+
     protected override void OnModelCreating(ModelBuilder model)
     {
         model.ApplyConfigurationsFromAssembly(typeof(SkillsDbContext).Assembly);

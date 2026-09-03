@@ -37,6 +37,19 @@ public sealed class JobkeepAppFactory(string connectionString) : WebApplicationF
         // earlier read.
         builder.UseSetting("ConnectionStrings:Postgres", connectionString);
 
+        // PHASE 14 — no seeded vocabulary under test.
+        //
+        // The seed is real behaviour and it stays on everywhere else; here it
+        // fights Respawn. Reset truncates `skills` between tests, the host re-seeds
+        // when it boots, and the result is 228 reference rows sitting inside every
+        // arrange that has nothing to do with skills — which broke three existing
+        // tests the day this landed, one of them subtly: a test seeding "aws" got
+        // the seed's "AWS" row back, because the natural key made them one.
+        //
+        // UseSetting for the same reason as the line above: Program.cs reads this
+        // off builder.Configuration before Build().
+        builder.UseSetting("Skills:SeedOnStartup", "false");
+
         // PHASE 13.3b — the test-only aggregate context, added to the app's own
         // container rather than to a second one, so tests keep resolving it from a
         // scope exactly as they resolved AppDbContext before.

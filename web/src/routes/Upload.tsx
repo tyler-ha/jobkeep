@@ -1223,7 +1223,13 @@ function PostingForm({
           <button
             type="button"
             className="btn"
-            onClick={() => set('skills', [...draft.skills, { name: '', required: true }])}
+            onClick={() =>
+              // Phase 14: a hand-added skill has no kind. 'Unknown' rather than a
+              // guess — the catalogue fills it from the seeded vocabulary if it
+              // recognises the name, and inventing 'Technical' here would beat that
+              // to it, since kind is set on create and never overwritten.
+              set('skills', [...draft.skills, { name: '', required: true, kind: 'Unknown' }])
+            }
           >
             Add a skill
           </button>

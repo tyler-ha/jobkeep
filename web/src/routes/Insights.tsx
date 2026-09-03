@@ -161,7 +161,6 @@ function Funnel({ funnel }: { funnel: ApplicationFunnel }) {
 
 function Demand({ skills }: { skills: SkillDemandItem[] }) {
   const widths = barScale(skills.map((s) => s.postingCount));
-  const top = skills[0]?.postingCount ?? 0;
 
   return (
     <section className="panel insight insight-demand" aria-labelledby="h-demand">
@@ -207,15 +206,15 @@ function Demand({ skills }: { skills: SkillDemandItem[] }) {
         </ol>
       )}
 
-      {/* The recorded gap, said out loud rather than papered over. Merging the
-          two rows client-side would hide a defect the backend has a test
-          pinning, and the fix is a migration, not a chart. */}
-      {top > 0 && (
-        <p className="insight-foot quiet">
-          Skills are matched exactly, so <code>C#</code> and <code>c#</code> count as two.
-          A known gap — the fix is a case-insensitive key on the skills table.
-        </p>
-      )}
+      {/* The footnote that used to sit here told the user that C# and c# count as
+          two rows and that the fix was a case-insensitive key. Phase 7 shipped that
+          key — skills.NameNormalized is `lower("Name")`, generated and stored, with
+          the UNIQUE index on it — so the two CANNOT both exist and the note had
+          become a confession of a defect the product no longer has. Verified against
+          the migrated database, 2026-09-03. Removed rather than reworded: the caveat
+          that remains (the chart counts skill ROWS, so SQL and PostgreSQL are two) is
+          about matching, not casing, and the Résumés screen already says it where it
+          costs the user something. */}
     </section>
   );
 }

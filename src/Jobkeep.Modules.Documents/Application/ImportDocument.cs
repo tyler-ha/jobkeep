@@ -194,7 +194,7 @@ public class ImportDocumentHandler : IRequestHandler<ImportDocument, SliceResult
     // always has the fields to fill in rather than a null it has to special-case.
     internal static ImportDraft EmptyDraft(DocumentKind kind, string label) =>
         kind == DocumentKind.Resume
-            ? new ImportDraft(new ResumeDraft(label, null, null, null, null, null, [], [], []), null)
+            ? new ImportDraft(new ResumeDraft(label, null, null, null, null, null, [], [], [], []), null)
             : new ImportDraft(null, new PostingDraft("", "", null, null, null, [], []));
 
     internal static ImportResponse ToResponse(DocumentImport import, ImportDraft draft) => new(

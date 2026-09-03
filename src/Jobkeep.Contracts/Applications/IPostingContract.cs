@@ -1,7 +1,9 @@
-// PHASE 13.1: the interface and its DTOs live in Jobkeep.Contracts; the
+﻿// PHASE 13.1: the interface and its DTOs live in Jobkeep.Contracts; the
 // implementation stays here, with the module that owns the tables it guards.
 // The namespace is deliberately unchanged -- 13.6 renames namespaces to match
 // projects, in one pass, once nothing else is moving.
+
+using Jobkeep.Models;
 
 namespace Jobkeep.Modules.Applications;
 
@@ -94,7 +96,11 @@ public interface IPostingContract
 // the API edge).
 public record PostingContent(Guid PostingId, string? Description);
 
-public record ExtractedSkill(string Name, bool IsRequired);
+// PHASE 14 added Kind, defaulted so the two existing call sites that do not know
+// one need no change. It is passed straight through to ISkillCatalog, where it is
+// advisory on create — this contract does not decide what a skill IS, it only
+// carries what its caller found out while reading a document.
+public record ExtractedSkill(string Name, bool IsRequired, SkillKind Kind = SkillKind.Unknown);
 
 // One row of `posting_skills`, minus the row's own bookkeeping. Source is not
 // here: whether a human typed a skill or a model extracted it governs whether

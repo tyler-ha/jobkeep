@@ -9,6 +9,19 @@ public class Skill : IAuditable
     public string Name { get; set; } = string.Empty;   // unique, e.g. "C#"
     public string? Category { get; set; }               // "Language", "Cloud", ...
 
+    // PHASE 14 — the second axis. Category says which FAMILY ("Language",
+    // "Practice"); Kind says whether it is a capability or a way of working.
+    // They are independent: C# is Technical and a Language, Agile is Technical
+    // and a Practice, Communication is Soft and Interpersonal.
+    //
+    // Not nullable, unlike Category, and the asymmetry is on purpose. Category
+    // is genuinely optional — most skills never get one and nothing reads it as
+    // a decision. Kind is a classification every skill has whether or not we
+    // know it, so the missing case is a VALUE (Unknown) rather than a null, and
+    // callers get an enum they can switch on without a null check. The default
+    // is set database-side too, so a writer that is not EF gets it right.
+    public SkillKind Kind { get; set; } = SkillKind.Unknown;
+
     // Phase 7 — the case-insensitive natural key. A STORED generated column:
     // Postgres computes lower("Name") on write, so it cannot drift from the
     // value it normalises and no C# writer can forget to set it. The unique
