@@ -1,9 +1,8 @@
 using System.Text.Json.Serialization;
-// Phase 13.1: the Map*Module extensions moved here from each module's own
-// wiring file, so the module projects carry no ASP.NET dependency. The Add*
-// half still lives with its module. Both halves disappear into controllers
-// and a module DI extension in 13.5.
-using Jobkeep.Api.Endpoints;
+// Phase 13.5: the Map*Module extensions 13.1 parked in Api/Endpoints/ are gone,
+// replaced by the controllers in Api/Controllers/. The Add*Module() half still
+// lives with its module and still does what a mediator cannot know about.
+using Jobkeep.Api.Controllers;
 using Jobkeep.GraphQL;
 using Jobkeep.Modules.Ai;
 using Jobkeep.Modules.Analytics;
@@ -13,6 +12,8 @@ using Jobkeep.Modules.Documents;
 using Jobkeep.Modules.Skills;
 using Jobkeep.Persistence;
 using Jobkeep.Shared;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -216,6 +217,54 @@ builder.Services.AddCors(options => options.AddPolicy(DevCorsPolicy, policy => p
     .AllowAnyHeader()
     .AllowAnyMethod()));
 
+// ---------------------------------------------------------------------------
+// PHASE 13.5 — controllers
+// ---------------------------------------------------------------------------
+// Every route is an attribute-routed [ApiController] action under Controllers/,
+// replacing the five Api/Endpoints/*.cs files 13.1 had to create. Same URLs, same
+// responses; what changed is that the composition root has one shape for HTTP.
+//
+// The two options below are the whole configuration, and both are load-bearing.
+//
+// SuppressImplicitRequiredAttributeForNonNullableReferenceTypes — this is the
+// one that keeps validation in the slice, and it is a smaller lever than it
+// looks. By default MVC treats a non-nullable reference type as required, so
+// CreateApplicationRequest — a positional record with a non-nullable
+// `string Company` — would make POST {} a model-state failure, and
+// [ApiController] would answer 400 with its own ProblemDetails before the
+// handler ran. GraphQL, meanwhile, would keep answering "Company and Title are
+// required." from the slice. That is architecture.md finding A4 — one rule
+// enforced differently per surface — coming back through the front door.
+//
+// Turning the implicit required off puts DOMAIN rules back where every other
+// rule lives, in the handler, and Parity/SurfaceParityTests.cs pins that both
+// surfaces answer with the same sentence.
+//
+// What is deliberately NOT turned off is the auto-400 itself
+// (SuppressModelStateInvalidFilter), which was the first thing tried. It answers
+// for the failures a slice cannot see and must not have to: a body that is
+// absent, empty or unparseable, an enum name that does not exist, a multipart
+// body the form reader refused mid-stream. With it off, all of those bind null
+// and the handler dereferences them — measured, not assumed: an empty body and a
+// 6 MB upload both answered 500 with a NullReferenceException. Binding failures
+// were never the slice's job; only the rules were.
+//
+// AddJsonOptions — MVC does NOT read ConfigureHttpJsonOptions below. It has its
+// own JsonOptions, and without the converter here an incoming enum sent by name
+// ("Interviewing", "JobPosting") would fail to bind. So the split is:
+//
+//   * REQUESTS deserialize through MVC's copy, configured here.
+//   * RESPONSES serialize through the Http.Json copy configured below, because
+//     ToHttpResult builds a Results.* value and MVC wraps it rather than
+//     re-serializing it. That is what keeps Results.BadRequest("message") a bare
+//     JSON string, quotes included, which Rest/ and Parity/ assert on exactly.
+//
+// One converter, two options objects, because two frameworks are in play. It
+// looks like duplication and is not.
+builder.Services
+    .AddControllers(o => o.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true)
+    .AddJsonOptions(o => o.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+
 builder.Services.ConfigureHttpJsonOptions(o =>
 {
     // Serialize/accept enums by name ("Interviewing", "FullTime") instead of by
@@ -239,9 +288,9 @@ builder.Services
     .AddQueryType<Query>()
     .AddMutationType<Mutation>();
 
-// AddEndpointsApiExplorer discovers minimal-API endpoints; AddSwaggerGen
-// turns that into an OpenAPI document Swagger UI can render.
-builder.Services.AddEndpointsApiExplorer();
+// AddSwaggerGen turns what the ApiExplorer discovers into an OpenAPI document
+// Swagger UI can render. AddEndpointsApiExplorer() used to sit above it, for the
+// minimal APIs; 13.5 left none, and AddControllers brings MVC's own explorer.
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
@@ -308,23 +357,64 @@ if (app.Environment.IsDevelopment())
     app.UseCors(DevCorsPolicy);
 }
 
-// Every /applications route, REST side. One call, because the module owns its
-// own routing (Modules/Applications/ApplicationsModule.cs).
-app.MapApplicationsModule();
+// Every REST route in the app, from the five controllers under Controllers/.
+// This one line replaced five MapXModule() calls in 13.5, and the routes did not
+// move: the controllers carry the same templates the endpoint files did, and
+// three of them share the /applications prefix for the reason AiController gives.
+//
+// ---------------------------------------------------------------------------
+// Where the upload's size cap is ACTUALLY enforced
+// ---------------------------------------------------------------------------
+// The `file.Length > MaxBytes` check inside DocumentsController.Upload is not the
+// first line of defence. By the time a [FromForm] parameter is bound, ASP.NET
+// Core has already read the whole multipart body — files over 64 KB spool to a
+// temp file on disk — so without these two limits a 30 MB upload is written to
+// disk in full and only then answered "the limit is 5120KB". The framework
+// defaults are 128 MB for a multipart body and 30 MB for the request, both an
+// order of magnitude above anything that endpoint wants.
+//
+// These two do the refusing, before the bytes are stored:
+//   - MultipartBodyLengthLimit stops the form reader mid-stream and is what a
+//     client sending an oversized part actually hits.
+//   - RequestSizeLimit is the belt to that braces: it bounds the whole request,
+//     so a body that is oversized in some way the multipart reader would not
+//     count still cannot get through.
+//
+// The handler's own check stays. It is cheap, it produces the friendly message
+// with the real numbers in it, and it is the one that fires when a client
+// declares a length under the cap — these limits are about what an attacker can
+// make the server DO, not about what a user is told.
+//
+// WHY THIS IS HERE AND NOT AN ATTRIBUTE ON THE ACTION. [RequestSizeLimit] and
+// [RequestFormLimits] take compile-time constants, and MaxBytes is configuration
+// (DocumentOptions, bound from the "Documents" section). A const would work today,
+// because nothing sets that section — and would fail silently the day something
+// did: config would raise the app's cap while the transport limit kept refusing
+// below it, so the friendly message with the real numbers could never be reached.
+// Attaching the same attributes as endpoint metadata, where the bound options
+// exist, keeps one number in one place. It is the mechanism the minimal API used
+// too (.WithMetadata(new RequestSizeLimitAttribute(...))); MVC builds its filter
+// list from endpoint metadata, so both are honoured the same way.
+//
+// The envelope a multipart body carries on top of the file itself — boundaries,
+// part headers, and the three small text fields. 16 KB is far more than that
+// costs and far less than a second file would.
+const long MultipartEnvelopeSlack = 16 * 1024;
+var uploadOptions = app.Services.GetRequiredService<DocumentOptions>();
 
-// Every /stats route (Modules/Analytics/AnalyticsModule.cs).
-app.MapAnalyticsModule();
+app.MapControllers().Add(endpoint =>
+{
+    var action = endpoint.Metadata.OfType<ControllerActionDescriptor>().FirstOrDefault();
+    if (action?.ControllerTypeInfo != typeof(DocumentsController) ||
+        action.ActionName != nameof(DocumentsController.Upload)) return;
 
-// The analyzer's two routes. They live under /applications/{id}/... even though
-// the module is Ai — AiModule.cs explains why the URL follows the resource while
-// the code follows the owner.
-app.MapAiModule();
-
-// Every /imports route: upload, review, correct, confirm, discard.
-app.MapDocumentsModule();
-
-// The ATS check, GET and POST, under /applications/{id}/ats-check.
-app.MapAtsModule();
+    endpoint.Metadata.Add(new RequestFormLimitsAttribute
+    {
+        MultipartBodyLengthLimit = uploadOptions.MaxBytes
+    });
+    endpoint.Metadata.Add(new RequestSizeLimitAttribute(
+        uploadOptions.MaxBytes + MultipartEnvelopeSlack));
+});
 
 // Serves POST /graphql for queries + the Nitro (Banana Cake Pop) IDE at GET /graphql.
 app.MapGraphQL();

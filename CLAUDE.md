@@ -682,12 +682,40 @@ Three of its four stages compare a CV to an ad, which is not what the industry
 calls an ATS check. It is a `docs/backlog.md` row and **must not start before
 13.5**, which rewrites the same endpoints.
 
-**Currently up next: Phase 13.5 — controllers.** Read
-`docs/phases/phase-13-clean-architecture.md` §13.5; it is the live plan, and Phase 13
+**Currently up next: Phase 13.6 — namespaces, docs, decision record.** Read
+`docs/phases/phase-13-clean-architecture.md` §13.6; it is the live plan, and Phase 13
 was rewritten on 2026-09-01 when the user confirmed **microservices is the
-destination**. **13.1 through 13.4 are DONE and merged to `develop`**; 13.5 and 13.6
-remain. (This line said "up next: 13.4" until 2026-09-03; 13.4 had already landed at
-`24fbb49`.)
+destination**. **13.1 through 13.5 are DONE**; only 13.6 remains. (This line has
+twice named a step that had already landed — 13.4 at `24fbb49`, then 13.5 — so check
+the branch before trusting it.)
+
+**13.5 LANDED 2026-09-03** (suite 268 → 283, no migration, no `web/` change). The
+29 routes are five `[ApiController]` classes in `src/Jobkeep.Api/Controllers/` and
+**`Api/Endpoints/` is deleted** — do not recreate it, and do not add a route
+anywhere but a controller. Four things from it change how new code is written:
+
+- **An action returns `Task<IResult>` and calls `.ToHttpResult()`, unchanged.** MVC
+  converts an `IResult` return itself (`HttpActionResult` is `internal` — it is not
+  meant to be used by hand). That is also what keeps responses byte-identical:
+  `Results.*` serializes through `Http.Json.JsonOptions`, so
+  `Results.BadRequest("message")` is a bare JSON string, where
+  `ControllerBase.BadRequest("message")` would be `text/plain`. **Do not "modernise"
+  an action to `ActionResult<T>`** — that changes the wire.
+- **JSON is configured in TWO places and both are load-bearing.** MVC does not read
+  `ConfigureHttpJsonOptions`. Requests deserialize through MVC's `JsonOptions`
+  (`AddJsonOptions`, where the enum converter is), responses through the Http.Json
+  one. Adding a converter to only one is a silent half-fix.
+- **The slice owns the RULES; the framework owns whether there was anything to apply
+  them to.** `SuppressImplicitRequiredAttributeForNonNullableReferenceTypes` is on,
+  so `POST {}` reaches the handler and both surfaces answer with the same sentence
+  (finding A4). `SuppressModelStateInvalidFilter` is deliberately **off**: it was
+  tried, and an unbindable request then binds `null` and 500s — measured on an empty
+  body and a 6 MB upload. Both halves are pinned by tests.
+- **A limit that comes from config cannot be an attribute.** `[RequestSizeLimit]` and
+  `[RequestFormLimits]` take constants, so the upload's caps are attached as endpoint
+  metadata at `MapControllers()` in `Program.cs`, where the bound `DocumentOptions`
+  exists. A `const` would work today and fail silently the day the `Documents`
+  config section set anything.
 
 **13.4 needs a decision before any code:** 33 requests become `IRequest<T>` and 53
 call sites become `Send(...)`, and the mediator library is chosen *at that step*.

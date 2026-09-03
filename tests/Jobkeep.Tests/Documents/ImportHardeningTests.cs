@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Jobkeep.Models;
@@ -449,5 +450,43 @@ public class ImportHardeningTests(PostgresFixture fixture) : IntegrationTestBase
             var application = await db.JobApplications.SingleAsync(a => a.Id == applicationId, Ct);
             Assert.Equal(resumeId, application.ResumeId);
         });
+    }
+
+    // ------------------------------------------- the cap the handler never sees
+
+    [Fact]
+    public async Task Upload_RefusesAnOversizedBody_BeforeTheHandlerEverRuns()
+    {
+        // DocumentsController.Upload checks file.Length and answers with a
+        // friendly message naming the real numbers. That check is NOT the first
+        // line of defence and never was: by the time a form parameter is bound,
+        // ASP.NET Core has read the whole multipart body, spooling anything over
+        // 64 KB to a temp file. The two limits attached at MapControllers() are
+        // what stop that, and this test is the only thing that says so.
+        //
+        // Written in Phase 13.5 because the migration to controllers put them at
+        // risk and nothing covered them. They were minimal-API metadata attached
+        // with .WithFormOptions()/.WithMetadata(); [RequestSizeLimit] and
+        // [RequestFormLimits] cannot take a configured value, so they are now
+        // attached in Program.cs instead — same mechanism, same numbers, and
+        // this is what proves they are still applied.
+        //
+        // 6 MB against the 5 MB default. The assertion is deliberately on the
+        // reader's own message rather than on the handler's: seeing "the limit is
+        // 5120KB" here would mean the body HAD been read in full, which is the
+        // failure this pins.
+        using var form = new MultipartFormDataContent();
+        var oversized = new ByteArrayContent(new byte[6 * 1024 * 1024]);
+        oversized.Headers.ContentType = new MediaTypeHeaderValue("text/plain");
+        form.Add(oversized, "file", "big.txt");
+        form.Add(new StringContent(nameof(DocumentKind.Resume)), "kind");
+
+        var response = await Client.PostAsync("/imports", form, Ct);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("Multipart body length limit", await response.Content.ReadAsStringAsync(Ct));
+
+        // And nothing was stored on the way to refusing it.
+        await WithDbAsync(async db => Assert.Equal(0, await db.DocumentImports.CountAsync(Ct)));
     }
 }

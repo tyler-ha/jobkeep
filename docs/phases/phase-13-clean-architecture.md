@@ -1,12 +1,14 @@
 # Phase 13 — module-owned Clean Architecture, on the road to services
 
-**Status: In progress. Steps 13.1, 13.2 (a–e), 13.3 (a–c) and 13.4 done, 2026-09-01
-to 2026-09-03** (branches `phase-13/module-boundaries` then `phase-13/dispatch`,
-suite 239 → … → 254 → 256 → 266 → 268 green).
+**Status: In progress. Steps 13.1, 13.2 (a–e), 13.3 (a–c), 13.4 and 13.5 done,
+2026-09-01 to 2026-09-03** (branches `phase-13/module-boundaries`, then
+`phase-13/dispatch`, then `phase-13/controllers`, suite 239 → … → 254 → 256 → 266 →
+268 → 283 green).
 **13.2 is complete: no module names another module's table. 13.3 is complete: no
 module SHARES a table, a context or a schema with another, and the six foreign keys
 that used to cross a boundary are replaced in application code. 13.4 is complete:
-neither API surface names a handler — both send a message.** 13.5–13.6 remain.
+neither API surface names a handler — both send a message. 13.5 is complete: every
+route is a controller action and `Api/Endpoints/` is deleted.** 13.6 remains.
 
 **This doc was rewritten on 2026-09-01.** The version before it (written the same
 day, commit `bf968a0`) planned a **layer-first** migration: one `Domain`, one
@@ -941,21 +943,97 @@ frozen until 1.0 ships on master either way.
 
 ### 13.5 — controllers
 
-27 routes → ~6 `[ApiController]` classes, **same URLs**, and `Api/Endpoints/` — a
-deliberate one-step reinstatement of a shape CLAUDE.md forbids — is deleted. Four
-known traps:
+**Done 2026-09-03** (branch `phase-13/controllers`, suite 268 → 283, no migration,
+no `web/` change).
 
-- **`[AsParameters] ApplicationQuery`** becomes `[FromQuery]` on the model.
-- **The multipart route.** `IFormFile` is bound **without** `[FromForm]`, because
-  Swashbuckle 10 *throws* on an action carrying both and 500s the whole
-  `swagger.json` for **every** endpoint. **Under `[ApiController]` the binding rules
-  invert.** Re-solve it deliberately; `SwaggerDocumentTests.cs` catches it either way.
-- **`[ApiController]` auto-400s on model state** and emits its own `ProblemDetails`,
-  changing error *bodies* that `Rest/` and `Parity/` assert on. Decide whether the
-  auto-400 or the slice's validation is authoritative — two answers is finding A4
-  coming back.
-- **Antiforgery.** The form route disables it explicitly; the controller needs the
-  equivalent.
+**29 routes** — not 27; this doc was written before 13.3c added
+`DELETE /postings/{id}` and `DELETE /resumes/{id}` — became **five**
+`[ApiController]` classes under `Api/Controllers/`, and `Api/Endpoints/`, the
+one-step reinstatement of a shape CLAUDE.md forbids, is deleted. Every URL, every
+status code and every response body is unchanged; the OpenAPI document still
+describes 29 routes under the same five tags, with the same seven summaries.
+
+Five rather than "~6" because the two secondary prefixes stayed with the module that
+owns the table rather than becoming controllers of their own: `DELETE /postings/{id}`
+is an action on `ApplicationsController` and the five `/resumes` routes are actions
+on `DocumentsController`, both reached with a leading `~` to escape the class-level
+`[Route]`. That is what the second `MapGroup` used to buy, and it is what keeps the
+Swagger tag on the owning module — the split the endpoint files made on purpose,
+where **a URL follows the resource and the code follows the owner**.
+
+#### The four known traps, as they actually landed
+
+- **`[AsParameters] ApplicationQuery` → `[FromQuery] ApplicationQuery`.** A
+  one-word change and nothing else: MVC binds the init-only record from the query
+  string exactly as the minimal API did, so the type serving REST, GraphQL and
+  Swagger needed no edit.
+- **The multipart route.** The binding rules did not have to be re-solved after all:
+  `[ApiController]`'s binding-source inference special-cases `IFormFile` to the form,
+  so `file` binds with **no** `[FromForm]` — the same shape, for a different reason,
+  and the same reason it must stay that way (Swashbuckle 10 throws on an action
+  carrying both and 500s the whole document). The three scalars keep theirs.
+  `SwaggerDocumentTests` stayed green throughout.
+- **The auto-400.** Resolved by turning off `SuppressImplicitRequiredAttributeFor`
+  `NonNullableReferenceTypes` and **leaving the auto-400 itself on** — see below;
+  this is the one decision in the step that took two attempts.
+- **Antiforgery.** No equivalent needed. `.DisableAntiforgery()` existed because
+  minimal APIs validate form posts by default; MVC validates only when
+  `[ValidateAntiForgeryToken]` or the auto-validate filter is present, and neither
+  is. The paragraph explaining *why* it is off moved to `DocumentsController`
+  anyway, because the default is not the decision — auth still has to revisit it.
+
+#### Four things the plan did not know
+
+- **`Microsoft.AspNetCore.Mvc.HttpActionResult` is `internal`.** The step was planned
+  around wrapping `ToHttpResult`'s `IResult` in it by hand, on the strength of the
+  public XML documentation for the type; the build says `CS0122`. It is internal
+  because it is not meant to be used by hand: **an action declared
+  `Task<IResult>` is converted by MVC itself.** So `ResultHttpExtensions.cs` — the
+  file the plan expected to be the centre of the change — was not touched at all,
+  and every call site kept its `.ToHttpResult(created => Results.Created(...))`
+  shape. It is also what keeps response bodies byte-identical: a `Results.*` value
+  serializes through `Http.Json.JsonOptions`, not MVC's, so
+  `Results.BadRequest("message")` is still a bare JSON string rather than the
+  `text/plain` that `ControllerBase.BadRequest("message")` would have produced.
+- **MVC does not read `ConfigureHttpJsonOptions`.** It has its own `JsonOptions`, and
+  without `JsonStringEnumConverter` added there, an incoming enum sent by name —
+  `"Interviewing"`, `"JobPosting"` — fails to bind. One converter, two options
+  objects: **requests** deserialize through MVC's copy, **responses** serialize
+  through the Http.Json copy, because of the point above. This was not on the trap
+  list and it would have been a silent break of the wire contract.
+- **Suppressing the auto-400 outright was tried first, and cost two 500s.** The
+  reasoning was sound — `CreateApplicationRequest` is a positional record with a
+  non-nullable `string Company`, so `POST {}` would have been refused by MVC with a
+  generic `ProblemDetails` while GraphQL kept answering *"Company and Title are
+  required."*, which is **finding A4 returning through the front door**. But
+  `SuppressModelStateInvalidFilter` is too big a lever: with it off, a request that
+  could not be **bound at all** binds `null` and the handler dereferences it.
+  Measured, not assumed — an empty JSON body and a 6 MB upload both answered **500,
+  `NullReferenceException`**. The narrower flag,
+  `SuppressImplicitRequiredAttributeForNonNullableReferenceTypes`, gets the whole
+  benefit and none of that: `{}` reaches the slice, an unbindable body still gets a
+  framework 400. **The rule that came out of it: the slice owns the RULES, the
+  framework owns whether there was anything to apply them to.** Both halves are now
+  pinned by tests (`Create_WithAnEmptyBody_Returns400_NotAnUnhandled500`).
+- **The upload's size limits could not be attributes.** `[RequestSizeLimit]` and
+  `[RequestFormLimits]` take compile-time constants; `DocumentOptions.MaxBytes` is
+  configuration. A `const` would work today, because nothing sets the `Documents`
+  section — and would fail silently the day something did, with config raising the
+  app's cap while the transport limit kept refusing below it, so the friendly
+  message naming the real numbers could never be reached. They are attached as
+  endpoint metadata at `MapControllers()` instead, where the bound options exist,
+  which is the same mechanism the minimal API used. **Nothing covered these limits
+  before**, which is exactly why the migration put them at risk;
+  `Upload_RefusesAnOversizedBody_BeforeTheHandlerEverRuns` now asserts the form
+  reader refuses mid-stream rather than the handler answering after the whole body
+  has been read to disk.
+
+#### Not done here
+
+`CLAUDE.md`'s "Where new code goes" still describes `<Module>Module.cs` mapping
+routes. Deliberate: 13.6 rewrites that section in one pass, and it already carries a
+banner pointing at this doc. **Diagrams not redrawn** — nothing in the schema moved,
+and they are frozen until 1.0 ships on master either way.
 
 ### 13.6 — namespaces, docs, decision record
 

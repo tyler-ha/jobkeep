@@ -309,4 +309,29 @@ public sealed class ApplicationsCrudTests(PostgresFixture fixture) : Integration
         Assert.Equal(HttpStatusCode.NoContent, first.StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, second.StatusCode);
     }
+
+    [Fact]
+    public async Task Create_WithAnEmptyBody_Returns400_NotAnUnhandled500()
+    {
+        // The line between the two validators, pinned. Phase 13.5 moved every
+        // route onto controllers, and [ApiController] then had an opinion about
+        // requests the slice had always owned: it treats a non-nullable reference
+        // type as required, so POST {} would have been refused with a generic
+        // ProblemDetails while GraphQL kept answering "Company and Title are
+        // required." Program.cs turns that implicit-required off, which is why
+        // the test above still reads the way it does.
+        //
+        // What is deliberately left ON is the auto-400 for a request that could
+        // not be BOUND at all. Suppressing that as well was tried first and cost
+        // a 500: an empty body binds to null and the handler dereferences it.
+        // A missing body is not a rule the slice can enforce — there is nothing
+        // to hand it — so the framework answers, and the assertion here is only
+        // that it answers with a 4xx rather than falling through.
+        using var empty = new StringContent("", System.Text.Encoding.UTF8, "application/json");
+
+        var response = await Client.PostAsync("/applications", empty, Ct);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await WithDbAsync(async db => Assert.Equal(0, await db.JobApplications.CountAsync(Ct)));
+    }
 }
