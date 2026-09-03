@@ -1,6 +1,7 @@
 using Jobkeep.Modules.Applications;
 using Jobkeep.Models;
 using Jobkeep.Shared;
+using Mediator;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jobkeep.Modules.Analytics;
@@ -18,13 +19,16 @@ public record StatusCount(ApplicationStatus Status, int Count);
 // stages itself to get a denominator will eventually sum them differently.
 public record ApplicationFunnel(List<StatusCount> Stages, int Total);
 
-public class StatusFunnelHandler
+public record StatusFunnel() : IRequest<SliceResult<ApplicationFunnel>>;
+
+public class StatusFunnelHandler : IRequestHandler<StatusFunnel, SliceResult<ApplicationFunnel>>
 {
     private readonly AnalyticsDbContext _db;
 
     public StatusFunnelHandler(AnalyticsDbContext db) => _db = db;
 
-    public async Task<SliceResult<ApplicationFunnel>> HandleAsync(CancellationToken ct = default)
+    public async ValueTask<SliceResult<ApplicationFunnel>> Handle(
+        StatusFunnel message, CancellationToken ct)
     {
         // PHASE 13.2 — the GROUP BY moved into a view Applications publishes, so
         // this module no longer names `job_applications`. The aggregate still

@@ -68,10 +68,11 @@ public static class AtsModule
 {
     public static IServiceCollection AddAtsModule(this IServiceCollection services)
     {
-        // Scoped, matching the contracts and the context interface behind them —
-        // every dependency of these two handlers lives for one request.
-        services.AddScoped<CheckAtsHandler>();
-        services.AddScoped<GetAtsResultHandler>();
+        // PHASE 13.4 — the AddScoped<XHandler>() lines that were here are gone.
+        // AddMediator() in Program.cs registers every IRequestHandler<,> and
+        // INotificationHandler<> it finds in the referenced module assemblies, so
+        // a new slice is now a file and a route, with nothing to remember to
+        // register. What stays below is what a mediator cannot know about.
 
         // PHASE 13.3c ENDED THE PURE-CONSUMER ASYMMETRY, on the condition the
         // old comment named. It said: "Ats is the only module that is purely a
@@ -87,11 +88,11 @@ public static class AtsModule
         services.AddScoped<IAtsContract, AtsContract>();
 
         // The other half of the same drop: `ats_results.ApplicationId` was a
-        // CASCADE. Registered as a handler rather than called by name, so
-        // Applications announces its delete and never learns this module exists
-        // — see SharedKernel/DomainEvents.cs for why that direction was chosen
-        // over a fifth contract method.
-        services.AddScoped<IDomainEventHandler<ApplicationDeleted>, OnApplicationDeleted>();
+        // CASCADE. OnApplicationDeleted subscribes rather than being called by
+        // name, so Applications announces its delete and never learns this module
+        // exists — see Jobkeep.Contracts' ApplicationEvents.cs for why that
+        // direction was chosen over a fifth contract method. Since 13.4 it needs
+        // no registration here: AddMediator() finds it.
 
         // No options class. The two limits CheckAts imposes on the model call are
         // constants in that file with the measurement beside them, for the reason

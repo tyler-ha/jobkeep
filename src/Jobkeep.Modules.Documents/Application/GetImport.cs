@@ -1,4 +1,5 @@
 using Jobkeep.Shared;
+using Mediator;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jobkeep.Modules.Documents;
@@ -10,14 +11,18 @@ namespace Jobkeep.Modules.Documents;
 // the exception that proves the rule: the user's job on this screen is to decide
 // whether the draft matches the document, and they cannot do that without the
 // document in front of them.
-public class GetImportHandler
+public record GetImport(Guid Id) : IRequest<SliceResult<ImportResponse>>;
+
+public class GetImportHandler : IRequestHandler<GetImport, SliceResult<ImportResponse>>
 {
     private readonly DocumentsDbContext _db;
 
     public GetImportHandler(DocumentsDbContext db) => _db = db;
 
-    public async Task<SliceResult<ImportResponse>> HandleAsync(Guid id, CancellationToken ct = default)
+    public async ValueTask<SliceResult<ImportResponse>> Handle(
+        GetImport message, CancellationToken ct)
     {
+        var id = message.Id;
         // Tracking is off: this is a pure read, and the draft is deserialized
         // from a column rather than mutated.
         var import = await _db.DocumentImports

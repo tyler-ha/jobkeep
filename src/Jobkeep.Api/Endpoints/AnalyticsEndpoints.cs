@@ -1,5 +1,6 @@
 using Jobkeep.Modules.Analytics;
 using Jobkeep.Shared;
+using Mediator;
 
 namespace Jobkeep.Api.Endpoints;
 
@@ -27,22 +28,22 @@ public static class AnalyticsEndpoints
         // as skillDemand(query: { top: 5 }).
         group.MapGet("/skill-demand", async (
             int? top,
-            SkillDemandHandler handler,
+            ISender sender,
             CancellationToken ct) =>
-            (await handler.HandleAsync(top, ct)).ToHttpResult());
+            (await sender.Send(new SkillDemand(top), ct)).ToHttpResult());
 
         // GET /stats/funnel — no parameters; the funnel is the whole table.
         group.MapGet("/funnel", async (
-            StatusFunnelHandler handler,
+            ISender sender,
             CancellationToken ct) =>
-            (await handler.HandleAsync(ct)).ToHttpResult());
+            (await sender.Send(new StatusFunnel(), ct)).ToHttpResult());
 
         // GET /stats/companies?top=
         group.MapGet("/companies", async (
             int? top,
-            CompanyRollupHandler handler,
+            ISender sender,
             CancellationToken ct) =>
-            (await handler.HandleAsync(top, ct)).ToHttpResult());
+            (await sender.Send(new CompanyRollup(top), ct)).ToHttpResult());
 
         return app;
     }

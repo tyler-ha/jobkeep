@@ -4,6 +4,20 @@ using Jobkeep.Modules.Applications;
 using Jobkeep.Modules.Ats;
 using Jobkeep.Modules.Documents;
 using Jobkeep.Models;
+using Mediator;
+
+// PHASE 13.4 — namespace aliases, and they are not cosmetic. Every resolver
+// below is named for the field it publishes (`GetApplication`, `CheckAts`), and
+// 13.4 gave the request record the same name — so a bare `new CheckAts(...)`
+// inside this class binds to the METHOD and does not compile. Aliasing the five
+// module namespaces keeps the call sites one line each; the alternative is
+// fully-qualified type names on every field, or renaming resolvers and changing
+// the published schema to suit a C# lookup rule.
+using Apps = Jobkeep.Modules.Applications;
+using Stats = Jobkeep.Modules.Analytics;
+using Ai = Jobkeep.Modules.Ai;
+using Docs = Jobkeep.Modules.Documents;
+using Ats = Jobkeep.Modules.Ats;
 
 namespace Jobkeep.GraphQL;
 
@@ -35,15 +49,15 @@ public class Query
 {
     public async Task<ApplicationPage> GetApplications(
         ApplicationQuery? query,
-        [Service] ListApplicationsHandler handler,
+        [Service] ISender sender,
         CancellationToken ct)
-        => (await handler.HandleAsync(query ?? new ApplicationQuery(), ct)).ValueOrThrow();
+        => (await sender.Send(new Apps.ListApplications(query ?? new ApplicationQuery()), ct)).ValueOrThrow();
 
     public async Task<ApplicationDetail> GetApplication(
         Guid id,
-        [Service] GetApplicationHandler handler,
+        [Service] ISender sender,
         CancellationToken ct)
-        => (await handler.HandleAsync(id, ct)).ValueOrThrow();
+        => (await sender.Send(new Apps.GetApplication(id), ct)).ValueOrThrow();
 
     // Phase 2.4 — the analytics fields. Same pattern: adapters over the slice
     // handlers the /stats routes call, so the cap on `top` and the shape of the
@@ -57,20 +71,20 @@ public class Query
     // (architecture.md A7, closed in Phase 2.3 and worth keeping closed).
     public async Task<List<SkillDemandItem>> GetSkillDemand(
         int? top,
-        [Service] SkillDemandHandler handler,
+        [Service] ISender sender,
         CancellationToken ct)
-        => (await handler.HandleAsync(top, ct)).ValueOrThrow();
+        => (await sender.Send(new Stats.SkillDemand(top), ct)).ValueOrThrow();
 
     public async Task<ApplicationFunnel> GetStatusFunnel(
-        [Service] StatusFunnelHandler handler,
+        [Service] ISender sender,
         CancellationToken ct)
-        => (await handler.HandleAsync(ct)).ValueOrThrow();
+        => (await sender.Send(new Stats.StatusFunnel(), ct)).ValueOrThrow();
 
     public async Task<List<CompanyRollupItem>> GetCompanyRollup(
         int? top,
-        [Service] CompanyRollupHandler handler,
+        [Service] ISender sender,
         CancellationToken ct)
-        => (await handler.HandleAsync(top, ct)).ValueOrThrow();
+        => (await sender.Send(new Stats.CompanyRollup(top), ct)).ValueOrThrow();
 
     // Phase 4 — reads back the stored analysis without re-running the model.
     // The counterpart to the analyzePosting mutation, and the reason the analysis
@@ -79,9 +93,9 @@ public class Query
     // Modules/Ai/GetAnalysis.cs.
     public async Task<AnalysisSummaryResponse> GetAnalysis(
         Guid applicationId,
-        [Service] GetAnalysisHandler handler,
+        [Service] ISender sender,
         CancellationToken ct)
-        => (await handler.HandleAsync(applicationId, ct)).ValueOrThrow();
+        => (await sender.Send(new Ai.GetAnalysis(applicationId), ct)).ValueOrThrow();
 
     // Phase 4.5 — the document import review cycle.
     //
@@ -91,33 +105,33 @@ public class Query
     // draft either way, decided by the same handlers.
     public async Task<List<ImportSummary>> GetImports(
         ImportStatus? status,
-        [Service] ListImportsHandler handler,
+        [Service] ISender sender,
         CancellationToken ct)
-        => (await handler.HandleAsync(status, ct)).ValueOrThrow();
+        => (await sender.Send(new Docs.ListImports(status), ct)).ValueOrThrow();
 
     // Returns the extracted text as well as the draft — the review screen needs
     // the document to check the draft against. GetImport.cs notes why that is a
     // deliberate exception to this codebase's habit of never over-fetching.
     public async Task<ImportResponse> GetImport(
         Guid id,
-        [Service] GetImportHandler handler,
+        [Service] ISender sender,
         CancellationToken ct)
-        => (await handler.HandleAsync(id, ct)).ValueOrThrow();
+        => (await sender.Send(new Docs.GetImport(id), ct)).ValueOrThrow();
 
     // Phase 6 step 6.1 — the résumé read surface, which did not exist until the
     // front end needed a picker. Same adapter pattern; the list/detail split (no
     // résumé text in the list, text in the detail) is decided in the handlers, so
     // a GraphQL client cannot select its way past it.
     public async Task<List<ResumeSummary>> GetResumes(
-        [Service] ListResumesHandler handler,
+        [Service] ISender sender,
         CancellationToken ct)
-        => (await handler.HandleAsync(ct)).ValueOrThrow();
+        => (await sender.Send(new Docs.ListResumes(), ct)).ValueOrThrow();
 
     public async Task<ResumeDetail> GetResume(
         Guid id,
-        [Service] GetResumeHandler handler,
+        [Service] ISender sender,
         CancellationToken ct)
-        => (await handler.HandleAsync(id, ct)).ValueOrThrow();
+        => (await sender.Send(new Docs.GetResume(id), ct)).ValueOrThrow();
 
     // Phase 5 — the stored ATS check. A query, not a mutation, because it reads
     // and nothing else; the checkAts mutation is what computes it. Same split as
@@ -125,7 +139,7 @@ public class Query
     // stored so that reading it back cannot quietly become a different answer.
     public async Task<AtsCheckResponse> GetAtsResult(
         Guid applicationId,
-        [Service] GetAtsResultHandler handler,
+        [Service] ISender sender,
         CancellationToken ct)
-        => (await handler.HandleAsync(applicationId, ct)).ValueOrThrow();
+        => (await sender.Send(new Ats.GetAtsResult(applicationId), ct)).ValueOrThrow();
 }

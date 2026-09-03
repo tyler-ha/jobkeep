@@ -5,6 +5,7 @@ using Jobkeep.Modules.Applications;
 using Jobkeep.Modules.Documents;
 using Jobkeep.Modules.Skills;
 using Jobkeep.Shared;
+using Mediator;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
 
@@ -130,7 +131,11 @@ internal sealed class CoverageDraft
     public List<int> EvidencedRequirementNumbers { get; set; } = new();
 }
 
-public class CheckAtsHandler
+public record CheckAts(
+    Guid ApplicationId,
+    Guid? ResumeId = null) : IRequest<SliceResult<AtsCheckResponse>>;
+
+public class CheckAtsHandler : IRequestHandler<CheckAts, SliceResult<AtsCheckResponse>>
 {
     // A resume long enough to say something and short enough for a 3B model's
     // context window. The real CV this was built against is 3,262 characters, so
@@ -179,9 +184,10 @@ public class CheckAtsHandler
         _model = model;
     }
 
-    public async Task<SliceResult<AtsCheckResponse>> HandleAsync(
-        Guid applicationId, Guid? resumeId = null, CancellationToken ct = default)
+    public async ValueTask<SliceResult<AtsCheckResponse>> Handle(
+        CheckAts message, CancellationToken ct)
     {
+        var (applicationId, resumeId) = message;
         // ---------------------------------------------------------------
         // Stage 1 — resolve
         // ---------------------------------------------------------------

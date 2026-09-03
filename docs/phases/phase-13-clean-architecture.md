@@ -1,11 +1,12 @@
 # Phase 13 — module-owned Clean Architecture, on the road to services
 
-**Status: In progress. Steps 13.1, 13.2 (a–e) and 13.3 (a–c) done, 2026-09-01 to
-2026-09-02** (branch `phase-13/module-boundaries`, suite 239 → … → 254 → 256 → 266
-green).
+**Status: In progress. Steps 13.1, 13.2 (a–e), 13.3 (a–c) and 13.4 done, 2026-09-01
+to 2026-09-03** (branches `phase-13/module-boundaries` then `phase-13/dispatch`,
+suite 239 → … → 254 → 256 → 266 → 268 green).
 **13.2 is complete: no module names another module's table. 13.3 is complete: no
 module SHARES a table, a context or a schema with another, and the six foreign keys
-that used to cross a boundary are replaced in application code.** 13.4–13.6 remain.
+that used to cross a boundary are replaced in application code. 13.4 is complete:
+neither API surface names a handler — both send a message.** 13.5–13.6 remain.
 
 **This doc was rewritten on 2026-09-01.** The version before it (written the same
 day, commit `bf968a0`) planned a **layer-first** migration: one `Domain`, one
@@ -595,24 +596,28 @@ deleter hold the list of everyone who cares, so a sixth module means editing
 Applications, and at service scale it means N synchronous calls on the delete path,
 any of which can fail and none of which the caller can usefully retry. So
 Applications *announces* and the interested modules subscribe.
-`SharedKernel/DomainEvents.cs` is 3 types and ~30 lines and argues all of it.
-**13.4 replaces those three types with the chosen mediator's `INotification`; the
-call sites do not move**, which is the reason for writing it now rather than
-waiting one step.
+`SharedKernel/DomainEvents.cs` was 3 types and ~30 lines and argued all of it.
+**13.4 replaced those three types with `INotification`, `INotificationHandler<>`
+and `IPublisher`, deleted the file, and did not touch either call site** — which is
+the whole return on writing it a step early. The argument moved to
+`Jobkeep.Contracts/Applications/ApplicationEvents.cs`, beside the events.
 
 Three details worth keeping:
 
-- **There is no `IDomainEvent` marker interface**, and it is not an oversight. Event
-  types are module vocabulary, so they live in `Jobkeep.Contracts` — and Contracts
-  may reference no other Jobkeep assembly, SharedKernel included
-  (`Foundation_projects_depend_on_nothing_of_ours`). A marker would force exactly
-  that reference. `where TEvent : class` is what is left; it is weaker and the file
-  says so.
-- **SharedKernel still has zero package references.** The publisher resolves handlers
-  through `System.IServiceProvider.GetService(typeof(IEnumerable<...>))` rather than
-  the `GetServices<T>` extension, because that extension would drag
-  `Microsoft.Extensions.DependencyInjection.Abstractions` into every module at once
-  — which is precisely what that csproj's comment exists to prevent.
+- ~~**There is no `IDomainEvent` marker interface**~~ — **RESOLVED at 13.4.** The
+  reasoning held exactly as written: event types are module vocabulary, so they live
+  in `Jobkeep.Contracts`, and Contracts may reference no other Jobkeep assembly
+  (`Foundation_projects_depend_on_nothing_of_ours`), so a marker in SharedKernel
+  would have forced that reference. What changed is where the marker comes from: a
+  PACKAGE is not a Jobkeep assembly, so `Mediator.Abstractions` supplies
+  `INotification` and the constraint that could not be written by hand now exists.
+  `where TEvent : class` is gone with the publisher that needed it.
+- **SharedKernel still has zero package references, and now has one file fewer.**
+  The hand-rolled publisher resolved handlers through
+  `System.IServiceProvider.GetService(typeof(IEnumerable<...>))` rather than the
+  `GetServices<T>` extension, precisely to keep that promise. 13.4 deleted the file
+  instead, so the constraint is kept by having nothing there rather than by working
+  around it.
 - **Publish AFTER the commit, and the ordering is the decision.** Publishing first
   would delete the ATS result of an application that then failed to delete: a live
   row loses a stored judgement, and re-earning it costs a model call the user waits
@@ -882,6 +887,57 @@ step was told to confirm and record:
 The third option — hand-rolling the sender the way 13.3c hand-rolled the publisher —
 was on the table and refused: ~20 lines is cheap, but this seam is the one a reader
 of the repo is meant to recognise, and a bespoke `ISender` makes them read it instead.
+
+**DONE 2026-09-03**, on branch `phase-13/dispatch`. Suite 266 → 268, no migration, no
+`web/` change, `has-pending-model-changes` clean on all five contexts. Six deviations
+from the plan above, all of them worth keeping:
+
+- **The counts were wrong, and the shape was wronger.** 29 request handlers, not 33;
+  57 call sites, not 53; plus 2 notification handlers. But the real gap is that the
+  plan said "33 requests → `IRequest<T>`", implying a rename. **There were no request
+  objects.** Handlers took scalars — `(Guid id, XRequest request, CancellationToken)`,
+  and `ImportDocument` took six parameters — so every slice needed a request record
+  *created*. That, not the `Send(...)` sweep, was the cost of this step.
+- **The wire DTOs are wrapped, not marked.** `UpdateApplicationRequest` and friends
+  stay plain records and the command wraps them (`new UpdateApplication(id, request)`).
+  Making them `IRequest<T>` directly would have been fewer types and would have
+  stamped the mediator's marker onto the public API contract — the same mistake as
+  returning an EF entity, one layer up.
+- **Naming: the record takes the use case's name, the handler keeps `...Handler`.**
+  So a call site reads `Send(new GetApplication(id), ct)`. The `Handle` parameter is
+  called `message` in all 29, uniformly, so that the five slices whose wire DTO is
+  already named `request` do not need a different shape from the other 24.
+- **GraphQL needed namespace aliases.** Every resolver is named for the field it
+  publishes, 13.4 gave the request record the same name, and inside `Query`/`Mutation`
+  a bare `new CheckAts(...)` binds to the METHOD and does not compile. Five aliases
+  (`Apps`, `Stats`, `Ai`, `Docs`, `Ats`) at the top of each file; the alternatives
+  were fully-qualified names on 28 fields, or renaming resolvers and changing the
+  published schema to suit a C# lookup rule.
+- **`Mediator.Abstractions` is pinned in `Jobkeep.Contracts`, not in the six module
+  csprojs**, so one reference reaches all of them and there is one version to move
+  instead of seven. That makes `Jobkeep.Contracts.csproj`'s "also has no package
+  references, on purpose" false, and the comment was rewritten rather than left: the
+  rule it protects (anything here must survive a network hop) is satisfied, because a
+  record that implements `INotification` serialises exactly as it did before.
+  `Jobkeep.SharedKernel` still has zero, which is the promise that was load-bearing.
+- **`ApplicationContract` stopped naming handlers.** It injected
+  `CreateApplicationHandler` and `AddRequirementToPostingHandler` directly since
+  13.2c; it takes `ISender` now. Same delegation, but a contract whose whole purpose
+  is to survive the handler being renamed or split should not name it.
+
+**One thing a mediator costs, and it is bought back rather than assumed.**
+`ISender.Send` takes `IRequest<T>`, so the compiler checks the response type and
+nothing else: a request whose handler is missing, misnamed, or in a project the
+composition root does not reference compiles at every call site and throws
+`MissingMessageHandlerException` at runtime, on whichever route nobody clicked. That
+is exactly the coupling the old `XHandler handler` parameter made the compiler
+enforce. `tests/Jobkeep.Tests/Architecture/DispatchTests.cs` is the two tests that
+replace it — every `IRequest<>` has exactly one handler, every `INotification` has at
+least one — by reflection over the same assembly graph the source generator walks. No
+container, no database.
+
+**Diagrams deliberately not redrawn** — nothing in the schema moved, and they are
+frozen until 1.0 ships on master either way.
 
 ### 13.5 — controllers
 

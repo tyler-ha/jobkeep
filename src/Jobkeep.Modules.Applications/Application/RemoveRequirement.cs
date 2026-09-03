@@ -1,4 +1,5 @@
 using Jobkeep.Shared;
+using Mediator;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jobkeep.Modules.Applications;
@@ -11,15 +12,20 @@ namespace Jobkeep.Modules.Applications;
 // address — a horizontal-access bug today, and a cross-tenant one the moment
 // owner scoping lands (security-and-data-audit.md F1). Scoping the query to the
 // route's parent is the cheap habit that prevents it.
-public class RemoveRequirementHandler
+public record RemoveRequirement(
+    Guid ApplicationId,
+    Guid RequirementId) : IRequest<SliceResult<bool>>;
+
+public class RemoveRequirementHandler : IRequestHandler<RemoveRequirement, SliceResult<bool>>
 {
     private readonly ApplicationsDbContext _db;
 
     public RemoveRequirementHandler(ApplicationsDbContext db) => _db = db;
 
-    public async Task<SliceResult<bool>> HandleAsync(
-        Guid applicationId, Guid requirementId, CancellationToken ct = default)
+    public async ValueTask<SliceResult<bool>> Handle(
+        RemoveRequirement message, CancellationToken ct)
     {
+        var (applicationId, requirementId) = message;
         var postingId = await _db.JobApplications
             .Where(a => a.Id == applicationId)
             .Select(a => a.PostingId)

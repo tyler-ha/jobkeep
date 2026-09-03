@@ -55,11 +55,11 @@ public static class AnalyticsModule
 {
     public static IServiceCollection AddAnalyticsModule(this IServiceCollection services)
     {
-        // Scoped, matching the context — a singleton handler holding a scoped
-        // context is the captive-dependency bug ApplicationsModule calls out.
-        services.AddScoped<SkillDemandHandler>();
-        services.AddScoped<StatusFunnelHandler>();
-        services.AddScoped<CompanyRollupHandler>();
+        // PHASE 13.4 — the AddScoped<XHandler>() lines that were here are gone.
+        // AddMediator() in Program.cs registers every IRequestHandler<,> it finds
+        // in the referenced module assemblies, so this module's slices need no
+        // registration at all and this method now registers only its context and
+        // its contracts.
         return services;
     }
 }

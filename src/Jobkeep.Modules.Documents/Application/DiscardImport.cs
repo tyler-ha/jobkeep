@@ -1,5 +1,6 @@
 using Jobkeep.Models;
 using Jobkeep.Shared;
+using Mediator;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jobkeep.Modules.Documents;
@@ -18,14 +19,18 @@ namespace Jobkeep.Modules.Documents;
 // and it would then be a deliberate retention decision rather than an accident
 // of the delete button. The security audit's retention item (APP 11.2) is where
 // that decision belongs, because a discarded resume is still a resume.
-public class DiscardImportHandler
+public record DiscardImport(Guid Id) : IRequest<SliceResult<bool>>;
+
+public class DiscardImportHandler : IRequestHandler<DiscardImport, SliceResult<bool>>
 {
     private readonly DocumentsDbContext _db;
 
     public DiscardImportHandler(DocumentsDbContext db) => _db = db;
 
-    public async Task<SliceResult<bool>> HandleAsync(Guid id, CancellationToken ct = default)
+    public async ValueTask<SliceResult<bool>> Handle(
+        DiscardImport message, CancellationToken ct)
     {
+        var id = message.Id;
         var import = await _db.DocumentImports.FirstOrDefaultAsync(d => d.Id == id, ct);
         if (import is null)
             return SliceResult<bool>.NotFound($"Import {id} not found.");

@@ -1,6 +1,7 @@
 using Jobkeep.Modules.Applications;
 using Jobkeep.Modules.Skills;
 using Jobkeep.Shared;
+using Mediator;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jobkeep.Modules.Analytics;
@@ -24,7 +25,9 @@ namespace Jobkeep.Modules.Analytics;
 // would be a second implementation of the same question.
 public record SkillDemandItem(string Name, string? Category, int PostingCount);
 
-public class SkillDemandHandler
+public record SkillDemand(int? Top) : IRequest<SliceResult<List<SkillDemandItem>>>;
+
+public class SkillDemandHandler : IRequestHandler<SkillDemand, SliceResult<List<SkillDemandItem>>>
 {
     // A cap, not a preference — same reasoning as ListApplicationsHandler's
     // MaxPageSize. `top` reaches Take() directly off an unauthenticated query
@@ -41,9 +44,10 @@ public class SkillDemandHandler
         _skills = skills;
     }
 
-    public async Task<SliceResult<List<SkillDemandItem>>> HandleAsync(
-        int? top, CancellationToken ct = default)
+    public async ValueTask<SliceResult<List<SkillDemandItem>>> Handle(
+        SkillDemand message, CancellationToken ct)
     {
+        var top = message.Top;
         var take = top ?? DefaultTop;
 
         // Rejects rather than clamps, matching the list slice: a caller asking

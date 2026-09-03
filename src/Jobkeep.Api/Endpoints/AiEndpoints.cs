@@ -1,5 +1,6 @@
 using Jobkeep.Modules.Ai;
 using Jobkeep.Shared;
+using Mediator;
 
 namespace Jobkeep.Api.Endpoints;
 
@@ -30,17 +31,17 @@ public static class AiEndpoints
         // there before.
         group.MapPost("/{id:guid}/analyze", async (
             Guid id,
-            AnalyzePostingHandler handler,
+            ISender sender,
             CancellationToken ct) =>
-            (await handler.HandleAsync(id, ct)).ToHttpResult());
+            (await sender.Send(new AnalyzePosting(id), ct)).ToHttpResult());
 
         // GET /applications/{id}/analysis — reads back what was stored, without
         // paying for inference again.
         group.MapGet("/{id:guid}/analysis", async (
             Guid id,
-            GetAnalysisHandler handler,
+            ISender sender,
             CancellationToken ct) =>
-            (await handler.HandleAsync(id, ct)).ToHttpResult());
+            (await sender.Send(new GetAnalysis(id), ct)).ToHttpResult());
 
         return app;
     }

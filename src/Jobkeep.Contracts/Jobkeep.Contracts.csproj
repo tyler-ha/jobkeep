@@ -5,11 +5,34 @@
        module's project — that single rule is what makes extracting a module a
        directory move instead of a redesign.
 
-       Also has no package references, on purpose. When a module becomes its own
-       service, this project is what the wire schema is generated from, so
-       anything that could not survive a network hop does not belong in it. -->
+       ONE package reference, added in Phase 13.4, and the rule it has to satisfy
+       is unchanged: when a module becomes its own service, this project is what
+       the wire schema is generated from, so anything that could not survive a
+       network hop does not belong in it. Mediator.Abstractions is marker
+       interfaces and two handler contracts — IRequest<T>, INotification and
+       their handlers — so a message type that implements one serialises exactly
+       as it did before.
+
+       It is declared HERE rather than in each of the six module csprojs, and
+       that is deliberate rather than lazy: every module already references
+       Contracts, so one pin flows to all of them and there is one version to
+       move instead of seven. (The EF packages next door are named per project
+       for the opposite reason — Npgsql declares a RANGE on EF Core, so a
+       transitive-only reference lands on the range's floor. This package is
+       nobody's transitive dependency but ours, so there is no floor to land on.)
+
+       The upside is worth naming, because it retires an argument written down in
+       SharedKernel/DomainEvents.cs at 13.3c: there was no IDomainEvent marker
+       because Contracts may reference no other Jobkeep assembly, and a marker in
+       SharedKernel would have forced one. A marker arriving from a PACKAGE has
+       no such problem, so INotification is the constraint that could not be
+       written by hand. -->
   <PropertyGroup>
     <RootNamespace>Jobkeep.Contracts</RootNamespace>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Mediator.Abstractions" Version="3.0.2" />
+  </ItemGroup>
 
 </Project>

@@ -1,5 +1,6 @@
 using Jobkeep.Modules.Applications;
 using Jobkeep.Shared;
+using Mediator;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jobkeep.Modules.Analytics;
@@ -15,7 +16,9 @@ namespace Jobkeep.Modules.Analytics;
 
 public record CompanyRollupItem(string Name, int ApplicationCount);
 
-public class CompanyRollupHandler
+public record CompanyRollup(int? Top) : IRequest<SliceResult<List<CompanyRollupItem>>>;
+
+public class CompanyRollupHandler : IRequestHandler<CompanyRollup, SliceResult<List<CompanyRollupItem>>>
 {
     private const int MaxTop = 100;
     private const int DefaultTop = 20;
@@ -24,9 +27,10 @@ public class CompanyRollupHandler
 
     public CompanyRollupHandler(AnalyticsDbContext db) => _db = db;
 
-    public async Task<SliceResult<List<CompanyRollupItem>>> HandleAsync(
-        int? top, CancellationToken ct = default)
+    public async ValueTask<SliceResult<List<CompanyRollupItem>>> Handle(
+        CompanyRollup message, CancellationToken ct)
     {
+        var top = message.Top;
         var take = top ?? DefaultTop;
 
         if (take < 1 || take > MaxTop)

@@ -2,6 +2,7 @@ using Jobkeep.Models;
 using Jobkeep.Modules.Applications;
 using Jobkeep.Modules.Skills;
 using Jobkeep.Shared;
+using Mediator;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jobkeep.Modules.Documents;
@@ -55,7 +56,9 @@ public record CommitResponse(
     int EducationsCreated,
     int RequirementsCreated);
 
-public class CommitImportHandler
+public record CommitImport(Guid Id) : IRequest<SliceResult<CommitResponse>>;
+
+public class CommitImportHandler : IRequestHandler<CommitImport, SliceResult<CommitResponse>>
 {
     private readonly DocumentsDbContext _db;
     private readonly ISkillCatalog _skills;
@@ -71,8 +74,10 @@ public class CommitImportHandler
         _applications = applications;
     }
 
-    public async Task<SliceResult<CommitResponse>> HandleAsync(Guid id, CancellationToken ct = default)
+    public async ValueTask<SliceResult<CommitResponse>> Handle(
+        CommitImport message, CancellationToken ct)
     {
+        var id = message.Id;
         var import = await _db.DocumentImports.FirstOrDefaultAsync(d => d.Id == id, ct);
         if (import is null)
             return SliceResult<CommitResponse>.NotFound($"Import {id} not found.");
@@ -312,7 +317,7 @@ public class CommitImportHandler
         // write. It is a DUPLICATE one: if anything after the application insert
         // failed, the application and its company were already committed while
         // this import still read AwaitingReview — so the double-click guard in
-        // HandleAsync did not fire, and confirming again logged a SECOND
+        // Handle did not fire, and confirming again logged a SECOND
         // application for the same document. That is the worst outcome available
         // to a feature whose entire premise is that nothing exists until a human
         // confirms it.

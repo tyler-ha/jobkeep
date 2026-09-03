@@ -1,6 +1,7 @@
 using Jobkeep.Models;
 using Jobkeep.Modules.Skills;
 using Jobkeep.Shared;
+using Mediator;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jobkeep.Modules.Applications;
@@ -25,7 +26,11 @@ public record AddSkillToPostingRequest(string SkillName, string? Category, bool 
 // navigation cycle along with it.
 public record PostingSkillResponse(string SkillName, string? Category, bool IsRequired, SkillSource Source);
 
-public class AddSkillToPostingHandler
+public record AddSkillToPosting(
+    Guid ApplicationId,
+    AddSkillToPostingRequest Request) : IRequest<SliceResult<PostingSkillResponse>>;
+
+public class AddSkillToPostingHandler : IRequestHandler<AddSkillToPosting, SliceResult<PostingSkillResponse>>
 {
     private readonly ApplicationsDbContext _db;
     private readonly ISkillCatalog _skills;
@@ -45,9 +50,10 @@ public class AddSkillToPostingHandler
         _skills = skills;
     }
 
-    public async Task<SliceResult<PostingSkillResponse>> HandleAsync(
-        Guid applicationId, AddSkillToPostingRequest request, CancellationToken ct = default)
+    public async ValueTask<SliceResult<PostingSkillResponse>> Handle(
+        AddSkillToPosting message, CancellationToken ct)
     {
+        var (applicationId, request) = message;
         // Validation lives in the handler, not at either edge, so REST and
         // GraphQL cannot enforce different rules (architecture.md A4).
         var skillName = request.SkillName?.Trim();

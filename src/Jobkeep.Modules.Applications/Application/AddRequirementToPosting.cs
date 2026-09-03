@@ -1,5 +1,6 @@
 using Jobkeep.Models;
 using Jobkeep.Shared;
+using Mediator;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jobkeep.Modules.Applications;
@@ -19,15 +20,20 @@ public record AddRequirementToPostingRequest(string Text, RequirementKind Kind, 
 
 public record RequirementResponse(Guid Id, string Text, RequirementKind Kind, bool IsMustHave);
 
-public class AddRequirementToPostingHandler
+public record AddRequirementToPosting(
+    Guid ApplicationId,
+    AddRequirementToPostingRequest Request) : IRequest<SliceResult<RequirementResponse>>;
+
+public class AddRequirementToPostingHandler : IRequestHandler<AddRequirementToPosting, SliceResult<RequirementResponse>>
 {
     private readonly ApplicationsDbContext _db;
 
     public AddRequirementToPostingHandler(ApplicationsDbContext db) => _db = db;
 
-    public async Task<SliceResult<RequirementResponse>> HandleAsync(
-        Guid applicationId, AddRequirementToPostingRequest request, CancellationToken ct = default)
+    public async ValueTask<SliceResult<RequirementResponse>> Handle(
+        AddRequirementToPosting message, CancellationToken ct)
     {
+        var (applicationId, request) = message;
         var text = request.Text?.Trim();
         if (string.IsNullOrEmpty(text))
             return SliceResult<RequirementResponse>.Invalid("text is required.");

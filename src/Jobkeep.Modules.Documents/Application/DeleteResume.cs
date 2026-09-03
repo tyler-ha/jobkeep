@@ -1,6 +1,7 @@
 using Jobkeep.Modules.Applications;
 using Jobkeep.Modules.Ats;
 using Jobkeep.Shared;
+using Mediator;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jobkeep.Modules.Documents;
@@ -50,7 +51,9 @@ namespace Jobkeep.Modules.Documents;
 // The order matters slightly and is cheap: ask Applications first, because an
 // application referencing a résumé is the far commoner case and the message a
 // user is far likelier to see.
-public class DeleteResumeHandler
+public record DeleteResume(Guid Id) : IRequest<SliceResult<bool>>;
+
+public class DeleteResumeHandler : IRequestHandler<DeleteResume, SliceResult<bool>>
 {
     private readonly DocumentsDbContext _db;
     private readonly IApplicationContract _applications;
@@ -66,8 +69,10 @@ public class DeleteResumeHandler
         _ats = ats;
     }
 
-    public async Task<SliceResult<bool>> HandleAsync(Guid id, CancellationToken ct = default)
+    public async ValueTask<SliceResult<bool>> Handle(
+        DeleteResume message, CancellationToken ct)
     {
+        var id = message.Id;
         var resume = await _db.Resumes.FirstOrDefaultAsync(r => r.Id == id, ct);
         if (resume is null)
             return SliceResult<bool>.NotFound($"Resume {id} not found.");

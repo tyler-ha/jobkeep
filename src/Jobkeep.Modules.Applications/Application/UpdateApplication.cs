@@ -2,6 +2,7 @@ using Jobkeep.Models;
 using Jobkeep.Modules.Documents;
 using Jobkeep.Modules.Skills;
 using Jobkeep.Shared;
+using Mediator;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jobkeep.Modules.Applications;
@@ -28,7 +29,11 @@ public record UpdateApplicationRequest(
     string? Description,
     Guid? ResumeId);
 
-public class UpdateApplicationHandler
+public record UpdateApplication(
+    Guid Id,
+    UpdateApplicationRequest Request) : IRequest<SliceResult<ApplicationDetail>>;
+
+public class UpdateApplicationHandler : IRequestHandler<UpdateApplication, SliceResult<ApplicationDetail>>
 {
     private readonly ApplicationsDbContext _db;
     private readonly ISkillCatalog _skills;
@@ -47,9 +52,10 @@ public class UpdateApplicationHandler
         _resumes = resumes;
     }
 
-    public async Task<SliceResult<ApplicationDetail>> HandleAsync(
-        Guid id, UpdateApplicationRequest request, CancellationToken ct = default)
+    public async ValueTask<SliceResult<ApplicationDetail>> Handle(
+        UpdateApplication message, CancellationToken ct)
     {
+        var (id, request) = message;
         // `is not null` distinguishes "omitted" from "sent as blank": the first
         // is a no-op, the second is an error. Collapsing them into
         // IsNullOrWhiteSpace would make a blank title silently ignored instead

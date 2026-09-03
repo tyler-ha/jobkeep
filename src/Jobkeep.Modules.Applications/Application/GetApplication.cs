@@ -1,6 +1,7 @@
 using Jobkeep.Modules.Documents;
 using Jobkeep.Modules.Skills;
 using Jobkeep.Shared;
+using Mediator;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jobkeep.Modules.Applications;
@@ -13,7 +14,13 @@ namespace Jobkeep.Modules.Applications;
 // selecting named columns, and what leaves the handler is a DTO the schema can
 // change underneath (architecture.md A2).
 
-public class GetApplicationHandler
+// PHASE 13.4. The request, and it is a new type rather than a renamed one: the
+// handler used to take a bare Guid, so there was nothing for a mediator to
+// dispatch ON. Naming is the use case for the message and `...Handler` for the
+// thing that runs it, so a call site reads Send(new GetApplication(id)).
+public record GetApplication(Guid Id) : IRequest<SliceResult<ApplicationDetail>>;
+
+public class GetApplicationHandler : IRequestHandler<GetApplication, SliceResult<ApplicationDetail>>
 {
     private readonly ApplicationsDbContext _db;
     private readonly ISkillCatalog _skills;
@@ -32,9 +39,11 @@ public class GetApplicationHandler
         _resumes = resumes;
     }
 
-    public async Task<SliceResult<ApplicationDetail>> HandleAsync(
-        Guid id, CancellationToken ct = default)
+    public async ValueTask<SliceResult<ApplicationDetail>> Handle(
+        GetApplication request, CancellationToken ct)
     {
+        var id = request.Id;
+
         var row = await _db.JobApplications
             .AsNoTracking()
             .Where(a => a.Id == id)

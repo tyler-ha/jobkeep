@@ -1,6 +1,7 @@
 using Jobkeep.Models;
 using Jobkeep.Modules.Skills;
 using Jobkeep.Shared;
+using Mediator;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jobkeep.Modules.Documents;
@@ -54,7 +55,9 @@ public record ResumeDetail(
     List<ResumeExperienceItem> Experiences,
     List<ResumeEducationItem> Educations);
 
-public class GetResumeHandler
+public record GetResume(Guid Id) : IRequest<SliceResult<ResumeDetail>>;
+
+public class GetResumeHandler : IRequestHandler<GetResume, SliceResult<ResumeDetail>>
 {
     // The shape SQL can actually produce, which since 13.2c is no longer the
     // shape the API returns. Its skills are ids: the names live in another
@@ -93,8 +96,10 @@ public class GetResumeHandler
         _skills = skills;
     }
 
-    public async Task<SliceResult<ResumeDetail>> HandleAsync(Guid id, CancellationToken ct = default)
+    public async ValueTask<SliceResult<ResumeDetail>> Handle(
+        GetResume message, CancellationToken ct)
     {
+        var id = message.Id;
         var row = await _db.Resumes
             .AsNoTracking()
             .Where(r => r.Id == id)

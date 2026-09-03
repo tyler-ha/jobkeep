@@ -2,6 +2,7 @@ using Jobkeep.Models;
 using Jobkeep.Modules.Documents;
 using Jobkeep.Modules.Skills;
 using Jobkeep.Shared;
+using Mediator;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jobkeep.Modules.Applications;
@@ -32,7 +33,10 @@ public record CreateApplicationRequest(
     // created by hand.
     Guid? ResumeId);
 
-public class CreateApplicationHandler
+public record CreateApplication(
+    CreateApplicationRequest Request) : IRequest<SliceResult<ApplicationDetail>>;
+
+public class CreateApplicationHandler : IRequestHandler<CreateApplication, SliceResult<ApplicationDetail>>
 {
     private readonly ApplicationsDbContext _db;
     private readonly ISkillCatalog _skills;
@@ -51,9 +55,10 @@ public class CreateApplicationHandler
         _resumes = resumes;
     }
 
-    public async Task<SliceResult<ApplicationDetail>> HandleAsync(
-        CreateApplicationRequest request, CancellationToken ct = default)
+    public async ValueTask<SliceResult<ApplicationDetail>> Handle(
+        CreateApplication message, CancellationToken ct)
     {
+        var request = message.Request;
         var company = request.Company?.Trim();
         var title = request.Title?.Trim();
 

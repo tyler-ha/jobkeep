@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Jobkeep.Models;
 using Jobkeep.Shared;
+using Mediator;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jobkeep.Modules.Documents;
@@ -18,15 +19,18 @@ namespace Jobkeep.Modules.Documents;
 // simpler on both sides and has no merge semantics to get wrong. The draft is a
 // document, and PATCH-ing a document with nested arrays means inventing a
 // path syntax for "the third experience entry's second bullet".
-public class ReviewImportHandler
+public record ReviewImport(Guid Id, ImportDraft Draft) : IRequest<SliceResult<ImportResponse>>;
+
+public class ReviewImportHandler : IRequestHandler<ReviewImport, SliceResult<ImportResponse>>
 {
     private readonly DocumentsDbContext _db;
 
     public ReviewImportHandler(DocumentsDbContext db) => _db = db;
 
-    public async Task<SliceResult<ImportResponse>> HandleAsync(
-        Guid id, ImportDraft draft, CancellationToken ct = default)
+    public async ValueTask<SliceResult<ImportResponse>> Handle(
+        ReviewImport message, CancellationToken ct)
     {
+        var (id, draft) = message;
         var import = await _db.DocumentImports.FirstOrDefaultAsync(d => d.Id == id, ct);
         if (import is null)
             return SliceResult<ImportResponse>.NotFound($"Import {id} not found.");

@@ -1,5 +1,6 @@
 using Jobkeep.Modules.Skills;
 using Jobkeep.Shared;
+using Mediator;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jobkeep.Modules.Applications;
@@ -11,7 +12,11 @@ namespace Jobkeep.Modules.Applications;
 // skill may be attached to other postings, and the FK from posting_skills to
 // skills is DeleteBehavior.Restrict precisely so a shared row can't vanish
 // underneath them. "Remove C# from this job" is not "C# is no longer a skill".
-public class RemoveSkillFromPostingHandler
+public record RemoveSkillFromPosting(
+    Guid ApplicationId,
+    string SkillName) : IRequest<SliceResult<bool>>;
+
+public class RemoveSkillFromPostingHandler : IRequestHandler<RemoveSkillFromPosting, SliceResult<bool>>
 {
     private readonly ApplicationsDbContext _db;
     private readonly ISkillCatalog _skills;
@@ -22,9 +27,10 @@ public class RemoveSkillFromPostingHandler
         _skills = skills;
     }
 
-    public async Task<SliceResult<bool>> HandleAsync(
-        Guid applicationId, string skillName, CancellationToken ct = default)
+    public async ValueTask<SliceResult<bool>> Handle(
+        RemoveSkillFromPosting message, CancellationToken ct)
     {
+        var (applicationId, skillName) = message;
         var name = skillName?.Trim();
         if (string.IsNullOrEmpty(name))
             return SliceResult<bool>.Invalid("skillName is required.");

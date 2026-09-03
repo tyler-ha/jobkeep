@@ -1,6 +1,7 @@
 using Jobkeep.Models;
 using Jobkeep.Modules.Skills;
 using Jobkeep.Shared;
+using Mediator;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jobkeep.Modules.Applications;
@@ -73,7 +74,9 @@ public record ApplicationPage(
     int PageSize,
     int TotalPages);
 
-public class ListApplicationsHandler
+public record ListApplications(ApplicationQuery Query) : IRequest<SliceResult<ApplicationPage>>;
+
+public class ListApplicationsHandler : IRequestHandler<ListApplications, SliceResult<ApplicationPage>>
 {
     // A cap, not a preference. PageSize is caller-supplied and reaches Take()
     // directly; without a ceiling, `?pageSize=1000000` is a free denial of
@@ -105,9 +108,10 @@ public class ListApplicationsHandler
         DateOnly DateApplied,
         List<Guid> SkillIds);
 
-    public async Task<SliceResult<ApplicationPage>> HandleAsync(
-        ApplicationQuery query, CancellationToken ct = default)
+    public async ValueTask<SliceResult<ApplicationPage>> Handle(
+        ListApplications message, CancellationToken ct)
     {
+        var query = message.Query;
         // Defaults resolved once, here, for whichever surface called.
         var pageNumber = query.Page ?? 1;
         var pageSize = query.PageSize ?? DefaultPageSize;

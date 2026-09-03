@@ -15,6 +15,21 @@
     <PackageReference Include="Swashbuckle.AspNetCore" Version="10.2.3" />
     <PackageReference Include="Microsoft.Extensions.AI" Version="10.9.0" />
 
+    <!-- PHASE 13.4. The generator half of the mediator, and it belongs to the
+         composition root alone: it is what emits AddMediator() and the switch
+         that maps a request type to its handler. It scans the referenced
+         assemblies, so the handlers it finds are the ones in the six module
+         projects; the marker interfaces they implement arrive from
+         Mediator.Abstractions, pinned once in Jobkeep.Contracts.
+
+         Analyzer-only, hence PrivateAssets: nothing at runtime references it,
+         and nothing downstream should inherit it — a second AddMediator() in
+         another assembly would be a second registry of the same handlers. -->
+    <PackageReference Include="Mediator.SourceGenerator" Version="3.0.2">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+
     <!-- The concrete model provider, named in exactly one place (ModelClient.cs). -->
     <PackageReference Include="OllamaSharp" Version="5.4.30" />
 
