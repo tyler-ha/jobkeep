@@ -223,10 +223,11 @@ public class DocumentStructurer : IDocumentStructurer
 
         _ => $"""
             Read the whole job advertisement below and fill in every field.
-            List every technology named anywhere in it, including the ones in the
-            responsibilities. List every requirement, responsibility and benefit
-            it states as its own separate entry.
-            Only include technologies that literally appear in the text.
+            List every skill named anywhere in it, including the ones in the
+            responsibilities — both technologies and soft skills. List every
+            requirement, responsibility and benefit it states as its own separate
+            entry.
+            Only include skills that literally appear in the text.
 
             ### JOB ADVERTISEMENT
             {text}

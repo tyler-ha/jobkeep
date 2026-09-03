@@ -17,6 +17,17 @@ public class SkillConfiguration : IEntityTypeConfiguration<Skill>
         e.Property(s => s.Name).HasMaxLength(100);
         e.Property(s => s.Category).HasMaxLength(50);
 
+        // PHASE 14. Stored as a string like every other enum in this schema, so
+        // the table still reads as English in psql. The database-side default
+        // matters more here than it looks: Kind is non-nullable in C#, so
+        // without it the migration would have to invent a value for existing
+        // rows anyway — this way the same answer is written once, in the place
+        // that is also correct for a writer that is not EF (Phase 7, F11).
+        e.Property(s => s.Kind)
+            .HasConversion<string>()
+            .HasMaxLength(20)
+            .HasDefaultValue(SkillKind.Unknown);
+
         // Phase 7 — see companies above. This is the table where the defect
         // was costing something measurable: a duplicate row split one
         // skill's count in /stats/skill-demand, and the Phase 5 ATS check

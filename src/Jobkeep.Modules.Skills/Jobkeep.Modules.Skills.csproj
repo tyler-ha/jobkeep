@@ -62,6 +62,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- PHASE 14. The starting skill vocabulary, embedded rather than copied to
+         the output directory: it ships inside the assembly, so it cannot go
+         missing from a container image or a Lambda zip, and SkillSeeder reads it
+         through GetManifestResourceStream with no path handling at all. -->
+    <EmbeddedResource Include="skills-seed.json" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="../Jobkeep.SharedKernel/Jobkeep.SharedKernel.csproj" />
     <ProjectReference Include="../Jobkeep.Contracts/Jobkeep.Contracts.csproj" />
     <ProjectReference Include="../Jobkeep.Persistence/Jobkeep.Persistence.csproj" />

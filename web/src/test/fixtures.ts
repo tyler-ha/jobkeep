@@ -221,6 +221,9 @@ export const importDetail: ImportResponse = {
       location: 'Melbourne VIC',
       headline: null,
       skills: ['C#', 'SQL'],
+      // Phase 14. Non-empty on purpose: an empty list would let a review screen
+      // that silently drops soft skills still pass this fixture.
+      softSkills: ['Communication', 'Mentoring'],
       experience: [
         {
           employer: 'Example Pty Ltd',

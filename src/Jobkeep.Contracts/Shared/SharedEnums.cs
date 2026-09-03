@@ -42,3 +42,27 @@ public enum ApplicationStatus { Applied, Interviewing, Offer, Rejected, Withdraw
 
 // Did a human enter this skill, or did the Phase 4 AI analyzer extract it?
 public enum SkillSource { Parsed, AiExtracted }
+
+// PHASE 14 — is this a capability you learn, or a way you work?
+//
+// A THIRD shared enum, and it is here for the reason the two above are, not by
+// association: SkillKind rides on SkillInfo, which is what ISkillCatalog hands
+// to every module, so it reaches the response DTOs of Applications (Posting
+// SkillResponse), Documents (ResumeSkillItem) and Analytics (SkillDemandItem).
+// Three published surfaces, therefore three routes into the GraphQL schema, and
+// two CLR enums of one name is a schema-BUILD failure. The 13.3b test — copy only
+// when one side is unpublished — says share it.
+//
+// WHY IT IS NOT `Category`
+// ------------------------
+// `Skill.Category` already exists and already means the FAMILY: "Language",
+// "Cloud", "Practice". Kind is a different axis and the two are independent — C#
+// is Technical AND a Language, Agile is Technical AND a Practice, Communication
+// is Soft AND Interpersonal. Writing "Technical" into Category would spend the
+// family axis to buy the kind axis, and Insights renders Category beside the
+// skill name, so the loss would be on screen.
+//
+// Unknown is the default and is not a failure state. A skill that arrived before
+// this phase, or one the model named without a kind, is simply uncategorised —
+// the seed fills in the ones worth knowing and the rest are harmless.
+public enum SkillKind { Unknown, Technical, Soft }

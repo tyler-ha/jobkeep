@@ -65,6 +65,7 @@ public class TestDbContext(DbContextOptions<TestDbContext> options) : DbContext(
     public DbSet<Company> Companies => Set<Company>();
     public DbSet<JobPosting> JobPostings => Set<JobPosting>();
     public DbSet<Skill> Skills => Set<Skill>();
+    public DbSet<SkillAlias> SkillAliases => Set<SkillAlias>();
     public DbSet<PostingSkill> PostingSkills => Set<PostingSkill>();
     public DbSet<JobRequirement> JobRequirements => Set<JobRequirement>();
     public DbSet<JobApplication> JobApplications => Set<JobApplication>();

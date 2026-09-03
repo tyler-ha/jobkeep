@@ -1,3 +1,5 @@
+﻿using Jobkeep.Models;
+
 namespace Jobkeep.Modules.Skills;
 
 // PHASE 13.2: the interface and its DTO live in Jobkeep.Contracts; the
@@ -8,14 +10,25 @@ namespace Jobkeep.Modules.Skills;
 // What the rest of the app is allowed to know about a skill. Deliberately not
 // the Skill entity: handing that over hands over PostingSkills and ResumeSkills
 // with it, and the boundary would exist on paper only.
-public record SkillInfo(Guid Id, string Name, string? Category);
+//
+// PHASE 14 added Kind. Note what it is NOT: there is no Aliases property here,
+// deliberately. A caller resolves a name and gets the canonical row back; that
+// the row answers to three other spellings is this module's business and none of
+// theirs. Publishing the alias list would invite a caller to do its own matching
+// against it, which is the whole thing the catalog exists to stop.
+public record SkillInfo(Guid Id, string Name, string? Category, SkillKind Kind = SkillKind.Unknown);
 
 // A skill a caller wants to exist. Category is advisory: it is used only when
 // the row is created, never to update one that is already there. Two modules
 // disagreeing about whether "SQL" is a Language or a Database must not take
 // turns overwriting each other, and the first writer to name it is as good a
 // tiebreak as any -- the alternative is a merge rule nobody asked for.
-public record SkillRequest(string Name, string? Category = null);
+//
+// PHASE 14: Kind is advisory in exactly the same way and for exactly the same
+// reason. An import that decides "Communication" is Soft does not get to
+// re-decide it on the next import, and the seed does not get to overwrite what a
+// human set. First writer names it.
+public record SkillRequest(string Name, string? Category = null, SkillKind Kind = SkillKind.Unknown);
 
 // The shared skill taxonomy, as a service rather than a table.
 //
@@ -78,6 +91,16 @@ public interface ISkillCatalog
     // arrives from a human typing one into a box. There is no caller holding a
     // hundred names it did not itself create.
     //
+    // PHASE 14 — THE MATCH IS NOW ALSO ON ALIASES. "Agile Methodologies" finds
+    // the row stored as "Agile", and the caller is told about "Agile": the
+    // canonical row is what comes back, never the spelling that was asked for.
+    // That is the point rather than a side effect — a caller that got its own
+    // wording back could not tell that two of its names were one skill.
+    //
+    // Skills are searched first and aliases only on a miss. So an alias that
+    // collides with a real skill name is INERT rather than harmful, which is the
+    // safety net under an invariant SkillSeeder enforces properly.
+    //
     // The match is on the natural key, so "C#" finds the row stored as "c#".
     // That is a deliberate CHANGE from what the callers did before 13.2c, where
     // each compared `Skill.Name` directly and a wrong-cased name simply missed.
@@ -95,6 +118,19 @@ public interface ISkillCatalog
     // SkillInfo — call `.Values.DistinctBy(s => s.Id)` if what you want is the
     // set. That is the shape callers actually need, because they are building
     // link rows and the link table's key is the skill id.
+    //
+    // PHASE 14 WIDENED WHAT "TWO SPELLINGS" MEANS, and every caller gets it for
+    // free. Before, only case differed — "C#" and "c#". Now an ALIAS resolves
+    // too, so a document naming both "Docker" and "Docker Containers" produces
+    // two keys pointing at the one Docker row, and the caller's own dedup by
+    // skill id collapses them exactly as it already collapsed the casing. No
+    // call site changed for this; that it needed no call site change is the
+    // argument for resolving here rather than in five places.
+    //
+    // A name that matches NEITHER a skill nor an alias still creates a row, with
+    // Kind = Unknown. The catalog is a vocabulary that grows, not a whitelist:
+    // refusing an unrecognised skill would mean a user cannot record something
+    // real because the seed file has not heard of it yet.
     //
     // Blank names are skipped rather than refused: the callers are cleaning up
     // model output, and a model that emits an empty string in a list of skills

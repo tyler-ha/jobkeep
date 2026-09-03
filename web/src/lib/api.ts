@@ -137,6 +137,16 @@ export type SourceFormat = 'PlainText' | 'Markdown' | 'Pdf' | 'Docx';
  * parsed — the check reads these rows, not the prose. */
 export type SkillSource = 'Parsed' | 'AiExtracted';
 
+/* Phase 14. Is this a capability or a way of working? Set on the skill row when
+ * it is first created — by the seeded vocabulary, or by whichever import named
+ * it first — and never overwritten afterwards.
+ *
+ * Only on the DRAFT types for now, deliberately. The stored skill responses
+ * (PostingSkillResponse, ResumeSkillItem) do not carry it, because nothing
+ * renders it yet and an unread field on the wire is schema nobody can safely
+ * remove later. Adding it there is additive when a screen wants it. */
+export type SkillKind = 'Unknown' | 'Technical' | 'Soft';
+
 /* ---- Applications ------------------------------------------------------- */
 
 /* Mirrors ApplicationListItem in src/Modules/Applications/ListApplications.cs.
@@ -415,6 +425,10 @@ export interface ResumeDraft {
   location: string | null;
   headline: string | null;
   skills: string[];
+  /** Phase 14. The résumé's soft skills, as a second list rather than a tag on
+   *  each entry in `skills` — ImportDraft.cs says why. Both lists become
+   *  resume_skills rows at commit; the split only carries the kind. */
+  softSkills: string[];
   experience: DraftExperience[];
   education: DraftEducation[];
 }
@@ -422,6 +436,7 @@ export interface ResumeDraft {
 export interface DraftPostingSkill {
   name: string;
   required: boolean;
+  kind: SkillKind;
 }
 
 export interface DraftRequirement {
@@ -627,10 +642,12 @@ export interface ApplicationFunnel {
 export const getFunnel = () => api.get<ApplicationFunnel>('/stats/funnel');
 
 /** SkillDemand.cs. One GROUP BY over the skills every ad you recorded names.
- *  Known gap, recorded not fixed: `skills` dedups case-sensitively, so `C#` and
- *  `c#` are two rows and one skill's count is split between them. The Insights
- *  screen does not paper over that client-side — a chart that quietly merged
- *  them would hide the defect the backend test deliberately pins. */
+ *
+ *  The gap this comment used to record is FIXED, in two halves. Phase 7 put a
+ *  unique index on lower("Name"), so `C#` and `c#` are one row; Phase 14 added
+ *  skill_aliases, so `Agile` and `Agile Methodologies` are too. The chart still
+ *  merges nothing client-side — it does not have to, because the rows arrive
+ *  already merged. */
 export interface SkillDemandItem {
   name: string;
   category: string | null;

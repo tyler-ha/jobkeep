@@ -168,6 +168,15 @@ This is the same family as the case-sensitive dedup gap already recorded in
 than separately — both want a normalised natural key on `skills`, which is a
 migration and so its own phase.
 
+> **BOTH HALVES ARE NOW FIXED, in two phases rather than one.** Phase 7
+> (2026-09-01) put a unique index on a stored `lower("Name")`, so `C#` and `c#`
+> are one row. **Phase 14** (2026-09-03) added `skills.skill_aliases`, resolved
+> inside `SkillCatalog` so no call site changed, and `.NET Core` → `.NET` is one
+> of the aliases it ships with — the exact miss recorded above. `PostgreSQL` vs
+> `SQL` is deliberately NOT aliased: one is an instance of the other, and merging
+> them would make this check claim a match the CV has not earned. See
+> `phase-14-skill-vocabulary.md`.
+
 **What shipped instead, in this same change: a correction path.**
 `POST /resumes/{id}/skills` (`src/Modules/Documents/AddSkillToResume.cs`, and the
 `addSkillToResume` mutation) lets the user say *"yes, I do have this"* and have it

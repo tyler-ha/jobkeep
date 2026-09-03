@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Jobkeep.Models;
 using Jobkeep.Modules.Applications;
 using Jobkeep.Shared;
@@ -60,14 +61,36 @@ internal sealed class AnalysisDraft
                + "Do not answer with a job title.")]
     public string Summary { get; set; } = "";
 
-    [Description("Every technology, programming language, framework or tool named in the advertisement.")]
+    [Description("Every skill named in the advertisement — both technologies "
+               + "(languages, frameworks, tools, cloud services, databases) and soft skills "
+               + "(communication, stakeholder management, teamwork and the like).")]
     public List<DraftSkill> Skills { get; set; } = new();
 }
 
 internal sealed class DraftSkill
 {
-    [Description("The name of the technology, for example: C#, PostgreSQL, Kubernetes.")]
+    // See the twin of this field in Documents/ImportDraft.cs for the measurement
+    // behind the wording: without "not the sentence it appears in", a 3B model
+    // returns the ad's own phrasing and every adjective becomes a new skill row.
+    [Description("The name of the skill itself, not the sentence it appears in. "
+               + "Write \"Communication\", not \"Excellent communication skills\"; "
+               + "\"CI/CD\", not \"CI/CD pipelines\". "
+               + "For example: C#, PostgreSQL, Kubernetes, Stakeholder Management.")]
     public string Name { get; set; } = "";
+
+    // PHASE 14. Mirrors PostingSkillExtraction in the Documents module, which is
+    // duplication worth being honest about: two model callers read the same kind
+    // of document and both need the same field, but they are different modules
+    // and a shared extraction class would be a reference one of them is not
+    // allowed to have. The DTO is copied; the ENUM is not — SkillKind is in
+    // Contracts precisely so both can name the same type.
+    //
+    // AiSchema.Json does NOT carry JsonStringEnumConverter, unlike the Documents
+    // side, so this property is added to that converter list below — without it
+    // the schema would emit an integer and the model would be guessing ordinals.
+    [Description("Technical for a technology, language, framework, tool or database. "
+               + "Soft for a way of working or an interpersonal strength.")]
+    public SkillKind Kind { get; set; } = SkillKind.Unknown;
 
     [Description("True if the advertisement lists it as required or essential; "
                + "false if it is nice to have.")]
@@ -97,8 +120,27 @@ internal static class AiSchema
         }
     };
 
-    private static readonly JsonElement Schema =
-        AIJsonUtilities.CreateJsonSchema(typeof(AnalysisDraft), inferenceOptions: SchemaOptions);
+    // PHASE 14 MOVED THIS ABOVE Schema, and the move is load-bearing rather than
+    // tidiness. Static field initialisers run in DECLARATION ORDER, so Schema
+    // reading a Json declared below it would read null — enum properties would
+    // silently fall back to integers and the constraint would not be there. The
+    // Documents module hit this first and its StructuringSchema carries the same
+    // warning; this is the second instance, which is what makes it a trap rather
+    // than an anecdote.
+    //
+    // JsonStringEnumConverter is what turns DraftSkill.Kind into a JSON Schema
+    // `enum` of NAMES instead of an integer type — so "answer with one of these
+    // two words" becomes something constrained decoding enforces, not something
+    // the description asks for politely.
+    public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
+    {
+        Converters = { new JsonStringEnumConverter() }
+    };
+
+    // serializerOptions is passed as well as inferenceOptions, and it carries the
+    // converter above. Without it the enum is an integer on both legs.
+    private static readonly JsonElement Schema = AIJsonUtilities.CreateJsonSchema(
+        typeof(AnalysisDraft), serializerOptions: Json, inferenceOptions: SchemaOptions);
 
     public static ChatOptions Options { get; } = new()
     {
@@ -112,7 +154,6 @@ internal static class AiSchema
         Temperature = 0
     };
 
-    public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 }
 
 public record AnalyzePosting(Guid ApplicationId) : IRequest<SliceResult<AiAnalysisResponse>>;

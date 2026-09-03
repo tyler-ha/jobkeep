@@ -153,7 +153,7 @@ public class CommitImportHandler : IRequestHandler<CommitImport, SliceResult<Com
         // failure just after would leave a resume the user cannot re-import (the
         // label check above would refuse the retry). Ordering is the whole fix;
         // there is no cleverer one available without a distributed transaction.
-        var resolved = await ResolveSkillsAsync(draft.Skills, ct);
+        var resolved = await ResolveSkillsAsync(draft.Skills, draft.SoftSkills, ct);
 
         var resume = new Resume
         {
@@ -270,15 +270,25 @@ public class CommitImportHandler : IRequestHandler<CommitImport, SliceResult<Com
     // so DistinctBy on the id is what turns its answer back into a set of links.
     // The visible consequence is unchanged: an import naming "C#" and "c#"
     // creates one link, and the first spelling in the document is the one stored.
+    // PHASE 14 — takes the two draft lists rather than one, because a résumé's
+    // technical and soft skills arrive separately (see ResumeExtraction) and the
+    // only difference between them is the Kind they carry into the catalogue.
+    //
+    // ONE call, not two, and that matters: FindOrCreateAsync saves, so two calls
+    // would be two transactions and a failure between them would leave half a
+    // vocabulary committed. Merging the lists here keeps the ordering rule this
+    // file already obeys — resolve everything, then add rows of our own.
     private async Task<IReadOnlyList<SkillInfo>> ResolveSkillsAsync(
-        List<string> names, CancellationToken ct)
+        List<string> technical, List<string> soft, CancellationToken ct)
     {
         // Clipped to the column width for the same reason every other field here
         // is: the name came from a model, and a name longer than the column is a
         // 500 the user cannot act on.
-        var requested = names
-            .Where(n => !string.IsNullOrWhiteSpace(n))
-            .Select(n => new SkillRequest(Clip(n.Trim(), 100)!))
+        var requested = technical
+            .Select(n => (Name: n, Kind: SkillKind.Technical))
+            .Concat(soft.Select(n => (Name: n, Kind: SkillKind.Soft)))
+            .Where(x => !string.IsNullOrWhiteSpace(x.Name))
+            .Select(x => new SkillRequest(Clip(x.Name.Trim(), 100)!, Kind: x.Kind))
             .ToList();
 
         if (requested.Count == 0) return [];
@@ -385,7 +395,7 @@ public class CommitImportHandler : IRequestHandler<CommitImport, SliceResult<Com
                     // paraphrase of it.
                     draft.Description ?? import.ExtractedText,
                     draft.SourceUrl,
-                    draft.Skills.Select(s => new ExtractedSkill(Clip(s.Name, 100)!, s.Required)).ToList(),
+                    draft.Skills.Select(s => new ExtractedSkill(Clip(s.Name, 100)!, s.Required, s.Kind)).ToList(),
                     draft.Requirements
                         .Select(r => new PostingRequirement(r.Text, r.Kind, r.IsMustHave))
                         .ToList()),

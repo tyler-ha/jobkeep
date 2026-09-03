@@ -370,8 +370,16 @@ and the front end, three containers, `compose.yaml` at the root plus
 `docker compose down` stops it, `down -v` drops the database, `logs -f api`
 follows one service.
 
-- The front end is the **real Vite dev server** with `./web` bind-mounted, so hot
-  reload survives. The API is a **published build**, so a C# edit costs
+- The front end is the **real Vite dev server** with `./web` bind-mounted — but
+  **HOT RELOAD DOES NOT FIRE FOR EDITS MADE ON THE HOST** (observed 2026-09-03: a
+  `web/src/styles/*.css` edit did not reach the browser, and survived a
+  ctrl+shift+R hard reload; only `docker compose restart web` picked it up). The
+  bind mount carries the bytes; it does not carry the inotify event from Windows
+  into the Linux container, and `vite.config.ts` sets no `server.watch.usePolling`.
+  **So after editing anything under `web/`, run `docker compose restart web`** — or
+  add `usePolling` if this becomes a per-minute cost. Do not debug a stale screen as
+  a code bug; it took three wrong turns the first time. The API is a **published
+  build**, so a C# edit costs
   `docker compose up --build api`. That asymmetry is deliberate — `dotnet watch`
   over a bind mount would drag the host's Windows `obj/` into a Linux container.
 - Adding an npm dependency also needs `up --build`: an anonymous volume masks
@@ -642,10 +650,44 @@ about that date — verify it before relying on it.
 
 ## When asked to move to the next phase
 
-**Currently up next: Phase 13.4 — dispatch.** Read
-`docs/phases/phase-13-clean-architecture.md` §13.4; it is the live plan, rewritten on
-2026-09-01 when the user confirmed **microservices is the destination**. **13.3 is
-DONE — all three sub-steps.**
+**PHASE 14 IS DONE (2026-09-03) — the skill vocabulary.** One migration
+(`SkillKindAndAliases`, `skills` schema), suite 268 → 281, seed of 228 skills and
+322 aliases. `docs/phases/phase-14-skill-vocabulary.md` has the whole record; five
+things from it change how new code is written:
+
+- **`skills.skill_aliases` exists and `SkillCatalog` resolves through it. Skills
+  first, aliases only on a miss** — so an alias colliding with a real skill row is
+  inert. **No call site changed and none should start**: reaching for the alias
+  table outside `SkillCatalog` is the same bug as reaching for `NaturalKey.Of`.
+- **`SkillKind { Unknown, Technical, Soft }` is in Contracts** (`SharedEnums.cs`),
+  a THIRD shared enum, for the same GraphQL reason as the other two. It is a
+  SECOND AXIS — `Category` still means the family, and C# is Technical *and* a
+  Language. Advisory on create like `Category`: **first writer names it**, which
+  is how the seed corrected the model calling Scrum a soft skill.
+- **The vocabulary is `src/Jobkeep.Modules.Skills/skills-seed.json`**, embedded,
+  applied idempotently at startup. Edit the file and restart; no migration.
+  **An alias must be a SYNONYM, not a relative** — `Docker Containers` → `Docker`
+  yes, `PostgreSQL` → `SQL` never. A wrong alias fails invisibly, by claiming a
+  match the CV has not earned.
+- **`Skills:SeedOnStartup` is false under test only** (`JobkeepAppFactory`).
+  Respawn truncates between tests, so a seeded catalogue would re-materialise into
+  every unrelated arrange. Not a knob — a test seam.
+- **A model returns PHRASES unless told not to.** `"Excellent communication
+  skills"`, `"CI/CD pipelines"`. Fixed in the `[Description]` — *"the name of the
+  skill itself, not the sentence it appears in"* — not with more aliases. A
+  catalogue cannot alias its way out of an open set of sentence fragments.
+
+**Also decided, not built: the ATS check is misnamed and becomes "Match check".**
+Three of its four stages compare a CV to an ad, which is not what the industry
+calls an ATS check. It is a `docs/backlog.md` row and **must not start before
+13.5**, which rewrites the same endpoints.
+
+**Currently up next: Phase 13.5 — controllers.** Read
+`docs/phases/phase-13-clean-architecture.md` §13.5; it is the live plan, and Phase 13
+was rewritten on 2026-09-01 when the user confirmed **microservices is the
+destination**. **13.1 through 13.4 are DONE and merged to `develop`**; 13.5 and 13.6
+remain. (This line said "up next: 13.4" until 2026-09-03; 13.4 had already landed at
+`24fbb49`.)
 
 **13.4 needs a decision before any code:** 33 requests become `IRequest<T>` and 53
 call sites become `Send(...)`, and the mediator library is chosen *at that step*.
@@ -671,7 +713,8 @@ written:
   invisible orphan rather than destroying work on a row that survived. Same call
   `ISkillCatalog.FindOrCreateAsync` makes about its own save. There is **no outbox**,
   so a crash between commit and publish loses the event; that is written down, not
-  forgotten, and it is Phase 14's.
+  forgotten, and it is **Phase 15's** — Phase 14 is the skill vocabulary, which
+  took the number on 2026-09-03.
 - **A delete-side contract check is WEAKER than the RESTRICT it replaced, and the
   gap is a TOCTOU race** — a foreign key refuses inside the transaction, two counts
   and a delete do not. Accepted with reasons in `DeleteResume.cs`; the read paths
@@ -898,7 +941,12 @@ should be written:
   reported `PostgreSQL` as missing even though the CV names it in prose — the
   resume's structured skill list says `SQL`. Same family as the case-sensitive
   dedup gap already recorded below; fix them together, not separately, because
-  both want a normalised natural key on `skills`. The **correction path** shipped
+  both want a normalised natural key on `skills`. **BOTH HALVES ARE NOW FIXED** —
+  Phase 7 the case key, **Phase 14 the aliases** (`skills.skill_aliases`, resolved
+  inside `SkillCatalog`, so no call site changed). `.NET Core` → `.NET` is one of
+  the seeded aliases. `PostgreSQL` → `SQL` deliberately is NOT: one is an instance
+  of the other, and aliasing them would claim a match the CV has not earned. The
+  **correction path** shipped
   with the phase — `POST /resumes/{id}/skills` and the `addSkillToResume` mutation
   (`Modules/Documents/AddSkillToResume.cs`) — so a near-miss costs one click
   rather than a re-import. It is not the synonym fix, and it is the first write to

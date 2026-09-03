@@ -78,14 +78,19 @@ public class PostingContract : IPostingContract
         var deduped = skills
             .Where(s => !string.IsNullOrWhiteSpace(s.Name))
             .GroupBy(s => s.Name.Trim())
-            .Select(g => new ExtractedSkill(g.Key, g.First().IsRequired))
+            .Select(g => new ExtractedSkill(g.Key, g.First().IsRequired, g.First().Kind))
             .ToList();
 
         // One call for the whole batch. The catalog collapses spellings, so two
         // entries here can come back pointing at the same row — which is exactly
         // the duplicate-key case the `linked` set below already handles.
+        // PHASE 14 — Kind rides along. Advisory on create, so the first document
+        // to call something Soft settles it and a later one disagreeing does not
+        // start a tug of war. No Category: an ad names a skill, it does not name
+        // the family that skill belongs to, and inventing one here would be this
+        // method deciding something it did not read.
         var resolved = await _skills.FindOrCreateAsync(
-            deduped.Select(s => new SkillRequest(s.Name)).ToList(), ct);
+            deduped.Select(s => new SkillRequest(s.Name, Kind: s.Kind)).ToList(), ct);
 
         // Every link that could collide, in one query. The in-memory part is a set
         // difference over a handful of rows, not an aggregate — "aggregate in SQL"
