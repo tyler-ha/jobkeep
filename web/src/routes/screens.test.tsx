@@ -161,6 +161,16 @@ describe('every screen renders', () => {
     }
   });
 
+  /* Phase 9, gap 3. The board has its own read and its own narrower row: a
+     COUNT of skills where the list sends their names. Nothing else on the screen
+     would notice `skillCount` arriving as undefined — the card would simply drop
+     the line — so the count is what this asserts. */
+  it('Pipeline reads the board and counts skills from it', async () => {
+    at('/pipeline');
+    expect(await screen.findByText('Senior Backend Engineer (.NET)')).toBeTruthy();
+    expect(await screen.findByText('5')).toBeTruthy();
+  });
+
   it('Job post renders the ad and its skills', async () => {
     at(`/applications/${APP_ID}`);
     expect(await screen.findByRole('heading', { name: 'Senior Backend Engineer (.NET)' })).toBeTruthy();

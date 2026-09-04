@@ -1,4 +1,4 @@
-using Jobkeep.Modules.Applications;
+﻿using Jobkeep.Modules.Applications;
 using Mediator;
 using Microsoft.AspNetCore.Mvc;
 
@@ -24,6 +24,17 @@ public class ApplicationsController : ControllerBase
         [FromServices] ISender sender,
         CancellationToken ct)
         => (await sender.Send(new ListApplications(query), ct)).ToHttpResult();
+
+    // GET /applications/board — PHASE 9, gap 3. Every card at once.
+    //
+    // Declared before the {id:guid} route for readability only; it cannot be
+    // shadowed by it, because "board" is not a Guid and the constraint says so.
+    [HttpGet("board")]
+    [EndpointSummary("Every application as a board card, newest first, capped.")]
+    public async Task<IResult> Board(
+        [FromServices] ISender sender,
+        CancellationToken ct)
+        => (await sender.Send(new GetBoard(), ct)).ToHttpResult();
 
     // GET /applications/{id}
     [HttpGet("{id:guid}")]

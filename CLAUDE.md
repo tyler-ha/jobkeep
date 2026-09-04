@@ -739,8 +739,11 @@ Three questions were settled at the same time and are recorded in
 smaller hand-rolled option **the ponytail ladder argued for**, deliberately, for
 the platform answer an interviewer expects), and there is **no third-party login**.
 
-**Nothing is scheduled next.** The live candidates, none started: **Phase 9** (the
-three backend gaps the front end found), **Phase 6 step 6.4** (the README), the
+**Nothing is scheduled next.** **Phase 9 is two thirds done** — gap 2 (the status
+set) and gap 3 (`GET /applications/board`, the Pipeline's read) both landed
+2026-09-04, and **gap 1 is blocked on a decision**: it projects `match_results`
+into a list row, which decision 17 used to make free and Phase 13 does not. The
+other live candidates: **Phase 6 step 6.4** (the README), the
 **Phase 6 visual pass** on the other seven screens, and the **`docs/token-log.md`
 backfill** (Phases 8-14 have no rows and Phase 14's is provisional; the ledger's
 own rule says do it in a *fresh* session).
