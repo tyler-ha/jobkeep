@@ -1,6 +1,6 @@
 # Phase 11 — authentication and owner scoping
 
-**Status: IN PROGRESS. 11.1a landed 2026-09-04.** It was to run immediately
+**Status: IN PROGRESS. 11.1a and 11.1b landed 2026-09-04.** It was to run immediately
 after [Phase 10](phase-10-aws-deploy.md) and be coupled to it; **Phase 10 was
 dropped on 2026-09-04** and this phase was pushed to the end of the roadmap in
 the same decision. See `architecture.md` decision 22.
@@ -21,8 +21,8 @@ here has been (13.1–13.6, 6.1–6.5). Each ends in something runnable.
 | Step | What it is | Status |
 |---|---|---|
 | **11.1a** | The Identity module exists and migrates. Sixth `DbContext`, `identity` schema, seven tables, its own `__EFMigrationsHistory`. **No sign-in yet, nothing enforced.** | **Done 2026-09-04** |
-| **11.1b** | Register and sign in. `AddIdentity*` wiring in `Jobkeep.Api`, the endpoints, and the **named-origin CORS policy** — the trap below, which fires here and not later | Next |
-| **11.1c** | The client half: a login route, a route guard in `App.tsx`, `credentials: 'include'` on the one `request()`, and a 401 branch on `ApiError` | |
+| **11.1b** | Register and sign in. `AddIdentity*` wiring in `Jobkeep.Api`, the endpoints, and the **named-origin CORS policy** — the trap below, which fires here and not later | **Done 2026-09-04** |
+| **11.1c** | The client half: a login route, a route guard in `App.tsx`, `credentials: 'include'` on the one `request()`, and a 401 branch on `ApiError` | Next |
 | **11.2** | Owner scoping. `OwnerUserId`, the EF global query filter, ~two dozen slices re-scoped, `CreatedBy`/`UpdatedBy` become real foreign keys | |
 | **11.3** | Postgres RLS — the second layer — plus the test that disables the EF filter and proves the database still refuses | |
 
@@ -86,6 +86,67 @@ before restoring, and a new project has to be added to that list. It fails *late
 and misleadingly — restore succeeds against the projects it was given, then the
 build dies on a `ProjectReference` to a directory nobody copied, which reads like
 a compiler error. The Dockerfile now says so above the list.
+
+### 11.1b, as built
+
+**Ten routes and one of them is ours.** `AddIdentityApiEndpoints<JobkeepUser>()`
+plus `MapIdentityApi<JobkeepUser>()` inside a `/identity` group is the whole
+sign-in surface: register, login, refresh, confirmEmail, resendConfirmationEmail,
+forgotPassword, resetPassword, manage/2fa, manage/info. The tenth is `logout`,
+written here, because `MapIdentityApi` has none — and that is not an oversight
+on Microsoft's part: signing out a *bearer token* is something only the client
+can do. With a cookie it is the opposite, so it is four lines and a
+`RequireAuthorization()`.
+
+Five things decided in the step:
+
+- **It is a deliberate exception to 13.5's "every route is a controller
+  action".** These routes are not written here, they are the framework's, and
+  re-typing them as a controller would mean re-typing password hashing, the
+  security stamp, lockout and the token flows — precisely the work decision 3
+  chose this package to avoid. What 13.5 actually bought was *"the composition
+  root has one shape for HTTP"*, and one framework-supplied group beside
+  `MapControllers()` does not spend that. A rule that has to be re-argued in
+  order to add hand-written routes is doing its job.
+- **The CORS trap cost one line, not a rewrite, and that is the payoff of a
+  decision made three phases earlier.** Phase 6.1 refused `AllowAnyOrigin` and
+  wrote down why — *"AllowAnyOrigin and AllowCredentials are mutually exclusive,
+  so writing the wildcard now would have to be undone the moment auth lands"*.
+  It landed; the origin list was already explicit; `.AllowCredentials()` was the
+  entire change. **The handoff and this plan both budgeted a named-origin policy
+  as work in this step. There was none to do.**
+- **`UseAuthentication()`/`UseAuthorization()` are written out, not left to
+  `WebApplication`'s auto-insertion**, because the order against `UseCors` is the
+  point: a preflight `OPTIONS` carries no cookie, so authorization running first
+  refuses it before CORS ever answers — and that surfaces in the browser as a
+  CORS error with nothing on the server to explain it.
+- **`AddEndpointsApiExplorer()` came back.** 13.5 dropped it because it left no
+  minimal APIs; `MapIdentityApi`'s routes are minimal APIs and MVC's explorer
+  does not see them. Without it the endpoints work and are invisible in Swagger
+  UI — which is the one place a human signs in from before 11.1c exists.
+- **Roles are still not registered** (`.AddRoles<IdentityRole<Guid>>()`). The
+  three tables exist so that adding them later is not a migration against rows;
+  nothing authorizes on a role yet, so a `RoleManager` nobody injects would be
+  registration for its own sake.
+
+**Verified against the running stack, not only the suite** — register 200, login
+200 with a `Set-Cookie`, `manage/info` 200 with it and 401 without, logout 204
+and 401 after, and `swagger.json` still 200 with all ten paths in it.
+
+**Two known ceilings, written down rather than fixed.**
+`forgotPassword` and `resendConfirmationEmail` are mapped and answer 200, but
+`AddIdentityApiEndpoints` registers a **no-op `IEmailSender`** — so no mail is
+sent and no token ever reaches a human. Email confirmation is not required to
+log in, so nothing is broken by it today; the day a real deploy exists, either
+wire a sender or unmap those two. And **antiforgery is still off**
+(`DocumentsModule.cs` argues it, on the grounds that there were no cookies for a
+browser to attach). There are now. It stays off while nothing is `[Authorize]`d —
+11.2 is when a forged cross-site POST can do something, and that is where the
+paragraph gets re-read.
+
+Suite 332 → 338: five in `tests/Jobkeep.Tests/Rest/IdentityTests.cs` and one
+added to `CorsTests`. No migration — 11.1a's is the only one this phase has so
+far.
 
 ## Decided 2026-09-04, before any code — do not re-litigate
 

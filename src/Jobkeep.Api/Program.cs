@@ -16,7 +16,9 @@ using Jobkeep.Modules.Documents;
 using Jobkeep.Modules.Identity;
 using Jobkeep.Modules.Skills;
 using Jobkeep.Persistence;
+using Jobkeep.Modules.Identity.Domain;
 using Jobkeep.SharedKernel;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.EntityFrameworkCore;
@@ -214,6 +216,32 @@ builder.Services.AddDocumentsModule(builder.Configuration);
 builder.Services.AddMatchModule();
 
 // ---------------------------------------------------------------------------
+// PHASE 11.1b — authentication
+// ---------------------------------------------------------------------------
+// AddIdentityApiEndpoints is the platform's own register/sign-in surface. It
+// wires AddIdentityCore, both authentication schemes (a bearer token and the
+// application cookie) and the endpoints MapIdentityApi maps further down.
+//
+// It is a DELIBERATE exception to 13.5's "every route is a controller action".
+// Those routes are not written here — they are the framework's — and re-typing
+// them as a controller would mean re-typing password hashing, the security
+// stamp, lockout and the token flows, which is precisely the work decision 3
+// chose this package to avoid. The rule 13.5 actually bought is "the composition
+// root has one shape for HTTP", and one framework-supplied group beside
+// MapControllers does not break it. A rule that has to be re-argued to add
+// hand-written routes has done its job.
+//
+// ROLES ARE NOT ADDED (.AddRoles<IdentityRole<Guid>>()). The three role tables
+// exist — 11.1a created them so that adding roles later is not a migration
+// against a table that already has rows — but nothing authorizes on a role yet,
+// so a RoleManager nobody injects would be registration for its own sake. The
+// store resolves to a user-only store as a result, which is what the tables
+// being empty already says.
+builder.Services
+    .AddIdentityApiEndpoints<JobkeepUser>()
+    .AddEntityFrameworkStores<IdentityDbContext>();
+
+// ---------------------------------------------------------------------------
 // CORS, for the Phase 6 front end
 // ---------------------------------------------------------------------------
 // The front end's dev server and this API are different origins — :5173 and
@@ -242,11 +270,20 @@ builder.Services.AddMatchModule();
 //     its front-end origin, which is the right default for an API that is about
 //     to sit on a public Function URL with no authentication in front of it.
 //
-// What auth will have to revisit: AllowCredentials is deliberately NOT set. Add
-// it only alongside the origin list staying explicit, and re-read the
-// antiforgery paragraph in DocumentsModule.cs at the same time — that one is
-// switched off precisely because there are no cookies for a browser to attach
-// yet, and both decisions change together.
+// PHASE 11.1b SET AllowCredentials, and this is the paragraph that predicted it.
+// Identity's default is a cookie, and a browser will not attach one to a
+// cross-origin fetch unless the response says AllowCredentials — so :5173 could
+// sign in and then be anonymous on the very next request, with no error anywhere
+// on the server. The origin list was already explicit, which is the only reason
+// this is one line now: AllowAnyOrigin and AllowCredentials are mutually
+// exclusive, so the wildcard this comment refused in Phase 6.1 would have had to
+// be unpicked here instead.
+//
+// Still open, and named so it is not re-discovered: the antiforgery paragraph in
+// DocumentsModule.cs turns antiforgery OFF because there were no cookies for a
+// browser to attach. There are now. It stays off for as long as nothing is
+// [Authorize]d — 11.2 is when a forged cross-site POST can actually do
+// something, and that is where it gets re-read.
 const string DevCorsPolicy = "localdev";
 var allowedOrigins = builder.Configuration
     .GetSection("Cors:AllowedOrigins").Get<string[]>()
@@ -255,7 +292,8 @@ var allowedOrigins = builder.Configuration
 builder.Services.AddCors(options => options.AddPolicy(DevCorsPolicy, policy => policy
     .WithOrigins(allowedOrigins)
     .AllowAnyHeader()
-    .AllowAnyMethod()));
+    .AllowAnyMethod()
+    .AllowCredentials()));
 
 // ---------------------------------------------------------------------------
 // PHASE 13.5 — controllers
@@ -329,8 +367,14 @@ builder.Services
     .AddMutationType<Mutation>();
 
 // AddSwaggerGen turns what the ApiExplorer discovers into an OpenAPI document
-// Swagger UI can render. AddEndpointsApiExplorer() used to sit above it, for the
-// minimal APIs; 13.5 left none, and AddControllers brings MVC's own explorer.
+// Swagger UI can render. AddControllers brings MVC's own explorer, which is why
+// 13.5 could drop AddEndpointsApiExplorer() — it left no minimal APIs.
+//
+// PHASE 11.1b PUT IT BACK, because MapIdentityApi's routes are minimal APIs and
+// MVC's explorer does not see them. Without this line the identity endpoints
+// exist, work, and are invisible in Swagger UI — which is the one place a human
+// is going to try signing in from before the front end has a login screen.
+builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
@@ -405,6 +449,18 @@ if (app.Environment.IsDevelopment())
     app.UseCors(DevCorsPolicy);
 }
 
+// PHASE 11.1b. Written out rather than left to WebApplication's auto-insertion,
+// because the ORDER against UseCors is the whole point: a preflight OPTIONS
+// carries no cookie, so authorization running first would refuse it before the
+// CORS middleware ever answered — and that surfaces in the browser as a CORS
+// error with nothing on the server to explain it. Calling them here also marks
+// them as set, so the framework does not add a second pair further up.
+//
+// Nothing is [Authorize]d yet except /identity/logout below. These two are what
+// turn the cookie into a ClaimsPrincipal, which is what 11.2 will scope on.
+app.UseAuthentication();
+app.UseAuthorization();
+
 // Every REST route in the app, from the five controllers under Controllers/.
 // This one line replaced five MapXModule() calls in 13.5, and the routes did not
 // move: the controllers carry the same templates the endpoint files did, and
@@ -463,6 +519,35 @@ app.MapControllers().Add(endpoint =>
     endpoint.Metadata.Add(new RequestSizeLimitAttribute(
         uploadOptions.MaxBytes + MultipartEnvelopeSlack));
 });
+
+// PHASE 11.1b — the platform's identity endpoints, under /identity.
+//
+// A GROUP rather than the app root, so they are /identity/register and
+// /identity/login rather than sitting beside /applications as if they were this
+// app's own vocabulary. It also gives the whole set one Swagger tag.
+//
+// The COOKIE is the flow this app uses: POST /identity/login?useCookies=true
+// sets the application cookie, and the front end sends credentials: 'include'
+// from then on (11.1c). The same endpoint without that query string answers with
+// a bearer token instead; both schemes are registered because
+// AddIdentityApiEndpoints registers both, and the token half is left reachable
+// deliberately — it is what a non-browser client would use, and it costs nothing
+// to leave working.
+var identity = app.MapGroup("/identity").WithTags("Identity");
+identity.MapIdentityApi<JobkeepUser>();
+
+// MapIdentityApi has no logout, and that is not an oversight in the framework:
+// signing out a bearer token is something only the client can do. With a cookie
+// it is the opposite — the cookie is in the browser and only a Set-Cookie from
+// here clears it — so this is the one route the group is genuinely missing.
+//
+// RequireAuthorization is not protection, it is honesty: logging out when you
+// were never logged in is a 401, not a silent 204 that implies something happened.
+identity.MapPost("/logout", async (SignInManager<JobkeepUser> signIn) =>
+{
+    await signIn.SignOutAsync();
+    return Results.NoContent();
+}).RequireAuthorization();
 
 // Serves POST /graphql for queries + the Nitro (Banana Cake Pop) IDE at GET /graphql.
 app.MapGraphQL();

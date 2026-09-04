@@ -79,6 +79,25 @@ public class CorsTests(PostgresFixture fixture) : IntegrationTestBase(fixture)
     }
 
     /// <summary>
+    /// Phase 11.1b. Identity's default is a cookie, and a browser will not attach one
+    /// to a cross-origin fetch unless the response says so — so without this header
+    /// the front end would sign in successfully and be anonymous on the next request,
+    /// with nothing wrong on the server side to find.
+    /// </summary>
+    [Fact]
+    public async Task ActualRequest_AllowsCredentials_SoTheAuthCookieIsSent()
+    {
+        var request = new HttpRequestMessage(HttpMethod.Get, "/resumes");
+        request.Headers.Add("Origin", DevServer);
+
+        var response = await Client.SendAsync(request, Ct);
+
+        Assert.Equal(
+            "true",
+            Assert.Single(response.Headers.GetValues("Access-Control-Allow-Credentials")));
+    }
+
+    /// <summary>
     /// The origins come from config, which is the point — a deployed front end lists
     /// its own origin without a code change, and step 6.2 can move the dev port if
     /// the build tool it picks serves on a different one.
