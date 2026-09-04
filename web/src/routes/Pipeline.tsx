@@ -19,10 +19,10 @@ import {
   APPLICATION_STATUSES,
   ApiError,
   asApiError,
-  listApplications,
+  getApplicationBoard,
   updateApplication,
-  type ApplicationListItem,
   type ApplicationStatus,
+  type BoardCard,
 } from '../lib/api';
 import { formatDateOnly } from '../lib/format';
 
@@ -43,22 +43,19 @@ import { formatDateOnly } from '../lib/format';
  * not need a live region to be usable, and works on a phone.
  */
 
-/* The API caps pageSize at 100 and rejects anything larger (ListApplications.cs
- * — a cap, not a clamp). A board is only honest if it holds everything, so the
- * remaining pages are fetched too, up to a ceiling: past this many the board is
- * the wrong tool anyway, and the footer says plainly what is not on it rather
- * than quietly showing a subset. */
-const PAGE_SIZE = 100;
-const MAX_PAGES = 5;
+/* PHASE 9, gap 3. This used to loop the paged list up to five times, because
+ * ListApplications caps pageSize at 100 and rejects anything larger. There is a
+ * board-shaped read now: one request, one cap, and `totalCount` counted before
+ * it — so the footer below still knows what is not on the board. */
 
 type Load =
   | { tag: 'loading' }
   | { tag: 'error'; error: ApiError }
-  | { tag: 'ready'; items: ApplicationListItem[]; total: number };
+  | { tag: 'ready'; items: BoardCard[]; total: number };
 
 export default function Pipeline() {
   const [load, setLoad] = useState<Load>({ tag: 'loading' });
-  const [dragging, setDragging] = useState<ApplicationListItem | null>(null);
+  const [dragging, setDragging] = useState<BoardCard | null>(null);
   const [refusal, setRefusal] = useState<string | null>(null);
   const [moveError, setMoveError] = useState<ApiError | null>(null);
   const [announce, setAnnounce] = useState('');
@@ -72,20 +69,8 @@ export default function Pipeline() {
 
     (async () => {
       try {
-        const q = (p: number) =>
-          `?page=${p}&pageSize=${PAGE_SIZE}&sort=DateApplied&direction=Desc`;
-        const first = await listApplications(q(1));
-        const items = [...first.items];
-
-        /* Almost never runs: a job search with more than a hundred live
-         * applications is not the common case. It is here so that when it does
-         * happen the board is not silently wrong. */
-        for (let p = 2; p <= Math.min(first.totalPages, MAX_PAGES); p++) {
-          const next = await listApplications(q(p));
-          items.push(...next.items);
-        }
-
-        if (live) setLoad({ tag: 'ready', items, total: first.totalCount });
+        const board = await getApplicationBoard();
+        if (live) setLoad({ tag: 'ready', items: board.cards, total: board.totalCount });
       } catch (e) {
         if (live) setLoad({ tag: 'error', error: asApiError(e) });
       }
@@ -97,7 +82,7 @@ export default function Pipeline() {
   }, []);
 
   const columns = useMemo(() => {
-    const by = new Map<ApplicationStatus, ApplicationListItem[]>(
+    const by = new Map<ApplicationStatus, BoardCard[]>(
       APPLICATION_STATUSES.map((s) => [s, []]),
     );
     if (load.tag === 'ready') for (const a of load.items) by.get(a.status)?.push(a);
@@ -105,7 +90,7 @@ export default function Pipeline() {
   }, [load]);
 
   const move = useCallback(
-    async (card: ApplicationListItem, to: ApplicationStatus) => {
+    async (card: BoardCard, to: ApplicationStatus) => {
       if (card.status === to) return;
       const from = card.status;
 
@@ -247,9 +232,9 @@ function Column({
   onMove,
 }: {
   status: ApplicationStatus;
-  cards: ApplicationListItem[];
-  dragging: ApplicationListItem | null;
-  onMove: (card: ApplicationListItem, to: ApplicationStatus) => void;
+  cards: BoardCard[];
+  dragging: BoardCard | null;
+  onMove: (card: BoardCard, to: ApplicationStatus) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
 
@@ -304,8 +289,8 @@ function Card({
   a,
   onMove,
 }: {
-  a: ApplicationListItem;
-  onMove: (card: ApplicationListItem, to: ApplicationStatus) => void;
+  a: BoardCard;
+  onMove: (card: BoardCard, to: ApplicationStatus) => void;
 }) {
   const { listeners, setNodeRef, isDragging } = useDraggable({ id: a.id });
 
@@ -346,7 +331,7 @@ function Card({
 
 /* The card's face, shared by the board and the drag overlay so the thing under
  * the cursor is the same object that was picked up rather than a lookalike. */
-function CardFace({ a, floating }: { a: ApplicationListItem; floating?: boolean }) {
+function CardFace({ a, floating }: { a: BoardCard; floating?: boolean }) {
   return (
     <div className="card-face" data-floating={floating || undefined}>
       <p className="card-role">
@@ -355,11 +340,11 @@ function CardFace({ a, floating }: { a: ApplicationListItem; floating?: boolean 
       <p className="card-company">{a.company}</p>
       <p className="card-meta">
         <time dateTime={a.dateApplied}>{formatDateOnly(a.dateApplied)}</time>
-        {a.skills.length > 0 && (
+        {a.skillCount > 0 && (
           <>
             {' · '}
-            <span className="num">{a.skills.length}</span>{' '}
-            {a.skills.length === 1 ? 'skill' : 'skills'}
+            <span className="num">{a.skillCount}</span>{' '}
+            {a.skillCount === 1 ? 'skill' : 'skills'}
           </>
         )}
       </p>

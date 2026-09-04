@@ -1,4 +1,5 @@
 import type {
+  ApplicationBoard,
   ApplicationDetail,
   ApplicationFunnel,
   ApplicationPage,
@@ -59,6 +60,22 @@ export const listPage: ApplicationPage = {
   page: 1,
   pageSize: 25,
   totalPages: 1,
+};
+
+/* Phase 9, gap 3. DERIVED from the list page rather than written out again:
+ * the board read returns the same rows with a narrower projection, so deriving
+ * it is what stops the two fixtures disagreeing about a row that is meant to be
+ * the same application. */
+export const board: ApplicationBoard = {
+  cards: listPage.items.map(({ id, company, title, status, dateApplied, skills }) => ({
+    id,
+    company,
+    title,
+    status,
+    dateApplied,
+    skillCount: skills.length,
+  })),
+  totalCount: listPage.totalCount,
 };
 
 export const detail: ApplicationDetail = {
@@ -266,6 +283,7 @@ export function stubFetch() {
       });
 
     if (path === '/applications' && method === 'GET') return ok(listPage);
+    if (path === '/applications/board') return ok(board);
     /* Phase 6.6 added a description box to the add form, so creating is now a
        path the screen tests walk. The body is echoed back inside the detail
        shape, which is enough for the caller and keeps the fixture honest about

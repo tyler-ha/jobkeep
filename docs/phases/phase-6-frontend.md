@@ -66,7 +66,7 @@ was approved.
 |---|---|
 | **Today** | `GET /applications` (recent), `GET /stats/funnel`, `GET /imports` (the review queue) |
 | **Applications** | `GET /applications` (filter, sort, page), `POST /applications`, `PATCH` / `DELETE /applications/{id}` |
-| **Pipeline** (board) | `GET /applications`, `PATCH /applications/{id}` — the drag is a status change, and it **can legitimately 400** |
+| **Pipeline** (board) | `GET /applications/board` (**Phase 9 gap 3** — it was `GET /applications`, looped up to five pages), `PATCH /applications/{id}` — the drag is a status change, and it **can legitimately 400** |
 | **Job post** (detail) | `GET /applications/{id}`, skills and requirements add/remove, `POST /applications/{id}/analyze`, `GET /applications/{id}/analysis` |
 | **Résumés** | `GET /resumes`, `GET /resumes/{id}`, `POST` / `DELETE /resumes/{id}/skills/...` |
 | **Import & confirm** | `POST /imports` (multipart), `GET /imports`, `GET` / `PUT /imports/{id}`, `POST .../reparse`, `POST .../confirm`, `DELETE /imports/{id}` |

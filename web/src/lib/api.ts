@@ -180,10 +180,32 @@ export interface ApplicationPage {
   totalPages: number;
 }
 
-/* Mirrors ApplicationQuery in ListApplications.cs. `status` takes ONE status —
- * there is no multi-status filter, which is why the Applications screen has no
- * combined "Closed" tab. Recorded as a Phase 7 item rather than faked here by
- * firing two requests and paging the union client-side. */
+/* Mirrors BoardCard in src/Jobkeep.Modules.Applications/Application/GetBoard.cs.
+ * Phase 9, gap 3 — narrower than a list row on purpose: the board's card shows
+ * how MANY skills, never which, so the server sends a count and skips the
+ * catalog lookup the list has to make. */
+export interface BoardCard {
+  id: string;
+  company: string;
+  title: string;
+  status: ApplicationStatus;
+  /** DateOnly, like the list's. */
+  dateApplied: string;
+  skillCount: number;
+}
+
+/** Not paged — a board is truncated or complete, because page two of a board is
+ *  not somewhere you can drag a card. `totalCount` is the count before the cap,
+ *  so the screen can say how many are missing. */
+export interface ApplicationBoard {
+  cards: BoardCard[];
+  totalCount: number;
+}
+
+/* Mirrors ApplicationQuery in ListApplications.cs. Phase 9 made `status` a SET
+ * (a repeated query parameter over REST) and added `isClosed` as the domain's
+ * own name for Rejected-or-Withdrawn — which is why the Applications screen has
+ * a Closed tab and does not spell that set out here. */
 export const APPLICATION_SORTS = ['DateApplied', 'Company', 'Title', 'Status', 'UpdatedAt'] as const;
 export type ApplicationSort = (typeof APPLICATION_SORTS)[number];
 
@@ -534,6 +556,10 @@ export interface CommitResponse {
 
 export const listApplications = (query = '') =>
   api.get<ApplicationPage>(`/applications${query}`);
+
+/* Phase 9, gap 3. One request for the whole board, where this used to be a loop
+ * over up to five pages of the list. */
+export const getApplicationBoard = () => api.get<ApplicationBoard>('/applications/board');
 
 export const getApplication = (id: string) =>
   api.get<ApplicationDetail>(`/applications/${id}`);

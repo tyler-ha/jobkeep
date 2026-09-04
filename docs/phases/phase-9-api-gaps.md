@@ -1,11 +1,13 @@
 # Phase 9 — the three reads the front end asked for and could not get
 
-**Status: IN PROGRESS.** **Gap 2 is DONE (2026-09-04)** — suite 314 → 323, web
-52 → 53, no migration. Gaps 1 and 3 are not started, and **gap 1 needs a design
-decision before any code** (see premise 1 in the box below). Gap 2 was taken first
-because it is the only one of the three with no open question in it.
+**Status: IN PROGRESS.** **Gaps 2 and 3 are DONE (2026-09-04)** — gap 2 took the
+suite 314 → 323 and web 52 → 53, gap 3 took it 323 → 328 and web 53 → 54. Neither
+needed a migration. **Only gap 1 is left, and it needs a design decision before any
+code** (see premise 1 in the box below). They were taken in that order because gap
+1 is the only one of the three with an open question in it.
 
-What gap 2 shipped is at the bottom, in ["Gap 2, as built"](#gap-2-as-built).
+What each shipped is at the bottom: ["Gap 2, as built"](#gap-2-as-built) and
+["Gap 3, as built"](#gap-3-as-built).
 
 > **Three premises in this plan expired after it was written (checked 2026-09-04).
 > Read this box before anything below it.**
@@ -221,5 +223,67 @@ GraphQL forms.
   whether a per-application match summary belongs on a contract is the question
   `CLAUDE.md`'s test asks (a fact about the thing, or a question the caller has
   about its own feature?). Settle that first.
-- **Gap 3** — a board-shaped read for Pipeline.
+
+---
+
+## Gap 3, as built
+
+`GET /applications/board` and the `applicationBoard` GraphQL field, one slice
+(`Applications/Application/GetBoard.cs`), no migration. Suite **328**, web **54**.
+The Pipeline screen's five-page loop and its `PAGE_SIZE` / `MAX_PAGES` constants
+are deleted; the honest footer stays, because a cap is still a cap.
+
+### It is a narrower row, not a bigger page
+
+The obvious version of this is `pageSize=500`, and it is the wrong one twice over:
+it widens the list's cap for every caller, and it keeps paying for a projection the
+board does not use. `BoardCard` carries a **skill count** where `ApplicationListItem`
+carries skill **names** — the card renders "· 3 skills" and never the names — so the
+board's read also skips the `ISkillCatalog.GetAsync` call the list makes for every
+page. One query per board instead of two per page, times five.
+
+It is deliberately **not** a cursor API. Phase 12's note said whatever fixes this
+should wait until something other than one screen wants it; one screen wants it, so
+this reads that one screen and nothing else — no filter, no sort, no page, because
+the board has no control for any of them. `GetBoard()` takes no arguments at all,
+which is why the GraphQL field takes none either.
+
+### Flat cards, not columns
+
+The plan said "returning the columns' cards". It returns a flat list, because the
+board *moves* cards between columns optimistically: with columns on the wire every
+drag would splice two arrays instead of changing one field, to save a grouping the
+client already does in one pass over rows it has.
+
+### Two things that only show up against real Postgres
+
+- **EF cannot order a constructor-projected record.** `Select(...).OrderBy(c => c.DateApplied)`
+  over a positional record throws — the members are not mapped back to columns. The
+  `ORDER BY` therefore sits on the entity query and the projection is a small private
+  method applied after it. It **throws rather than falling back to client evaluation**,
+  which is the good version of that failure and is why five tests found it at once.
+- **The count is taken through the projection.** `job_postings` carries Phase 8's
+  query filter too, so reaching `a.Posting` makes the read an inner join; a count
+  taken off the bare table would report rows the board cannot show — a footer
+  announcing missing cards on a board that is complete.
+
+### The cap is 500, and it is not tested
+
+The same number the front end reached by looping five pages of a hundred, so a full
+board costs what it always did; only the request count changed. Observing the cap
+needs 501 applications arranged through the real create path, which buys less than
+it costs — and the same is true of the `ThenBy(a => a.Id)` tiebreak, which is only
+reachable at that boundary. Both are argued in `GetBoard.cs` instead. What the tests
+do cover is the projection (`skillCount` present, `skills` absent), archived rows
+being off the board *and* out of its count, newest-first ordering, and GraphQL
+agreeing with REST.
+
+### Verified
+
+Suite **328/328**, web **54/54**, oxlint clean apart from the pre-existing warning
+at `web/src/routes/MatchCheck.tsx:193`. Checked live against the running stack as
+well as the suite: `GET /applications/board`, the GraphQL field, `swagger.json`
+still answering 200 (the whole document 500s if one route is unrepresentable), and
+`/applications/{id}` still resolving — `board` cannot shadow it, because the route
+constraint says `{id:guid}`.
 

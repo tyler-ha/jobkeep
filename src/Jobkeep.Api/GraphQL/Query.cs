@@ -1,4 +1,4 @@
-using Jobkeep.Modules.Ai;
+﻿using Jobkeep.Modules.Ai;
 using Jobkeep.Modules.Analytics;
 using Jobkeep.Modules.Applications;
 using Jobkeep.Modules.Applications.Domain;
@@ -53,6 +53,13 @@ public class Query
         [Service] ISender sender,
         CancellationToken ct)
         => (await sender.Send(new Apps.ListApplications(query ?? new ApplicationQuery()), ct)).ValueOrThrow();
+
+    // PHASE 9, gap 3. Takes no arguments, which is the point: the board has no
+    // filter, no sort and no page, so there is nothing for a caller to pass.
+    public async Task<ApplicationBoard> GetApplicationBoard(
+        [Service] ISender sender,
+        CancellationToken ct)
+        => (await sender.Send(new Apps.GetBoard(), ct)).ValueOrThrow();
 
     public async Task<ApplicationDetail> GetApplication(
         Guid id,
