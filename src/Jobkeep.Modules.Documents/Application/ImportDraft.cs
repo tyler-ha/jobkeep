@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Text.Json;
 using Jobkeep.Contracts.Applications;
 using Jobkeep.Contracts.Shared;
@@ -291,6 +291,11 @@ internal sealed class RequirementExtraction
 internal static class DraftLimits
 {
     public const int MaxLabelLength = 100;
+
+    // job_postings.Description, per JobPostingConfiguration. A whole pasted
+    // advertisement lands here, so this is the one draft field a real document
+    // can genuinely exceed.
+    public const int MaxDescriptionLength = 20000;
 }
 
 // ---------------------------------------------------------------------------

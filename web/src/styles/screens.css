@@ -1469,6 +1469,19 @@
   }
 }
 
+/* Phase 6.5 group 4. The source toggle and the paste box span the grid for the
+   same reason the drop zone does: they are the document being chosen, not a
+   field describing it. */
+.upload-wide {
+  grid-column: 1 / -1;
+}
+
+.paste-count {
+  align-self: flex-end;
+  font-variant-numeric: tabular-nums;
+  font-size: var(--t-xs);
+}
+
 /* ---- The drop zone ------------------------------------------------------- */
 
 .dropzone-wrap {

@@ -623,6 +623,19 @@ export const uploadImport = (file: File, kind: DocumentKind, label?: string, sou
   return api.upload<ImportResponse>('/imports', form);
 };
 
+/** The paste route — the same import with a string in place of a file. A
+ *  SIBLING endpoint rather than `file` becoming optional on the one above:
+ *  ImportText.cs argues why, and the short version is that one route with two
+ *  mutually exclusive bodies is how the Swagger document got taken down once
+ *  already. JSON, so the default Content-Type applies and there is no multipart
+ *  boundary to get out of the browser's way. */
+export const importText = (
+  text: string,
+  kind: DocumentKind,
+  label?: string,
+  sourceUrl?: string,
+) => api.post<ImportResponse>('/imports/text', { text, kind, label, sourceUrl });
+
 /** PUT, not PATCH, and a full replace of the draft — ReviewImport.cs makes the
  *  case: a partial update of a nested draft cannot express "delete the third
  *  experience", which is the correction a bad parse most often needs. */

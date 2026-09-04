@@ -720,14 +720,13 @@ name entity types by CLR full name and were rewritten with the rename, which is 
 one trap in that step. Two rules from it are in "Where new code goes" above; the
 whole record is `docs/phases/phase-13-clean-architecture.md` §13.6.
 
-**Nothing is scheduled next.** The live candidates, none started: **Phase 6.5
-group 4** (paste an ad's text — now the last group of that phase), **Phase 6 step
+**Nothing is scheduled next.** The live candidates, none started: **Phase 6 step
 6.4** (the README), the **Phase 6 visual pass** on the other seven screens, and the
 **`docs/token-log.md` backfill** (Phases 8-14 have no rows and Phase 14's is
 provisional; the ledger's own rule says do it in a *fresh* session).
-(This line has four times named a step that had already landed — 13.4 at `24fbb49`,
-then 13.5, then 13.6, then the match-check rename and group 6 — so check the branch
-before trusting it.)
+(This line has five times named a step that had already landed — 13.4 at `24fbb49`,
+then 13.5, then 13.6, then the match-check rename, then group 6 and group 4 with it
+— so check the branch before trusting it. **Phase 6.5 is now DONE in full.**)
 
 **13.5 LANDED 2026-09-03** (suite 268 → 283, no migration, no `web/` change). The
 29 routes are five `[ApiController]` classes in `src/Jobkeep.Api/Controllers/` and
@@ -899,10 +898,10 @@ Six things from 13.2 still change how new code is written:
   `StringComparer.OrdinalIgnoreCase`, matching `GetResume` and `ListApplications`;
   a test pins it.
 
-**Phase 6.5 group 4 (paste text) is parked**, by decision, until the 13.3 boundary —
-**which 13.3c reached on 2026-09-02.** It is unblocked; it is not scheduled. 13.4-13.6
-are the rest of Phase 13, and group 4 touches `src/`, so doing it mid-phase means
-writing a slice that 13.4 and 13.5 then rewrite twice.
+**Phase 6.5 group 4 (paste text) was parked** until the 13.3 boundary, and **shipped
+2026-09-04** — see the block below. Deferring it was right for the reason recorded at
+the time: it touches `src/`, and doing it mid-phase would have meant writing a slice
+13.4 and 13.5 then rewrote twice.
 
 **13.2c is the one sub-step that touched the front end**, and only as a widened type:
 `ImportStatus` gained `CommitFailed` in `web/src/lib/api.ts`, plus a fourth queue tab
@@ -912,12 +911,34 @@ contract, so leaving it would have been a lie in a type.
 
 **Phase 6.5** (`docs/phases/phase-6.5-upload-experience.md`) is the Upload screen,
 opened 2026-09-01 by the first real feedback the front end has had. Groups 1-3, 5
-and 6 are done — the import → upload rename (**UI wording only; the wire keeps
-`/imports`**), the drop zone, the timer-driven progress bar, the spacing, and
-**the upload no longer blocking on the model** (2026-09-04, see below).
-**Group 4 is what remains**: paste an ad's text through the same pipeline as a
-parsed file. The phase doc has the whole plan; do not re-derive it, and do not
-re-argue the URL scraper — it is refused with reasons in `docs/backlog.md`.
+**is DONE in full** as of 2026-09-04 — the import → upload rename (**UI wording only;
+the wire keeps `/imports`**), the drop zone, the timer-driven progress bar, the
+spacing, **the upload no longer blocking on the model** (group 6) and **paste an ad's
+text** (group 4). Do not re-argue the URL scraper — it is refused with reasons in
+`docs/backlog.md`.
+
+**GROUP 4 LANDED 2026-09-04** (suite 290 → 299, web 49 → 50, no migration).
+`POST /imports/text` and the `importText` mutation take a pasted advertisement
+instead of a file. Four things worth not re-deriving:
+
+- **`ImportTextHandler` DELEGATES to `ImportDocument` through the mediator.** It
+  owns exactly one rule — a paste under `MinTextChars` is refused where a file
+  under it is saved and warned about — and then sends ordinary bytes. So "a paste
+  and an uploaded `.txt` are the same import" is a property of the call graph, not
+  a comment: same content hash, same extracted text, same format, same status, and
+  `ImportTextTests` asserts it as identity. **Do not "optimise" this into a second
+  call to `IDocumentTextExtractor`** — that is the version the plan specified, and
+  it recreates the filename truncation, the hash, the save-before-parse ordering
+  and the enqueue as a second copy that agrees only by inspection.
+- **A sibling ROUTE, not an optional `file` parameter.** One endpoint with two
+  mutually exclusive bodies is the neighbourhood of the `[FromForm]`/`IFormFile`
+  trap that made `swagger.json` answer 500 for the whole document in Phase 4.5.
+- **The paste is trimmed before it is hashed**, so a sloppy browser selection
+  dedups against a tidy one and matches a `.txt` of the same words.
+- **`DraftLimits.MaxDescriptionLength` (20000) now clips on confirm.**
+  `job_postings.Description` is `varchar(20000)` and `CommitImport` falls back to
+  the whole extracted text when the model proposes no description — a long ad
+  confirmed into a 500. Clip, not refuse, matching every other field there.
 
 **GROUP 6 LANDED 2026-09-04** (suite 285 → 290, no migration). `POST /imports` no
 longer calls the model: it extracts, saves, and returns with the row in a new
@@ -967,8 +988,8 @@ question** section for it. The short version worth having before touching this a
 the scraper refusal's objections rather than reviving them, and this app is unusually
 well placed for one because it already turns unstructured text into a draft (Phase 4.5
 `DocumentStructurer`) and so needs **no CSS selectors to break on a redesign**. It is
-blocked on Phase 11 for any public ship, and paste-the-ad (group 4) is its backend
-either way.
+blocked on Phase 11 for any public ship, and paste-the-ad (group 4) — **which shipped
+2026-09-04** — is its backend either way.
 
 Phase 6 itself has two things left: the **visual pass on the other seven screens**
 (the user has seen the app and says there are problems, but has not said which —

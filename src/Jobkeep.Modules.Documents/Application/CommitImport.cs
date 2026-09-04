@@ -1,4 +1,4 @@
-using Jobkeep.Contracts.Applications;
+﻿using Jobkeep.Contracts.Applications;
 using Jobkeep.Contracts.Shared;
 using Jobkeep.Contracts.Skills;
 using Jobkeep.Modules.Documents.Domain;
@@ -401,7 +401,16 @@ public class CommitImportHandler : IRequestHandler<CommitImport, SliceResult<Com
                     // The full extracted text as the description, so the Phase 4
                     // analyzer re-reads the original advertisement rather than a
                     // paraphrase of it.
-                    draft.Description ?? import.ExtractedText,
+                    //
+                    // CLIPPED, like every other model-supplied field here.
+                    // job_postings.Description is varchar(20000) and this is the
+                    // one field whose value is a whole document rather than a
+                    // line out of one, so it is the one that actually reaches the
+                    // limit - a long ad pasted in full used to confirm into a
+                    // 500. Clip rather than refuse, matching the convention
+                    // above: losing the tail of an advertisement is recoverable,
+                    // losing the confirm is not.
+                    Clip(draft.Description ?? import.ExtractedText, DraftLimits.MaxDescriptionLength)!,
                     draft.SourceUrl,
                     draft.Skills.Select(s => new ExtractedSkill(Clip(s.Name, 100)!, s.Required, s.Kind)).ToList(),
                     draft.Requirements

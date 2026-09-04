@@ -171,6 +171,50 @@ describe('every screen renders', () => {
     expect((submit as HTMLButtonElement).disabled).toBe(true);
   });
 
+  /* Phase 6.5 group 4. Some ads are never a file: the user selects the page,
+     copies, and has nothing to upload. This walks that whole path, because the
+     interesting part is not the textarea — it is that a short paste keeps the
+     button disabled and a real one sends the ad to /imports/text intact. */
+  it('Upload takes a pasted ad, and holds the button until it is long enough', async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi.fn(stubFetch());
+    vi.stubGlobal('fetch', fetchSpy);
+
+    at('/upload');
+    await user.click(await screen.findByRole('radio', { name: /Paste text/ }));
+
+    const box = screen.getByRole('textbox', { name: /Paste the advertisement/ });
+    const submit = screen.getByRole('button', { name: /Read this text/ });
+
+    /* Under the server's 40-character floor the button stays down, and the
+       counter says by how much — a disabled button with no explanation is the
+       failure this counter exists to prevent. */
+    await user.type(box, 'Backend dev');
+    expect((submit as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText(/of 40 characters/)).toBeTruthy();
+
+    const ad =
+      'Senior Backend Engineer at Atlassian. We use C#, PostgreSQL and Kubernetes on AWS.';
+    await user.clear(box);
+    await user.type(box, ad);
+    expect((submit as HTMLButtonElement).disabled).toBe(false);
+
+    await user.click(submit);
+
+    /* The ad reaches the paste route, whole. Asserted on the request body
+       rather than on a rendered string: what matters is that no keyword was
+       dropped between the textarea and the wire. */
+    const posted = fetchSpy.mock.calls.find(
+      ([url, init]) =>
+        String(url).endsWith('/imports/text') && (init as RequestInit | undefined)?.method === 'POST',
+    );
+    expect(posted).toBeTruthy();
+    const body = JSON.parse((posted![1] as RequestInit).body as string);
+    expect(body.kind).toBe('Resume');
+    for (const keyword of ['Atlassian', 'C#', 'PostgreSQL', 'Kubernetes', 'AWS'])
+      expect(body.text).toContain(keyword);
+  });
+
   /* The three below are Phase 6.6. They exist because the app shipped a screen
    * that told the reader to "paste the ad in" and gave them nowhere to do it,
    * while the only textarea on the add form was wired to a field nothing reads.

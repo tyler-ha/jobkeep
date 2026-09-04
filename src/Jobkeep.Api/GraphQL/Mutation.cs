@@ -1,7 +1,8 @@
-using Jobkeep.Modules.Ai;
+﻿using Jobkeep.Modules.Ai;
 using Jobkeep.Modules.Applications;
 using Jobkeep.Modules.Match;
 using Jobkeep.Modules.Documents;
+using Jobkeep.Modules.Documents.Domain;
 using Jobkeep.Modules.Skills.Domain;
 using Mediator;
 
@@ -113,6 +114,18 @@ public class Mutation
     // `ImportDraftInput` on the way in, from the same CLR type — which is what
     // keeps "the shape you reviewed" and "the shape you send back corrected"
     // provably identical rather than two records that drift.
+    // PHASE 6.5 GROUP 4 - paste an ad instead of uploading one.
+    //
+    // The file-upload exception above covers RECEIVING BYTES, and nothing else.
+    // A paste is a string, which GraphQL has had since the first draft of the
+    // spec, so the house parity rule applies with no argument to make: this is
+    // the same slice, the same validation and the same response as the REST
+    // route beside it.
+    public async Task<ImportResponse> ImportText(
+        string text, DocumentKind kind, string? label, string? sourceUrl, string? name,
+        [Service] ISender sender, CancellationToken ct)
+        => (await sender.Send(new Docs.ImportText(text, kind, label, sourceUrl, name), ct)).ValueOrThrow();
+
     public async Task<ImportResponse> ReviewImport(
         Guid id, ImportDraft draft,
         [Service] ISender sender, CancellationToken ct)

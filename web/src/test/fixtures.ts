@@ -271,7 +271,13 @@ export function stubFetch() {
     if (path === '/stats/companies') return ok(companies);
     if (path === '/resumes') return ok(resumes);
     if (path === `/resumes/${RESUME_ID}`) return ok(resumeDetail);
-    if (path === '/imports') return ok(imports);
+    if (path === '/imports' && method === 'GET') return ok(imports);
+    /* The two ways in, Phase 6.5. Both answer with the created import, because
+       both really do: /imports/text delegates to the upload's own handler, so a
+       fixture that answered them differently would be lying about the one
+       property the backend tests exist to pin. */
+    if ((path === '/imports' || path === '/imports/text') && method === 'POST')
+      return ok({ ...importDetail, status: 'Parsing' });
     if (path === `/imports/${IMPORT_ID}`) return ok(importDetail);
     if (path === `/applications/${APP_ID}/match-check`) return ok(matchCheck);
     /* 404 is a real answer here, not a failure: GetAnalysis returns it for "not
