@@ -1,4 +1,16 @@
+import { useState } from 'react';
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
+import {
+  BarChart3,
+  Briefcase,
+  Columns3,
+  FileText,
+  LayoutDashboard,
+  Menu,
+  Target,
+  Upload as UploadIcon,
+  X,
+} from 'lucide-react';
 
 import Applications from './routes/Applications';
 import MatchCheck from './routes/MatchCheck';
@@ -13,30 +25,54 @@ import Upload from './routes/Upload';
  * application and is reached by opening a row, so it has a route but no nav
  * entry. */
 const NAV = [
-  { to: '/today', label: 'Today' },
-  { to: '/applications', label: 'Applications' },
-  { to: '/pipeline', label: 'Pipeline' },
-  { to: '/resumes', label: 'Résumés' },
-  { to: '/upload', label: 'Upload' },
-  { to: '/match-check', label: 'Match check' },
-  { to: '/insights', label: 'Insights' },
+  { to: '/today', label: 'Today', icon: LayoutDashboard },
+  { to: '/applications', label: 'Applications', icon: Briefcase },
+  { to: '/pipeline', label: 'Pipeline', icon: Columns3 },
+  { to: '/resumes', label: 'Résumés', icon: FileText },
+  { to: '/upload', label: 'Upload', icon: UploadIcon },
+  { to: '/match-check', label: 'Match check', icon: Target },
+  { to: '/insights', label: 'Insights', icon: BarChart3 },
 ];
 
 export default function App() {
+  const [navOpen, setNavOpen] = useState(false);
+
   return (
     <div className="shell">
-      <nav className="nav" aria-label="Main">
-        <NavLink to="/today" className="wordmark">
-          JobKeep
-        </NavLink>
+      <nav className="nav" aria-label="Main" data-open={navOpen || undefined}>
+        <div className="nav-bar">
+          <NavLink to="/today" className="wordmark" onClick={() => setNavOpen(false)}>
+            JobKeep
+          </NavLink>
+          {/* Hidden by CSS above 900px — a real toggle button rather than a
+              CSS-only checkbox hack, so aria-expanded stays accurate and the
+              icon swap needs no extra markup. */}
+          <button
+            type="button"
+            className="nav-toggle"
+            aria-expanded={navOpen}
+            aria-controls="nav-list"
+            aria-label={navOpen ? 'Close menu' : 'Open menu'}
+            onClick={() => setNavOpen((open) => !open)}
+          >
+            {navOpen ? <X size={20} aria-hidden /> : <Menu size={20} aria-hidden />}
+          </button>
+        </div>
 
-        <ul className="nav-list">
-          {NAV.map(({ to, label }) => (
+        <ul className="nav-list" id="nav-list">
+          {NAV.map(({ to, label, icon: Icon }) => (
             <li key={to}>
               {/* NavLink sets aria-current="page" itself, so the active style
                   keys off the accessibility state rather than a second,
-                  separately-maintained class. */}
-              <NavLink to={to} className="nav-link">
+                  separately-maintained class. The icon has no label of its
+                  own — it's decorative alongside the text, not a second way
+                  to identify the destination. Closing the mobile menu here,
+                  in the click that causes the navigation, is the state
+                  update the change actually belongs to — watching pathname
+                  in an effect would fire the same close a render later, and
+                  do it on desktop too, where there is no menu to close. */}
+              <NavLink to={to} className="nav-link" onClick={() => setNavOpen(false)}>
+                <Icon size={16} aria-hidden />
                 <span className="nav-label">{label}</span>
               </NavLink>
             </li>

@@ -122,14 +122,14 @@ export default function Today() {
       <p className="today-figure">
         {attention > 0 ? (
           <>
-            <span className="marked num">{attention}</span>
+            <span className="figure-num num">{attention}</span>
             <span className="today-figure-label">
               {attention === 1 ? 'thing' : 'things'} worth a look
             </span>
           </>
         ) : (
           <>
-            <span className="marked">Nothing waiting</span>
+            <span className="figure-num">Nothing waiting</span>
             <span className="today-figure-label">
               <span className="num">{funnel.total}</span> applications tracked
             </span>
