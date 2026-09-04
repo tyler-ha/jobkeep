@@ -52,6 +52,74 @@ describe('every screen renders', () => {
     expect(await screen.findByRole('group', { name: 'Filter by status' })).toBeTruthy();
   });
 
+  /* Phase 8 — the archive, its undo, and the empty state that had only one
+   * meaning. Grouped here rather than in a file of their own because they are
+   * the same screen as the two tests above and share its stub. */
+
+  it('Applications archives a row and offers an undo that calls restore', async () => {
+    const fetchSpy = vi.fn(stubFetch());
+    vi.stubGlobal('fetch', fetchSpy);
+
+    at('/applications');
+    const archive = await screen.findByRole('button', {
+      name: /^Archive Senior Backend Engineer/,
+    });
+    await userEvent.click(archive);
+
+    /* The banner names what went, because by the time it renders the row has
+     * left the table and "Archived." on its own tells the user nothing. */
+    const undo = await screen.findByRole('button', { name: 'Undo' });
+
+    /* Scoped to the banner, because the stub does not filter the list — the row
+       is still on screen, so an unscoped query for the title matches twice. The
+       banner naming what went is the assertion: "Archived." on its own tells
+       the user nothing once the row has actually left the table. */
+    const banner = screen.getByRole('status');
+    expect(within(banner).getByText(/Senior Backend Engineer/)).toBeTruthy();
+
+    const archived = fetchSpy.mock.calls.find(([, init]) => init?.method === 'DELETE');
+    expect(archived).toBeTruthy();
+
+    await userEvent.click(undo);
+
+    const restored = fetchSpy.mock.calls.find(([url]) => String(url).endsWith('/restore'));
+    expect(restored).toBeTruthy();
+    /* And the banner goes with it — an undo you can press twice is an undo that
+     * would 404 the second time, since a live row is not in the archive. */
+    expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
+  });
+
+  it('Applications says "nothing active" rather than "nothing recorded" when rows exist but are archived', async () => {
+    /* The phase doc's own line: "no applications" and "no ACTIVE applications"
+     * are different sentences, and only one of them was written. An empty list
+     * with everything archived used to read as an empty database.
+     *
+     * The stub returns an empty page while NOT including archived rows, which is
+     * exactly the state the server produces when everything has been put away. */
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(String(input));
+        if (url.pathname === '/applications' && (init?.method ?? 'GET') === 'GET')
+          return new Response(
+            JSON.stringify({ items: [], totalCount: 0, page: 1, pageSize: 25, totalPages: 0 }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          );
+        return stubFetch()(input, init);
+      }),
+    );
+
+    at('/applications');
+
+    expect(await screen.findByText('Nothing active')).toBeTruthy();
+    expect(screen.getByText(/Everything you have recorded is archived/)).toBeTruthy();
+
+    /* And ticking the filter changes the sentence, because with archived rows
+     * included an empty list really does mean an empty database. */
+    await userEvent.click(screen.getByRole('button', { name: /Include archived/ }));
+    expect(await screen.findByText('Nothing recorded yet')).toBeTruthy();
+  });
+
   it('Applications honours a status deep link from Today', async () => {
     at('/applications?status=Interviewing');
     const tab = await screen.findByRole('button', { name: /Interviewing/ });

@@ -162,6 +162,12 @@ export interface ApplicationListItem {
    *  and then format in local time, or dates near midnight shift by a day. */
   dateApplied: string;
   skills: string[];
+  /** Phase 8. Only ever true on a page fetched with `?includeArchived=true` —
+   *  the default list cannot contain an archived row, so a screen that never
+   *  asks for them can ignore this field entirely. It is sent rather than
+   *  inferred from the request because a component re-rendering off cached data
+   *  no longer knows which request produced it. */
+  isArchived: boolean;
 }
 
 /** The list is paged. A concrete page type rather than a generic, because
@@ -311,6 +317,8 @@ export interface ResumeSummary {
   skillCount: number;
   createdAtUtc: string;
   updatedAtUtc: string;
+  /** Phase 8, same contract as ApplicationListItem.isArchived. */
+  isArchived: boolean;
 }
 
 /** GetResume.cs. `skillName`, not `name`. */
@@ -536,7 +544,18 @@ export const createApplication = (body: CreateApplicationRequest) =>
 export const updateApplication = (id: string, body: UpdateApplicationRequest) =>
   api.patch<ApplicationDetail>(`/applications/${id}`, body);
 
-export const deleteApplication = (id: string) => api.delete<void>(`/applications/${id}`);
+/* Phase 8 — DELETE archives; it does not destroy. The route and the verb are
+ * unchanged and that is deliberate (DeleteApplication.cs argues it): from the
+ * client's side the row stops being returned by every read, which is what DELETE
+ * has always meant here. The name is `archiveApplication` on THIS side only,
+ * because the UI says "Archive" and a screen calling `deleteApplication` beside
+ * an Undo button reads like a bug. */
+export const archiveApplication = (id: string) => api.delete<void>(`/applications/${id}`);
+
+/** The undo. 404 if the application is live or absent — restoring addresses a row
+ *  in the archive, and a live one is not in it. */
+export const restoreApplication = (id: string) =>
+  api.post<void>(`/applications/${id}/restore`, {});
 
 export const addPostingSkill = (
   id: string,
@@ -572,7 +591,8 @@ export const runMatchCheck = (id: string, resumeId?: string) =>
 export const getMatchResult = (id: string) =>
   api.get<MatchCheckResponse>(`/applications/${id}/match-check`);
 
-export const listResumes = () => api.get<ResumeSummary[]>('/resumes');
+export const listResumes = (includeArchived = false) =>
+  api.get<ResumeSummary[]>(`/resumes${includeArchived ? '?includeArchived=true' : ''}`);
 
 export const getResume = (id: string) => api.get<ResumeDetail>(`/resumes/${id}`);
 

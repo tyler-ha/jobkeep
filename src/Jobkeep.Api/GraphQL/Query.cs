@@ -124,9 +124,15 @@ public class Query
     // résumé text in the list, text in the detail) is decided in the handlers, so
     // a GraphQL client cannot select its way past it.
     public async Task<List<ResumeSummary>> GetResumes(
+        // PHASE 8. NULLABLE, and both halves of that are forced. HotChocolate
+        // publishes a non-nullable `bool` as a required `Boolean!` argument, which
+        // would break every existing `resumes` query; and C# will not let an
+        // optional parameter sit before the [Service] and CancellationToken ones,
+        // so a default is not available either. `bool?` is optional on both sides.
+        bool? includeArchived,
         [Service] ISender sender,
         CancellationToken ct)
-        => (await sender.Send(new Docs.ListResumes(), ct)).ValueOrThrow();
+        => (await sender.Send(new Docs.ListResumes(includeArchived == true), ct)).ValueOrThrow();
 
     public async Task<ResumeDetail> GetResume(
         Guid id,

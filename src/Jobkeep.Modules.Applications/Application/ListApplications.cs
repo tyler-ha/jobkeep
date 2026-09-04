@@ -48,6 +48,16 @@ public record ApplicationQuery
     public SortDirection? Direction { get; init; }
     public int? Page { get; init; }
     public int? PageSize { get; init; }
+
+    // PHASE 8 — the archive filter. Nullable like the rest, and for the same
+    // [AsParameters]/[FromQuery] reason: a non-nullable bool would bind as
+    // required and `?includeArchived=` omitted would 400.
+    //
+    // The semantics are INCLUDE, not ONLY. `true` returns live and archived rows
+    // together, which is what an "include archived" checkbox means to the person
+    // ticking it. An archived-only view would be a third state, and the two
+    // screens that would want it can filter the merged list they already have.
+    public bool? IncludeArchived { get; init; }
 }
 
 // Deliberately flat, and deliberately not ApplicationDetail: a list row shows
@@ -61,7 +71,14 @@ public record ApplicationListItem(
     string? Location,
     ApplicationStatus Status,
     DateOnly DateApplied,
-    List<string> Skills);
+    List<string> Skills,
+    // PHASE 8. Always sent, and always false unless the caller asked for archived
+    // rows — a row the filter would have hidden is the only one that can be true.
+    // It is on the LIST item and not just the detail because the list is where a
+    // mixed page has to be rendered, and a client that cannot tell which rows are
+    // archived would have to infer it from the request it made, which is the kind
+    // of state a UI gets wrong on the second render.
+    bool IsArchived);
 
 // A concrete page type rather than a generic PagedResult<T>. HotChocolate names
 // GraphQL types after the CLR type, and a generic would land in the schema as
@@ -107,7 +124,8 @@ public class ListApplicationsHandler : IRequestHandler<ListApplications, SliceRe
         string? Location,
         ApplicationStatus Status,
         DateOnly DateApplied,
-        List<Guid> SkillIds);
+        List<Guid> SkillIds,
+        bool IsArchived);
 
     public async ValueTask<SliceResult<ApplicationPage>> Handle(
         ListApplications message, CancellationToken ct)
@@ -132,6 +150,19 @@ public class ListApplicationsHandler : IRequestHandler<ListApplications, SliceRe
         // AsNoTracking: this is a read that never writes back, so there is no
         // reason to pay for the change tracker's snapshot of every row.
         var applications = _db.JobApplications.AsNoTracking();
+
+        // PHASE 8. The default — archived rows excluded — costs nothing and is
+        // written nowhere: it is the global query filter, and every other read in
+        // this module gets it for free. Only the exception needs a line.
+        //
+        // IgnoreQueryFilters drops EVERY filter on the query, including the one on
+        // job_postings that the joins below reach through. That is correct rather
+        // than incidental: an application archived after its ad was archived would
+        // otherwise be dropped by the inner join to a posting the filter hides, so
+        // a caller asking to see archived rows would be handed a page missing some
+        // of them, with no indication that anything was withheld.
+        if (query.IncludeArchived == true)
+            applications = applications.IgnoreQueryFilters();
 
         if (query.Status is not null)
             applications = applications.Where(a => a.Status == query.Status);
@@ -207,7 +238,8 @@ public class ListApplicationsHandler : IRequestHandler<ListApplications, SliceRe
                 a.Posting.Location,
                 a.Status,
                 a.DateApplied,
-                a.Posting.PostingSkills.Select(ps => ps.SkillId).ToList()))
+                a.Posting.PostingSkills.Select(ps => ps.SkillId).ToList(),
+                a.IsDeleted))
             .ToListAsync(ct);
 
         // ONE call for the whole page's skills, across every row — which is why
@@ -234,7 +266,8 @@ public class ListApplicationsHandler : IRequestHandler<ListApplications, SliceRe
                     .Where(names.ContainsKey)
                     .Select(id => names[id].Name)
                     .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
-                    .ToList()))
+                    .ToList(),
+                r.IsArchived))
             .ToList();
 
         return SliceResult<ApplicationPage>.Ok(new ApplicationPage(

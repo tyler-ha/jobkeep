@@ -247,7 +247,16 @@ and happened four more times in the very next phase.
 **F9 · No `CreatedBy` / `UpdatedBy` anywhere.** Blocked on F1 — there is no actor to
 name yet.
 
-**F10 · Hard deletes only.** `DeleteAsync` (lines 115-125) is a bare `Remove`; the
+**F10 · Hard deletes only. RESOLVED in Phase 8** — `ISoftDeletable` on the three
+entities with a delete slice, converted centrally in `AuditSaveChangesInterceptor`
+so `Remove()` means archive, plus `HasQueryFilter` and a restore route on both
+surfaces. **The cascades named below no longer fire at all**, because no `DELETE`
+reaches Postgres — which is what makes the restore whole. Note the finding's own
+last sentence is now the wrong way round: nothing is *ir*recoverable, and the
+remaining gap is the opposite one, that nothing is ever actually removed (F18).
+Original finding follows.
+
+**F10 (as written)** · Hard deletes only. `DeleteAsync` (lines 115-125) is a bare `Remove`; the
 cascade rules then drop `ats_results`, and deleting a posting would drop its
 `ai_analyses`, `job_requirements` and `posting_skills`. Nothing is recoverable.
 
@@ -346,9 +355,15 @@ Closes F7, F8, F11, F12, F13, F14.
 - CHECK constraints, `HasMaxLength` on the eleven unbounded columns, and indexes on
   `DateApplied DESC` and `Status`.
 
-### Step 2 — Soft delete → **Phase 8** *(`backlog.md`'s "strongest candidate to pull in")*
+### Step 2 — Soft delete → **Phase 8. DONE 2026-09-04.**
 
-Closes F10. `IsDeleted` + `DeletedAtUtc` + `HasQueryFilter`.
+Closed F10. `IsDeleted` + `DeletedAtUtc` + `HasQueryFilter`.
+
+**Two corrections the work made to the gotcha below, both recorded in
+`phase-8-soft-delete.md`:** only `resumes.LabelNormalized` needed the filtered
+index, because neither `companies` nor `skills` has a delete path; and the
+predicate `HasQueryFilter` does **not** reach is the one in the three published
+views, which are raw SQL and had to be re-cut in the migration by hand.
 
 > **Gotcha — write this one down.** `companies.Name` and `skills.Name` are UNIQUE.
 > Under soft delete they must become **filtered** unique indexes

@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using Jobkeep.Contracts.Applications;
 using Jobkeep.Modules.Ai;
 using Jobkeep.Modules.Ai.Domain;
@@ -56,18 +56,28 @@ public sealed class DeleteBehaviourTests(PostgresFixture fixture) : IntegrationT
     }
 
     [Fact]
-    public async Task DeletingAnApplication_TakesItsMatchResultWithIt()
+    public async Task ArchivingAnApplication_KEEPSItsMatchResult()
     {
-        // WAS a cascade on match_results.ApplicationId, on the grounds that a match check is
-        // owned by its application and means nothing without it. That is still true, and
-        // since 13.3b Postgres can no longer enforce it: `match_results` is in the Match
-        // module's schema and the foreign key crossed a boundary.
+        // THIS ASSERTION HAS BEEN 0, THEN 1, THEN 0, AND IS NOW 1 AGAIN — four phases,
+        // and the churn is the useful part rather than an embarrassment.
         //
-        // 13.3c restored the OUTCOME without the key. DeleteApplication publishes
-        // ApplicationDeleted after it commits; Match subscribes with OnApplicationDeleted
-        // and deletes the row. So this assertion is 0 again, and the interesting part is
-        // what the test now proves: not that a constraint exists, but that a module
-        // reacted. Between 13.3b and 13.3c it asserted the orphan on purpose.
+        //   * Phase 2: a CASCADE on match_results.ApplicationId. A match check is owned
+        //     by its application and means nothing without it.
+        //   * 13.3b: the foreign key crossed a module boundary and was dropped, so the
+        //     row was orphaned. The test was inverted to assert the orphan on purpose.
+        //   * 13.3c: the outcome was restored without the key — DeleteApplication
+        //     published ApplicationDeleted and Match deleted the row in response. Back
+        //     to 0, now proving that a module REACTED rather than that a constraint
+        //     existed.
+        //   * Phase 8: the application is no longer deleted. It is archived, it is one
+        //     click from coming back, and DeleteApplication.cs's own 13.3c comment —
+        //     "prefer the residue nobody can see" over "destroyed work on a live row" —
+        //     now points the other way. So nothing is published and the check survives.
+        //
+        // What the assertion means at each step is different every time, and only the
+        // last two are about the same question. The stored judgement outliving the
+        // archive is the FEATURE: restore the application and the check you last ran is
+        // still there, rather than a three-minute model call away.
         var id = await Client.CreateApplicationAsync("Atlassian", "Backend Engineer", Ct);
         await WithDbAsync(async db =>
         {
@@ -85,24 +95,65 @@ public sealed class DeleteBehaviourTests(PostgresFixture fixture) : IntegrationT
 
         (await Client.DeleteAsync($"/applications/{id}", Ct)).EnsureSuccessStatusCode();
 
+        // Zero LIVE applications — the test context carries the same global query filter
+        // the app does, so "gone" and "archived" read identically here. That is the
+        // property soft delete is built on, and it is why the six passing tests in this
+        // file needed no change at all.
         Assert.Equal(0, await WithDbAsync(db => db.JobApplications.CountAsync(Ct)));
-        Assert.Equal(0, await WithDbAsync(db => db.MatchResults.CountAsync(Ct)));
+
+        // The row is still there, and this is the only assertion in the file that has to
+        // look past the filter to say so.
+        Assert.Equal(1, await WithDbAsync(db =>
+            db.JobApplications.IgnoreQueryFilters().CountAsync(a => a.IsDeleted, Ct)));
+
+        Assert.Equal(1, await WithDbAsync(db => db.MatchResults.CountAsync(Ct)));
     }
 
     [Fact]
-    public async Task DeletingAPosting_CascadesToSkillLinksAndRequirements_AndTakesItsAnalysis()
+    public async Task RestoringAnArchivedApplication_BringsItBackWithItsMatchResult()
     {
-        // Three rules in one test, and 13.3c split them across two mechanisms.
-        // posting_skills and job_requirements are Applications' own tables in
-        // Applications' own schema, so they still cascade in Postgres. ai_analyses is
-        // not, so its cascade is now a delete notification: DeletePosting publishes
-        // PostingDeleted and Ai's OnPostingDeleted removes the row.
+        // The other half, and the reason the assertion above is worth 1: an archive
+        // whose undo loses the expensive part is not an undo.
+        var id = await Client.CreateApplicationAsync("Atlassian", "Platform Engineer", Ct);
+        await WithDbAsync(async db =>
+        {
+            db.MatchResults.Add(new MatchResult
+            {
+                ApplicationId = id,
+                MatchedKeywords = ["C#"],
+                MissingMustHaveKeywords = [],
+                FormattingRiskNotes = [],
+            });
+            await db.SaveChangesAsync(Ct);
+        });
+
+        (await Client.DeleteAsync($"/applications/{id}", Ct)).EnsureSuccessStatusCode();
+        var restore = await Client.PostAsync($"/applications/{id}/restore", null, Ct);
+
+        Assert.Equal(HttpStatusCode.NoContent, restore.StatusCode);
+        Assert.Equal(1, await WithDbAsync(db => db.JobApplications.CountAsync(Ct)));
+        Assert.Equal(1, await WithDbAsync(db => db.MatchResults.CountAsync(Ct)));
+    }
+
+    [Fact]
+    public async Task ArchivingAPosting_KEEPSItsSkillLinksRequirementsAndAnalysis()
+    {
+        // Three rules in one test, and PHASE 8 collapsed them back into one answer after
+        // 13.3c had split them across two mechanisms.
         //
-        // Which is why the delete below goes through DELETE /postings/{id} rather than
-        // db.JobPostings.Remove. Between 13.3b and 13.3c it went through the context,
-        // because no route existed — and a context delete raises no event, so the same
-        // arrangement would still leave the analysis behind and the test would be
-        // asserting the absence of a route rather than the presence of a replacement.
+        // 13.3c's arrangement: posting_skills and job_requirements are Applications' own
+        // tables in its own schema, so they cascaded in Postgres; ai_analyses is not, so
+        // its cascade had become a delete notification. Two mechanisms, one outcome.
+        //
+        // Soft delete stops BOTH. The DELETE never reaches Postgres, so the two cascades
+        // never fire; and nothing is published, so the subscriber never runs. Three rows
+        // survive for two different reasons that now produce the same result — which is
+        // exactly what makes a restore a restore rather than a re-import.
+        //
+        // The delete still goes through DELETE /postings/{id} rather than
+        // db.JobPostings.Remove. That mattered in 13.3c because a context delete raises
+        // no event; it matters now because the route is what a user can actually reach,
+        // and the interceptor makes the two paths identical anyway.
         var id = await Client.CreateApplicationAsync("Xero", "Senior Engineer", Ct);
         (await Client.AddSkillAsync(id, "C#", Ct)).EnsureSuccessStatusCode();
         (await Client.AddRequirementAsync(id, "5+ years .NET", Ct)).EnsureSuccessStatusCode();
@@ -122,37 +173,82 @@ public sealed class DeleteBehaviourTests(PostgresFixture fixture) : IntegrationT
         (await Client.DeleteAsync($"/applications/{id}", Ct)).EnsureSuccessStatusCode();
         (await Client.DeleteAsync($"/postings/{postingId}", Ct)).EnsureSuccessStatusCode();
 
-        // These two still cascade: both tables are Applications' own, in Applications'
-        // schema, so the foreign keys survived 13.3b untouched.
-        Assert.Equal(0, await WithDbAsync(db => db.PostingSkills.CountAsync(Ct)));
-        Assert.Equal(0, await WithDbAsync(db => db.JobRequirements.CountAsync(Ct)));
+        // The ad itself is hidden, which is what the user asked for.
+        Assert.Equal(0, await WithDbAsync(db => db.JobPostings.CountAsync(Ct)));
 
-        // This one goes for a different reason. `ai_analyses` is the Ai module's schema
-        // and its FK to job_postings has been gone since 13.3b, so nothing in Postgres
-        // connects these two rows; the analysis is deleted because Ai was told the ad
-        // was, and chose to.
-        Assert.Equal(0, await WithDbAsync(db => db.AiAnalyses.CountAsync(Ct)));
+        // These two survive because their CASCADE never fires — there is no DELETE for
+        // Postgres to cascade from. The foreign keys are untouched and still say
+        // CASCADE; they are simply not consulted.
+        Assert.Equal(1, await WithDbAsync(db => db.PostingSkills.CountAsync(Ct)));
+        Assert.Equal(1, await WithDbAsync(db => db.JobRequirements.CountAsync(Ct)));
 
-        // The shared skills row survives its posting either way. It used to be a
-        // RESTRICT saying so; now it is simply a different module's table that nothing
-        // in this delete path can reach.
+        // This one survives for the other reason: PostingDeleted is no longer published,
+        // so Ai is never told. Same outcome, different mechanism — and both mechanisms
+        // stopped because of one decision, which is the tidy part.
+        Assert.Equal(1, await WithDbAsync(db => db.AiAnalyses.CountAsync(Ct)));
+
+        // The shared skills row survives its posting either way, as it has through
+        // every version of this test. It used to be a RESTRICT saying so; since 13.3b it
+        // is simply a different module's table that nothing in this path can reach.
         Assert.Equal(1, await WithDbAsync(db => db.Skills.CountAsync(Ct)));
+
+        // And the whole ad comes back intact, which is the claim the four assertions
+        // above are really making.
+        (await Client.PostAsync($"/postings/{postingId}/restore", null, Ct))
+            .EnsureSuccessStatusCode();
+        Assert.Equal(1, await WithDbAsync(db => db.JobPostings.CountAsync(Ct)));
     }
 
     [Fact]
-    public async Task DeletingAPostingThatStillHasAnApplication_IsRefusedByTheDatabase()
+    public async Task ThePostingRestrict_StillExists_EvenThoughNothingReachesItAnyMore()
     {
+        // PHASE 8 REWROTE HOW THIS ASKS, not what it asserts. The rule — you cannot
+        // destroy an ad while an application names it — is unchanged and the foreign key
+        // that enforces it is unchanged. What changed is that the application can no
+        // longer get Postgres to consider it: db.JobPostings.Remove now produces an
+        // UPDATE, so the version of this test that went through the change tracker threw
+        // nothing and proved nothing.
+        //
+        // So it goes around EF entirely. A raw DELETE is the only thing left in the
+        // system that can still make this constraint speak, and keeping it provable
+        // matters because the key is dormant rather than retired: a purge (F18) would
+        // wake it, and a Restrict that quietly became a Cascade in the meantime would
+        // eat rows on the day it did.
+        //
+        // The SQL names its schema — `public` holds nothing since 13.3b.
         var id = await Client.CreateApplicationAsync("Seek", "Engineer", Ct);
         var postingId = await WithDbAsync(db =>
             db.JobApplications.Where(a => a.Id == id).Select(a => a.PostingId).SingleAsync(Ct));
 
-        var failure = await Assert.ThrowsAsync<DbUpdateException>(() => WithDbAsync(async db =>
-        {
-            db.JobPostings.Remove(await db.JobPostings.SingleAsync(p => p.Id == postingId, Ct));
-            await db.SaveChangesAsync(Ct);
-        }));
+        var failure = await Assert.ThrowsAnyAsync<Exception>(() => WithDbAsync(db =>
+            db.Database.ExecuteSqlRawAsync(
+                "DELETE FROM applications.job_postings WHERE \"Id\" = {0}",
+                [postingId],
+                Ct)));
 
-        Assert.Contains("violates foreign key constraint", failure.InnerException?.Message ?? "");
+        Assert.Contains("violates foreign key constraint", failure.InnerException?.Message ?? failure.Message);
+    }
+
+    [Fact]
+    public async Task ArchivingAPostingThatStillHasALiveApplication_IsRefusedByTheHandler()
+    {
+        // The refusal a user can actually reach, and since Phase 8 the ONLY one: the
+        // count in DeletePostingHandler, answering 400 rather than letting a constraint
+        // surface as a 500. It counts live applications, which the query filter does for
+        // free — so archiving the application is what frees the ad.
+        var id = await Client.CreateApplicationAsync("Seek", "Platform Engineer", Ct);
+        var postingId = await WithDbAsync(db =>
+            db.JobApplications.Where(a => a.Id == id).Select(a => a.PostingId).SingleAsync(Ct));
+
+        Assert.Equal(
+            HttpStatusCode.BadRequest,
+            (await Client.DeleteAsync($"/postings/{postingId}", Ct)).StatusCode);
+
+        (await Client.DeleteAsync($"/applications/{id}", Ct)).EnsureSuccessStatusCode();
+
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            (await Client.DeleteAsync($"/postings/{postingId}", Ct)).StatusCode);
     }
 
     [Fact]

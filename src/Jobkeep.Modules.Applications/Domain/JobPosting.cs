@@ -5,7 +5,7 @@ namespace Jobkeep.Modules.Applications.Domain;
 
 // The external job ad — the thing you found on Indeed/LinkedIn. This is the
 // unit the AI analyzer (Phase 4) reads, and AI-derived facts describe it.
-public class JobPosting : IAuditable
+public class JobPosting : IAuditable, ISoftDeletable
 {
     public Guid Id { get; set; } = Guid.NewGuid();
 
@@ -30,6 +30,12 @@ public class JobPosting : IAuditable
     // Phase 7 — F8: PATCH mutates Title, Location, Description and CompanyId,
     // and until now nothing recorded that it had.
     public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
+
+    // Phase 8. An archived ad keeps its skills and its requirements — the DELETE
+    // that used to cascade into both never runs now, which is what makes the
+    // restore below a restore and not a re-import.
+    public bool IsDeleted { get; set; }
+    public DateTime? DeletedAtUtc { get; set; }
 
     // Skills the ad asks for, via the shared Skill table (many-to-many).
     // IsRequired on the join row splits must-have vs nice-to-have.

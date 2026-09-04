@@ -15,6 +15,22 @@ public class JobApplicationConfiguration : IEntityTypeConfiguration<JobApplicati
     public void Configure(EntityTypeBuilder<JobApplication> e)
     {
         e.ToTable("job_applications", "applications");
+        // PHASE 8 — soft delete. Every existing query excludes archived rows
+        // from here, without one of them being rewritten; that is the whole
+        // reason this is a global filter rather than a `.Where` per slice, and
+        // it is what lets Today, Pipeline and Insights need no change at all.
+        //
+        // Escaping it is deliberate and explicit: IgnoreQueryFilters(), used by
+        // the list reads when `includeArchived` is set and by the restore slice,
+        // which has to find a row the filter hides.
+        e.HasQueryFilter(a => !a.IsDeleted);
+
+        // NO INDEX ON IsDeleted, and none added to the two below either. An index
+        // whose every entry holds the same value answers nothing, and making the
+        // Phase 7 indexes partial would be tuning for a distribution this table
+        // does not have — the archived rows are the minority by construction.
+        // Revisit if a live query ever shows Postgres scanning past them.
+
         e.Property(a => a.Status).HasConversion<string>().HasMaxLength(20);
         e.Property(a => a.Notes).HasMaxLength(10000);   // F13
 

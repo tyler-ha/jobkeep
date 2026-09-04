@@ -1,4 +1,4 @@
-﻿using Jobkeep.Modules.Ai;
+using Jobkeep.Modules.Ai;
 using Jobkeep.Modules.Applications;
 using Jobkeep.Modules.Match;
 using Jobkeep.Modules.Documents;
@@ -51,6 +51,15 @@ public class Mutation
         Guid id, [Service] ISender sender, CancellationToken ct)
         => (await sender.Send(new Apps.DeleteApplication(id), ct)).ValueOrThrow();
 
+    // PHASE 8 — the three restore mutations, the GraphQL half of the archive's
+    // undo. They exist on this surface for the reason the parity suite exists at
+    // all: an operation available on one surface and not the other is how the two
+    // start enforcing different rules, and a restore that is REST-only would mean
+    // a GraphQL client can archive a row it cannot bring back.
+    public async Task<bool> RestoreApplication(
+        Guid id, [Service] ISender sender, CancellationToken ct)
+        => (await sender.Send(new Apps.RestoreApplication(id), ct)).ValueOrThrow();
+
     // PHASE 13.3c — the first way to delete a job ad, and the publisher behind
     // the delete notification that replaced `ai_analyses.PostingId`'s cascade.
     //
@@ -62,6 +71,10 @@ public class Mutation
     public async Task<bool> DeletePosting(
         Guid id, [Service] ISender sender, CancellationToken ct)
         => (await sender.Send(new Apps.DeletePosting(id), ct)).ValueOrThrow();
+
+    public async Task<bool> RestorePosting(
+        Guid id, [Service] ISender sender, CancellationToken ct)
+        => (await sender.Send(new Apps.RestorePosting(id), ct)).ValueOrThrow();
 
     // Exercises the shared-skills join: reuses an existing Skill row by name or
     // creates it, then links it to the application's posting.
@@ -158,6 +171,12 @@ public class Mutation
     public async Task<bool> DeleteResume(
         Guid id, [Service] ISender sender, CancellationToken ct)
         => (await sender.Send(new Docs.DeleteResume(id), ct)).ValueOrThrow();
+
+    // Errors carrying INVALID_INPUT when a live résumé has taken the label, which
+    // is the same refusal REST answers 400 to — one rule, in RestoreResumeHandler.
+    public async Task<bool> RestoreResume(
+        Guid id, [Service] ISender sender, CancellationToken ct)
+        => (await sender.Send(new Docs.RestoreResume(id), ct)).ValueOrThrow();
 
     // The resume-side mirror of addSkillToPosting, and the first write to
     // `resume_skills` that is not part of the import cycle. Both halves of the

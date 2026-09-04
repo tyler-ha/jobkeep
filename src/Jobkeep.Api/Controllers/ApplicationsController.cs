@@ -59,6 +59,26 @@ public class ApplicationsController : ControllerBase
         CancellationToken ct)
         => (await sender.Send(new DeleteApplication(id), ct)).ToHttpResult(_ => Results.NoContent());
 
+    // POST /applications/{id}/restore — PHASE 8, the undo behind the archive.
+    //
+    // POST rather than PATCH, and rather than a body on the DELETE. A restore is
+    // a named operation on a resource, not a partial update of its fields: the
+    // caller does not say WHICH fields, and `PATCH {"isDeleted": false}` would
+    // publish two storage columns as part of the wire contract for no gain. The
+    // shape matches the other verbs this API already has — /confirm, /reparse,
+    // /match-check — all of which are things you DO to a row rather than edits
+    // you make to one.
+    //
+    // 404 when the row is live or absent; RestoreApplication.cs argues why those
+    // are the same answer.
+    [HttpPost("{id:guid}/restore")]
+    [EndpointSummary("Bring an archived application back.")]
+    public async Task<IResult> Restore(
+        Guid id,
+        [FromServices] ISender sender,
+        CancellationToken ct)
+        => (await sender.Send(new RestoreApplication(id), ct)).ToHttpResult(_ => Results.NoContent());
+
     // POST /applications/{id}/skills — link a skill to this application's posting
     [HttpPost("{id:guid}/skills")]
     public async Task<IResult> AddSkill(
@@ -124,4 +144,13 @@ public class ApplicationsController : ControllerBase
         [FromServices] ISender sender,
         CancellationToken ct)
         => (await sender.Send(new DeletePosting(id), ct)).ToHttpResult(_ => Results.NoContent());
+
+    // POST /postings/{id}/restore — PHASE 8. Same shape, same schema, same tag.
+    [HttpPost("~/postings/{id:guid}/restore")]
+    [EndpointSummary("Bring an archived job ad back.")]
+    public async Task<IResult> RestorePosting(
+        Guid id,
+        [FromServices] ISender sender,
+        CancellationToken ct)
+        => (await sender.Send(new RestorePosting(id), ct)).ToHttpResult(_ => Results.NoContent());
 }

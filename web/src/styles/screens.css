@@ -245,6 +245,57 @@
   white-space: nowrap;
 }
 
+/* ---- Phase 8: archive ---------------------------------------------------- */
+
+/* The action column. Narrow and right-aligned so the buttons form one edge
+   rather than a ragged one, and nowrap because "Restore" and "Archive" are
+   different widths and a wrapped button is taller than its row. */
+.col-action {
+  width: 1%;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* An archived row, when the list is showing them. Muted rather than struck
+   through or tinted: PRODUCT.md reserves the alert red for failures and for
+   destruction, and an archived application is neither — it is simply not part of
+   the active list. Lower contrast is the honest signal for "still here, not
+   current", and it is the same device .quiet already uses everywhere else.
+
+   The company cell keeps full ink. A row you cannot read is a row you cannot
+   scan for the thing you archived by mistake, which is the whole reason it is
+   visible at all. */
+.table-row[data-archived] {
+  color: var(--muted);
+}
+
+.table-row[data-archived] .cell-role a {
+  color: var(--muted);
+}
+
+/* The undo banner. Inline, above the table, no timeout.
+   A floating toast that disappears after five seconds is the usual pattern and
+   it is the wrong one here: the archive is reversible for as long as the row
+   exists, so there is no deadline to communicate, and a timer only punishes
+   someone who looked away. It sits in the flow and pushes the table down by one
+   line, which is also what makes it impossible to miss. */
+.undo {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-2) var(--s-3);
+  margin-bottom: var(--s-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  background: var(--card);
+  font-size: var(--t-sm);
+}
+
+/* The dismiss pushes to the right; Undo stays next to the sentence it undoes. */
+.undo button:last-child {
+  margin-left: auto;
+}
+
 .pager {
   display: flex;
   align-items: center;

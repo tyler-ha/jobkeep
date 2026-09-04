@@ -7,7 +7,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Jobkeep.Modules.Documents;
 
-// Slice: delete a résumé version off the shelf.
+// Slice: delete a résumé version off the shelf. Since PHASE 8 this ARCHIVES;
+// DeleteApplication.cs argues why the name and the route still say "delete".
 //
 // ---------------------------------------------------------------------------
 // Why this route did not exist until 13.3c
@@ -29,17 +30,32 @@ namespace Jobkeep.Modules.Documents;
 // from Postgres and both are asked here instead — through IApplicationContract
 // and IMatchContract, one count each.
 //
-// **This is weaker than RESTRICT and the difference is not academic.** A foreign
-// key refuses inside the transaction that attempts the delete; two counts and a
-// delete are three statements with gaps between them, so an application created
-// against this résumé after the count and before the commit survives, pointing at
-// a row that no longer exists. That is a time-of-check-to-time-of-use race, and it
-// is the actual cost of moving integrity out of the database.
+// **This was weaker than RESTRICT, and PHASE 8 is what closed the gap.** The
+// argument below is kept verbatim because it is the reasoning that chose this
+// phase's position on the roadmap, and it named its own fix in the last bullet.
+//
+// The race is now harmless rather than merely unlikely: the row does not go away,
+// so an application created against this résumé between the count and the commit
+// points at a row that still exists and is still readable by anything that asks
+// for it by id. What it gets is an ARCHIVED résumé rather than a missing one —
+// ApplicationDetail's tolerance below covers exactly that, and a restore makes it
+// whole. Nothing dangles, because nothing was destroyed.
+//
+// The two counts therefore stop being an integrity mechanism and become a
+// USABILITY one: they refuse to hide a document that live work still points at,
+// because a détail screen showing a blank résumé chip is a worse answer than a
+// sentence saying why. Note both counts now see live rows only — the query filter
+// on job_applications does that for the first, and Match's own filter would do it
+// for the second if match_results were archivable, which it is not — so archiving
+// the applications is what frees the résumé.
+//
+// The original statement of the problem:
 //
 // Accepted, with the reasoning stated rather than hidden:
 //   * The window is microseconds on a single-user local application where the
 //     same person would have to be creating an application and deleting the
-//     résumé it names at the same moment.
+//     résumé it names at the same moment. (Phase 8 note: the window is still
+//     there; what changed is that landing in it now costs nothing.)
 //   * The residue is the case the read path already handles. ApplicationDetail
 //     leaves ResumeLabel null when the résumé is gone and says so in a comment;
 //     GetMatchResult does the same. Neither renders a blank chip or throws.
@@ -48,6 +64,10 @@ namespace Jobkeep.Modules.Documents;
 //     answer at service scale — a saga with a compensating action, or making the
 //     delete a soft one nothing has to race against — is Phase 8's work, which
 //     is soft delete and rewrites this path anyway.
+//
+// That last clause is the one that came true, and it is worth saying out loud in
+// an interview: the cheapest fix for a distributed-integrity problem was not a
+// saga or a two-phase commit. It was deciding that nothing gets destroyed.
 //
 // The order matters slightly and is cheap: ask Applications first, because an
 // application referencing a résumé is the far commoner case and the message a
@@ -82,19 +102,21 @@ public class DeleteResumeHandler : IRequestHandler<DeleteResume, SliceResult<boo
         if (applications > 0)
             return SliceResult<bool>.Invalid(
                 $"'{resume.Label}' was sent with {applications} application(s). "
-                + "Point those at another résumé first, or delete them.");
+                + "Point those at another résumé first, or archive them.");
 
         var checks = await _ats.CountResultsForResumeAsync(id, ct);
         if (checks > 0)
             return SliceResult<bool>.Invalid(
                 $"'{resume.Label}' was judged by {checks} stored match check(s). "
-                + "Delete those applications first — re-running a check is cheap, "
-                + "but a result whose résumé is gone cannot be explained.");
+                + "Archive those applications first — re-running a check is cheap, "
+                + "but a result whose résumé is hidden cannot be explained.");
 
-        // Loaded and removed rather than ExecuteDelete, so EF applies the three
-        // cascades a résumé has: resume_skills, resume_experiences and
-        // resume_educations. All three are Documents' own tables in Documents'
-        // own schema, which is why they still cascade when the two above do not.
+        // Loaded and removed rather than ExecuteDelete, and Phase 8 inverted why —
+        // the same inversion as DeletePosting. It used to be so EF would apply the
+        // three cascades a résumé has: resume_skills, resume_experiences and
+        // resume_educations. Now it is so the interceptor can convert the delete
+        // to an archive, and the three cascades DO NOT FIRE. The parsed skills,
+        // jobs and qualifications survive, which is what a restore restores.
         //
         // The shared `skills` rows survive their links, as they always have —
         // that is what a shared vocabulary table is for, and since 13.3b it is
@@ -111,11 +133,11 @@ public class DeleteResumeHandler : IRequestHandler<DeleteResume, SliceResult<boo
         _db.Resumes.Remove(resume);
         await _db.SaveChangesAsync(ct);
 
-        // No event published. Nothing outside this module has a reaction to a
-        // deleted résumé — the two modules that point at one were asked above and
-        // said no, which is the difference between a RESTRICT replacement and a
-        // CASCADE replacement: one is a question asked before, the other is an
-        // announcement made after.
+        // No event published, as before — and since Phase 8 the other two delete
+        // slices publish nothing either, so this is no longer the odd one out. The
+        // distinction it recorded still holds and is still the useful one: a
+        // RESTRICT replacement is a question asked before, a CASCADE replacement
+        // is an announcement made after, and this path only ever needed the first.
         return SliceResult<bool>.Ok(true);
     }
 }

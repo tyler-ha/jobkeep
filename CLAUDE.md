@@ -739,10 +739,11 @@ Three questions were settled at the same time and are recorded in
 smaller hand-rolled option **the ponytail ladder argued for**, deliberately, for
 the platform answer an interviewer expects), and there is **no third-party login**.
 
-**Nothing is scheduled next.** The live candidates, none started: **Phase 6 step
-6.4** (the README), the **Phase 6 visual pass** on the other seven screens, and the
-**`docs/token-log.md` backfill** (Phases 8-14 have no rows and Phase 14's is
-provisional; the ledger's own rule says do it in a *fresh* session).
+**Nothing is scheduled next.** The live candidates, none started: **Phase 9** (the
+three backend gaps the front end found), **Phase 6 step 6.4** (the README), the
+**Phase 6 visual pass** on the other seven screens, and the **`docs/token-log.md`
+backfill** (Phases 8-14 have no rows and Phase 14's is provisional; the ledger's
+own rule says do it in a *fresh* session).
 (This line has five times named a step that had already landed — 13.4 at `24fbb49`,
 then 13.5, then 13.6, then the match-check rename, then group 6 and group 4 with it
 — so check the branch before trusting it. **Phase 6.5 is now DONE in full.**)
@@ -1033,9 +1034,52 @@ script is a sequence of migrations and later `ALTER`s silently correct earlier
 `CREATE`s; reading the final state out of that text is guesswork, and the dump is
 the applied result.
 
-**Then Phase 8** (`docs/phases/phase-8-soft-delete.md`) — soft delete, which needs
-the filtered unique indexes Phase 7's natural-key work created. Note its cost is
-overwhelmingly *front-end*: five list routes, five empty states, an undo.
+**PHASE 8 IS DONE (2026-09-04)** — soft delete. Two migrations (`SoftDelete`, in
+`applications` and `documents`), suite 303 → 314, web 50 → 52. Six things from it
+change how new code is written, and the first is the one that costs money to
+re-learn:
+
+- **`Remove()` MEANS ARCHIVE.** `ISoftDeletable` (SharedKernel) is matched by
+  `AuditSaveChangesInterceptor`, which converts `Deleted` → `Modified` and stamps
+  the two columns. So a slice cannot hard-delete by writing the obvious thing —
+  and **`ExecuteDelete` still can**, because it bypasses the change tracker. Three
+  entities carry it: `JobApplication`, `JobPosting`, `Resume`, the three with a
+  delete slice. **`Company` and `Skill` do NOT**, because nothing deletes them; the
+  phase doc corrects the plan's demand for filtered indexes on their names.
+- **`HasQueryFilter` DOES NOT REACH RAW SQL, AND THAT IS THE SILENT ONE.** All
+  three of Analytics' published views kept counting archived rows until the
+  migration re-cut them by hand; `v_posting_skill_demand` gained a JOIN it never
+  had, since `posting_skills` has no `IsDeleted`. Same trap applies to
+  `ExecuteUpdate`/`ExecuteDelete` and any future function or view.
+- **THE 13.3c DELETE NOTIFICATIONS ARE NO LONGER PUBLISHED.** `ApplicationDeleted`
+  and `PostingDeleted` existed to delete derived rows; archiving must not destroy a
+  stored match check about a row that survived — which is the weighing
+  `DeleteApplication.cs` already made in 13.3c, now pointing the other way. Both
+  events and both handlers are **unreachable through the app**, kept for the purge
+  (F18) that is their real caller. So `match_results` and `ai_analyses` now outlive
+  every archive and **nothing deletes them any more**.
+- **`resumes.LabelNormalized`'s unique index is FILTERED** (`NOT "IsDeleted"`), so
+  archiving frees the label — otherwise an archive silently burns a name. The price
+  is that **`RestoreResume` can be refused** with a 400 when a live résumé took the
+  label meanwhile. It asks first rather than letting the index throw a 500.
+- **`?includeArchived=true` means INCLUDE, not ONLY**, on `/applications` and
+  `/resumes`; both list items carry `isArchived`. On applications it calls
+  `IgnoreQueryFilters()` on the whole query, deliberately — `job_postings` is
+  filtered too, and an inner join would otherwise drop an application whose ad was
+  also archived, silently and only for that row.
+- **The archive button is NOT `.btn-danger`.** An archive is reversible and
+  deliberate; the alert red is for failures and destruction (`PRODUCT.md`). The
+  undo is an inline banner with **no timeout**, because the row is recoverable for
+  as long as it exists and a timer only punishes someone who looked away.
+
+**The plan's front-end estimate was wrong by an order of magnitude, and the reason
+is worth not repeating.** It said "five list routes, five empty states" and called
+this the highest front-end blast radius on the roadmap. **One screen changed.**
+The plan assumed delete affordances existed to convert — none did;
+`deleteApplication` was exported and called by nothing. The other four list routes
+needed no change at all, because the global filter excludes archived rows from
+fetches nobody rewrote. A blast-radius estimate written against a *planned* UI
+decays as fast as the plan does.
 
 **The roadmap was reordered and renumbered on 2026-09-01** (architecture.md
 decision 18). Read `docs/README.md` for the table; what matters here is the rule

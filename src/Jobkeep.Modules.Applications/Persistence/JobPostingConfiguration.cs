@@ -14,6 +14,14 @@ public class JobPostingConfiguration : IEntityTypeConfiguration<JobPosting>
     public void Configure(EntityTypeBuilder<JobPosting> e)
     {
         e.ToTable("job_postings", "applications");
+        // PHASE 8 — soft delete. Same global filter as job_applications, and the
+        // pairing matters: EF warns when a filtered principal is on the required
+        // end of a relationship with an UNFILTERED dependent, because the join
+        // then silently drops rows. Both ends carry the filter, so an archived ad
+        // and its live application cannot coexist — DeletePostingHandler still
+        // refuses while any live application names it.
+        e.HasQueryFilter(p => !p.IsDeleted);
+
         e.Property(p => p.Title).HasMaxLength(300);
         e.Property(p => p.EmploymentType).HasConversion<string>().HasMaxLength(20);
         e.Property(p => p.SalaryPeriod).HasConversion<string>().HasMaxLength(10);

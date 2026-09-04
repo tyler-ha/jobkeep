@@ -43,9 +43,21 @@ public record ResumeSummary(
     SourceFormat? SourceFormat,
     int SkillCount,
     DateTime CreatedAtUtc,
-    DateTime UpdatedAtUtc);
+    DateTime UpdatedAtUtc,
+    // PHASE 8, and the same reasoning as ApplicationListItem.IsArchived: a mixed
+    // list has to be renderable without the client inferring state from the
+    // request it sent.
+    bool IsArchived);
 
-public record ListResumes() : IRequest<SliceResult<List<ResumeSummary>>>;
+// PHASE 8 — the flag arrives as a parameter rather than as a query object,
+// because one optional bool is not a filter surface. If a second ever lands here,
+// that is the point to give this slice an ApplicationQuery of its own; doing it
+// now would be building the shape rather than the feature.
+//
+// Defaulted, so every existing call site — the controller, the GraphQL resolver
+// and eleven tests — compiles and keeps its old meaning unchanged.
+public record ListResumes(bool IncludeArchived = false)
+    : IRequest<SliceResult<List<ResumeSummary>>>;
 
 public class ListResumesHandler : IRequestHandler<ListResumes, SliceResult<List<ResumeSummary>>>
 {
@@ -61,8 +73,15 @@ public class ListResumesHandler : IRequestHandler<ListResumes, SliceResult<List<
     public async ValueTask<SliceResult<List<ResumeSummary>>> Handle(
         ListResumes message, CancellationToken ct)
     {
-        var items = await _db.Resumes
-            .AsNoTracking()
+        var resumes = _db.Resumes.AsNoTracking();
+
+        // PHASE 8. Include, not only — see ApplicationQuery.IncludeArchived.
+        // Nothing else on a résumé is filtered, so unlike the applications list
+        // this drops exactly one predicate.
+        if (message.IncludeArchived)
+            resumes = resumes.IgnoreQueryFilters();
+
+        var items = await resumes
             // Most recently touched first. UpdatedAtUtc rather than CreatedAtUtc
             // because adding a skill to a résumé is what the match check's drag
             // does, and the version you just corrected is the one you are working
@@ -84,7 +103,8 @@ public class ListResumesHandler : IRequestHandler<ListResumes, SliceResult<List<
                 r.SourceFormat,
                 r.ResumeSkills.Count,
                 r.CreatedAtUtc,
-                r.UpdatedAtUtc))
+                r.UpdatedAtUtc,
+                r.IsDeleted))
             .ToListAsync(ct);
 
         return SliceResult<List<ResumeSummary>>.Ok(items);

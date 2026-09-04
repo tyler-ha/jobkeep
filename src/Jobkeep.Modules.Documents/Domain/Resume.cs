@@ -28,7 +28,7 @@ namespace Jobkeep.Modules.Documents.Domain;
 // mentions" is one join rather than a text search. That is also exactly what
 // Phase 5's match check needs, and it is why the skills table was made shared in
 // the first place.
-public class Resume : IAuditable
+public class Resume : IAuditable, ISoftDeletable
 {
     public Guid Id { get; set; } = Guid.NewGuid();
 
@@ -81,6 +81,14 @@ public class Resume : IAuditable
 
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
+
+    // Phase 8. This is the entity soft delete changes most, and the reason is
+    // `LabelNormalized` above: the unique index on it is now FILTERED to live
+    // rows, so archiving "backend" frees the name — which is correct, and is
+    // also why a restore has to ask whether something took it since. Without the
+    // filter, archiving a résumé would permanently burn its label.
+    public bool IsDeleted { get; set; }
+    public DateTime? DeletedAtUtc { get; set; }
 
     [JsonIgnore] public List<ResumeSkill> ResumeSkills { get; set; } = new();
     [JsonIgnore] public List<ResumeExperience> Experiences { get; set; } = new();
