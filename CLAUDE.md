@@ -739,14 +739,25 @@ Three questions were settled at the same time and are recorded in
 smaller hand-rolled option **the ponytail ladder argued for**, deliberately, for
 the platform answer an interviewer expects), and there is **no third-party login**.
 
-**Nothing is scheduled next.** **Phase 9 is two thirds done** — gap 2 (the status
-set) and gap 3 (`GET /applications/board`, the Pipeline's read) both landed
-2026-09-04, and **gap 1 is blocked on a decision**: it projects `match_results`
-into a list row, which decision 17 used to make free and Phase 13 does not. The
-other live candidates: **Phase 6 step 6.4** (the README), the
-**Phase 6 visual pass** on the other seven screens, and the **`docs/token-log.md`
-backfill** (Phases 8-14 have no rows and Phase 14's is provisional; the ledger's
-own rule says do it in a *fresh* session).
+**PHASE 9 IS DONE (2026-09-04)** — all three gaps, no migration in any of them,
+suite 314 → 332 and web 52 → 55. Gap 2 is the status *set*, gap 3 is
+`GET /applications/board`, and **gap 1 put the "CV match" column back on the
+Applications screen**. The one rule from gap 1 worth not re-deriving: **a stored
+match summary on a list row is a CONTRACT CALL, not a projection.** The plan said
+it was "legal under decision 17 and needs no contract"; Phase 13 reversed that, so
+it is `IMatchContract.GetSummariesAsync(ids)` — batched over the page, keyed by
+application id, **absent means never checked**. It passes `CLAUDE.md`'s own test
+because it names a *fact about the row* (`match_results` is 1:1 with an
+application and already stores the three lists), which is the same reason
+`CountResultsForResumeAsync` belongs there and the opposite of the ATS skill gap,
+which stayed with its caller. `MatchSummary` is two integers on purpose — the
+keyword lists, the date and the warning are all left off, and the column
+deliberately cannot tell a stale check from a fresh one.
+
+**Nothing is scheduled next.** The live candidates: **Phase 6 step 6.4** (the
+README), the **Phase 6 visual pass** on the other seven screens, and the
+**`docs/token-log.md` backfill** (Phases 8-14 have no rows and Phase 14's is
+provisional; the ledger's own rule says do it in a *fresh* session).
 (This line has five times named a step that had already landed — 13.4 at `24fbb49`,
 then 13.5, then 13.6, then the match-check rename, then group 6 and group 4 with it
 — so check the branch before trusting it. **Phase 6.5 is now DONE in full.**)

@@ -327,7 +327,15 @@ public sealed class ListApplicationsTests(PostgresFixture fixture) : Integration
             // "isArchived" joined the list in Phase 8. It is a flag, not a payload — the
             // reason a list item carries it is in ApplicationListItem — so it does not
             // reopen A1, and this assertion staying exhaustive is what proves that.
-            new[] { "company", "dateApplied", "id", "isArchived", "location", "skills", "status", "title" },
+            //
+            // "match" joined it in Phase 9, and it is the one addition that deserves a
+            // second look, because A1 was precisely about a match result being dragged
+            // into a list row. It does not reopen A1 for two reasons: it is two integers
+            // rather than the five text[] columns of the stored check, and it does not
+            // arrive by an include at all — Applications cannot see `match_results`, so
+            // it comes from one batched IMatchContract call per page. An include graph
+            // would put the keyword lists back, and this assertion would fail.
+            new[] { "company", "dateApplied", "id", "isArchived", "location", "match", "skills", "status", "title" },
             item.EnumerateObject().Select(p => p.Name).OrderBy(n => n, StringComparer.Ordinal));
 
         // Named explicitly because these two are the ones that matter: the ad text is

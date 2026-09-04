@@ -40,7 +40,7 @@ phase doc is a historical record, not a description of the current tree.
 | 6.6 | [The ad goes somewhere](phases/phase-6.6-the-ad-goes-somewhere.md) | **Done** (2026-09-01) — the add form collected the ad into `Notes`, which nothing reads; the job post told you to paste the ad in and offered nowhere to do it |
 | 7 | [Data integrity & the dedup key](phases/phase-7-data-integrity.md) | **Done** (2026-09-01) — one migration; ERD redraw still outstanding. Formerly "Phase 2.7" |
 | 8 | [Soft delete / archive](phases/phase-8-soft-delete.md) | **Done** (2026-09-04). Two migrations; the front-end estimate was wrong — one screen changed, not five |
-| 9 | [The three reads the front end could not get](phases/phase-9-api-gaps.md) | **In progress.** Gap 2 (status set + isClosed) done 2026-09-04; gap 1 blocked on a contract decision |
+| 9 | [The three reads the front end could not get](phases/phase-9-api-gaps.md) | **Done 2026-09-04.** All three: the status set, `GET /applications/board`, and the CV-match summary on a list row |
 | 10 | [Deploy to AWS Lambda (Function URL)](phases/phase-10-aws-deploy.md) | **DROPPED** (2026-09-04) — AWS is not the target; a free host is to be chosen later. Kept as a researched record. Decision 22 |
 | 12 | [Feature expansion after the front end](phases/phase-12-feature-expansion.md) | **Placeholder** — not a feature list; what changes about *building* one once there are two halves. Formerly "Phase 7" |
 | **11, last** | [Authentication & owner scoping](phases/phase-11-auth.md) | **Planned, and deliberately last** (2026-09-04). Decision 9 is now confirmed; the deploy that gated it is dropped, which removed its date rather than its reason. ASP.NET Core Identity in full, no third-party login — both settled in the phase doc |

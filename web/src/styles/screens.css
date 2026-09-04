@@ -251,6 +251,16 @@
   overflow: hidden;
 }
 
+/* Phase 9, gap 1: the CV match fraction. Tabular figures because the column is
+   scanned down rather than read across, and "5/7" beside "12/14" in proportional
+   digits does not line up. Same treatment as the date column for the same reason. */
+.col-match {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--t-xs);
+  white-space: nowrap;
+}
+
 .col-date {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
@@ -2238,7 +2248,8 @@
     display: block;
     padding-right: 0;
   }
-  .col-skills {
+  .col-skills,
+  .col-match {
     display: none;
   }
   .gap {
