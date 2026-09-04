@@ -1,6 +1,6 @@
 # Phase 11 — authentication and owner scoping
 
-**Status: IN PROGRESS. 11.1a and 11.1b landed 2026-09-04.** It was to run immediately
+**Status: IN PROGRESS. 11.1a, 11.1b and 11.1c landed 2026-09-04.** It was to run immediately
 after [Phase 10](phase-10-aws-deploy.md) and be coupled to it; **Phase 10 was
 dropped on 2026-09-04** and this phase was pushed to the end of the roadmap in
 the same decision. See `architecture.md` decision 22.
@@ -22,7 +22,7 @@ here has been (13.1–13.6, 6.1–6.5). Each ends in something runnable.
 |---|---|---|
 | **11.1a** | The Identity module exists and migrates. Sixth `DbContext`, `identity` schema, seven tables, its own `__EFMigrationsHistory`. **No sign-in yet, nothing enforced.** | **Done 2026-09-04** |
 | **11.1b** | Register and sign in. `AddIdentity*` wiring in `Jobkeep.Api`, the endpoints, and the **named-origin CORS policy** — the trap below, which fires here and not later | **Done 2026-09-04** |
-| **11.1c** | The client half: a login route, a route guard in `App.tsx`, `credentials: 'include'` on the one `request()`, and a 401 branch on `ApiError` | Next |
+| **11.1c** | The client half: a login route, a route guard in `App.tsx`, `credentials: 'include'` on the one `request()`, and a 401 branch on `ApiError` | **Done 2026-09-04** |
 | **11.2** | Owner scoping. `OwnerUserId`, the EF global query filter, ~two dozen slices re-scoped, `CreatedBy`/`UpdatedBy` become real foreign keys | |
 | **11.3** | Postgres RLS — the second layer — plus the test that disables the EF filter and proves the database still refuses | |
 
@@ -147,6 +147,83 @@ paragraph gets re-read.
 Suite 332 → 338: five in `tests/Jobkeep.Tests/Rest/IdentityTests.cs` and one
 added to `CorsTests`. No migration — 11.1a's is the only one this phase has so
 far.
+
+### 11.1c, as built
+
+Five files: `web/src/routes/SignIn.tsx` (new), `App.tsx`, `lib/api.ts`,
+`styles/shell.css`, and the fixtures. Web suite **55 → 62**, no backend change
+except one comment. **The estimate in "Frontend impact" was right** — the choke
+point held, and no existing screen changed.
+
+**IT IS NOT A ROUTE, which is a deliberate deviation from the plan.** The plan
+said "a login route and a route guard in `App.tsx`". What shipped is one piece
+of state in `App` with three values — `undefined` (not asked yet), `null`
+(signed out), an `Account` — and the signed-out branch renders `<SignIn>`
+*instead of* the shell, whatever the address is. Two things fall out of that,
+and both are better than the `/login` version:
+
+- **The address survives.** Open a bookmarked `/applications/{id}` with an
+  expired session, sign in, and you are on that job post. No `?returnUrl`, and no
+  code to carry one.
+- **There is no signed-out URL to strand on.** A `/login` route is reachable
+  while signed in, and that state then needs a rule of its own.
+
+It is also less code, which is the tiebreak rather than the argument.
+
+**The third state is the one that matters.** There is no token in the client to
+inspect — the cookie is `HttpOnly` — so the only honest way to know whether a
+session is live is to ask the server, and that is a round trip. `undefined`
+renders nothing for its duration: showing the shell would flash the app at
+someone about to be given a sign-in form, and showing the form would flash a
+sign-in at someone already signed in.
+
+**The 401 handler is in `request()`, not in eight screens.** `onUnauthenticated`
+is a module-level slot `App` fills with "forget who is signed in". A session
+expires between *requests*, not between screens, so a per-screen branch would be
+eight copies of a rule with one cause — and nothing on the Applications screen
+knows about authentication, which is the property worth keeping. `ApiError`
+gained `isUnauthenticated` beside `isRuleRefusal` and `isMissing`, used in
+exactly one place: the sign-in form, where a 401 means *wrong password* rather
+than *session over*.
+
+**Two bugs found on the way, both in `request()` and both pre-existing in shape:**
+
+- **A 200 with no body threw.** `/identity/login` and `/identity/register` both
+  answer one, and `res.json()` on an empty body throws a `SyntaxError` *outside*
+  the try that catches fetch failures — so a successful sign-in would have
+  reported "Could not reach the API". Now reads text first.
+- **`ValidationProblemDetails` was read wrong.** The sentence a person needs is
+  in `errors`; `title` holds "One or more validation errors occurred.". Identity's
+  register is the first endpoint in this app to answer that shape, and "Username
+  'x' is already taken." is the whole message.
+
+**The form can also create the account.** One boolean and a different URL, since
+11.1b mapped both — and a sign-in form whose only alternative is Swagger is a
+dead end. Registration is **open**; that is right for localhost and is the first
+thing to close when a host is chosen (`ponytail:` note on `register` in
+`api.ts`).
+
+**A hint inside a `<label>` is part of the label.** The password rules were a
+`<span>` inside the field's label, which made the input's accessible name
+"Password At least six characters, with an…" — announced that way on focus, and
+unfindable by a test looking for a field called "Password". Moved out and wired
+with `aria-describedby`. Worth knowing because `.field-hint` is used inside
+`.field` elsewhere in `web/`.
+
+**The ceiling this step leaves, and it has an expiry date: `SameSite` is `Lax`.**
+`:5173` calling `:5080` is cross-*origin* but same-*site* — `SameSite` is blind
+to the port — so the browser attaches the cookie and this works. A deployed front
+end on a different domain from the API would be genuinely cross-site and the
+cookie would **silently stop being attached**: signed in, then anonymous, with
+nothing wrong on either side to find. The fix is `SameSite=None`, which requires
+`Secure` and therefore HTTPS, so it cannot be set today without breaking local
+development over http. Argued at the registration in `Program.cs`.
+
+**Not verified in a browser.** The Chrome extension was not connected in the
+session that built it, so what is proven is the suite (which renders the real
+`App` through the real gate) plus 11.1b's curl round trip against the running
+stack. **The appearance of the sign-in card is unreviewed** — it belongs in the
+Phase 6 visual pass that is already waiting on the user.
 
 ## Decided 2026-09-04, before any code — do not re-litigate
 

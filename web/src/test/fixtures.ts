@@ -25,6 +25,10 @@ import type {
  * test data has a way of ending up in a screenshot.
  */
 
+/* Phase 11.1c. A made-up address, for the same reason the résumé fixture is a
+   made-up person: test data ends up in screenshots. */
+export const account = { email: 'sam@example.com', isEmailConfirmed: false };
+
 export const APP_ID = 'a4b172d5-5741-4e9b-8879-6fd59701968f';
 export const RESUME_ID = 'c4d9af56-0000-4000-8000-000000000001';
 export const IMPORT_ID = 'd1e2f3a4-0000-4000-8000-000000000002';
@@ -286,6 +290,12 @@ export function stubFetch() {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
+
+    /* PHASE 11.1c. App asks who is signed in before it renders anything, so
+       every screen test needs an answer here — and a signed-in one, because the
+       screens are what those tests are about. The signed-OUT case is arranged by
+       the auth tests, which stub a 401 for this path themselves. */
+    if (path === '/identity/manage/info') return ok(account);
 
     if (path === '/applications' && method === 'GET') return ok(listPage);
     if (path === '/applications/board') return ok(board);
