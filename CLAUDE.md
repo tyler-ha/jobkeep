@@ -764,6 +764,34 @@ load-bearing, **not a dependency** — nothing in the phase needs a host, only t
 CORS named origin does, and that is config. It is **split into five runnable
 sub-steps** (11.1a, 11.1b, 11.1c, 11.2, 11.3) in `phase-11-auth.md`.
 
+**11.1b LANDED 2026-09-04**: **you can register and sign in.**
+`AddIdentityApiEndpoints<JobkeepUser>()` + `MapIdentityApi<JobkeepUser>()` in a
+`/identity` group, plus a hand-written `/identity/logout`. Suite 332 → 338, no
+migration. Four things from it change how new code is written:
+
+- **`MapIdentityApi` is a DELIBERATE exception to "every route is a controller
+  action"** (13.5). The routes are the framework's; re-typing them as a
+  controller would re-type password hashing, lockout and the token flows, which
+  is the work the package was chosen to avoid. **Do not "fix" it into a
+  controller**, and do not read it as licence to add hand-written minimal APIs.
+- **The CORS trap cost ONE LINE — `.AllowCredentials()`.** Phase 6.1 had already
+  refused `AllowAnyOrigin` and named this as the reason, so the origin list was
+  already explicit. Both the plan and the handoff budgeted a named-origin policy
+  as work in this step; there was none.
+- **`UseAuthentication`/`UseAuthorization` are written out on purpose**, after
+  `UseCors`. A preflight `OPTIONS` carries no cookie, so authorization first
+  refuses it before CORS answers — and it shows up in the browser as a CORS
+  error with nothing server-side to explain it.
+- **`AddEndpointsApiExplorer()` is back**, because `MapIdentityApi`'s routes are
+  minimal APIs and MVC's explorer does not see them. Without it they work and
+  are invisible in Swagger UI.
+
+Two ceilings written down, not fixed: `forgotPassword`/`resendConfirmationEmail`
+answer 200 against a **no-op `IEmailSender`** (nothing is mailed; confirmation is
+not required to log in), and **antiforgery is still off** — it stays off while
+nothing is `[Authorize]`d, and 11.2 is where `DocumentsModule.cs`'s paragraph
+gets re-read.
+
 **11.1a LANDED 2026-09-04**: `src/` is now **eleven projects**, there is a
 **sixth migrating context** and a **sixth schema, `identity`**, holding ASP.NET
 Core Identity's seven tables and its own `__EFMigrationsHistory`. Suite 332, no
