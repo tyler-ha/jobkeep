@@ -76,6 +76,19 @@ public sealed class SmokeTests(PostgresFixture fixture) : IntegrationTestBase(fi
         Assert.Contains("ai.ai_analyses", tables);
         Assert.Contains("ats.match_results", tables);
 
+        // PHASE 11.1a — ASP.NET Core Identity's seven, in their own schema and under
+        // the platform's own names. Both halves are the assertion: the schema is what
+        // keeps the module liftable, and the names are the deliberate choice not to
+        // rename tables that every Identity sample, tutorial and diagnostic tool
+        // already calls these things (IdentityDbContext.cs argues it).
+        Assert.Contains("identity.AspNetUsers", tables);
+        Assert.Contains("identity.AspNetRoles", tables);
+        Assert.Contains("identity.AspNetUserRoles", tables);
+        Assert.Contains("identity.AspNetUserClaims", tables);
+        Assert.Contains("identity.AspNetRoleClaims", tables);
+        Assert.Contains("identity.AspNetUserLogins", tables);
+        Assert.Contains("identity.AspNetUserTokens", tables);
+
         // Five histories, one per table-owning context. Analytics has none because it
         // owns nothing to create, and a sixth appearing here would mean it had started
         // to.

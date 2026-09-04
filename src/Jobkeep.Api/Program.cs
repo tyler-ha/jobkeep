@@ -13,6 +13,7 @@ using Jobkeep.Modules.Applications;
 using Jobkeep.Modules.Applications.Domain;
 using Jobkeep.Modules.Match;
 using Jobkeep.Modules.Documents;
+using Jobkeep.Modules.Identity;
 using Jobkeep.Modules.Skills;
 using Jobkeep.Persistence;
 using Jobkeep.SharedKernel;
@@ -119,6 +120,14 @@ AddModuleContext<SkillsDbContext>("skills");
 AddModuleContext<DocumentsDbContext>("documents");
 AddModuleContext<AiDbContext>("ai");
 AddModuleContext<MatchDbContext>("ats");
+
+// PHASE 11.1a — the sixth migrating context. It takes the same registration as
+// the other five, including the audit interceptor, which is a deliberate no-op
+// here: none of Identity's seven entity types is IAuditable or ISoftDeletable,
+// so the interceptor sees nothing to stamp. Registering it anyway keeps "every
+// module context is built the same way" true, which is worth more than saving
+// one delegate on a context that will never trigger it.
+AddModuleContext<IdentityDbContext>("identity");
 
 // Analytics reads three views published by Applications and owns no tables, so
 // it gets a context but no migrations history — there is nothing for it to
@@ -346,6 +355,14 @@ if (app.Environment.IsDevelopment())
     scope.ServiceProvider.GetRequiredService<DocumentsDbContext>().Database.Migrate();
     scope.ServiceProvider.GetRequiredService<AiDbContext>().Database.Migrate();
     scope.ServiceProvider.GetRequiredService<MatchDbContext>().Database.Migrate();
+
+    // PHASE 11.1a. Sixth, and independent of the other five like the four after
+    // Applications: nothing in `identity` references another schema yet, and
+    // nothing in another schema references it. 11.2 changes that in one
+    // direction — OwnerUserId — and the cross-schema rule from 13.3b applies
+    // when it does: a foreign key that crosses a schema becomes a contract check
+    // in application code, not a constraint.
+    scope.ServiceProvider.GetRequiredService<IdentityDbContext>().Database.Migrate();
 
     // PHASE 14 — the starting skill vocabulary, immediately after the Skills
     // migration that creates the two tables it writes to.

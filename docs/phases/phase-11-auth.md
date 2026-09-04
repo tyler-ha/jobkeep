@@ -1,9 +1,91 @@
 # Phase 11 — authentication and owner scoping
 
-**Status: Planned, and deliberately LAST.** Not started. It was to run
-immediately after [Phase 10](phase-10-aws-deploy.md) and be coupled to it;
-**Phase 10 was dropped on 2026-09-04** and this phase was pushed to the end of
-the roadmap in the same decision. See `architecture.md` decision 22.
+**Status: IN PROGRESS. 11.1a landed 2026-09-04.** It was to run immediately
+after [Phase 10](phase-10-aws-deploy.md) and be coupled to it; **Phase 10 was
+dropped on 2026-09-04** and this phase was pushed to the end of the roadmap in
+the same decision. See `architecture.md` decision 22.
+
+**It was then started early, at the user's instruction on 2026-09-04**, with the
+gate below read out first and accepted. The gate said *"this ships before
+whatever deploy replaces Phase 10, and not before"* — that is an argument about
+when authentication becomes load-bearing, not a dependency: **nothing in this
+phase needs a host to exist.** The one thing that does is the CORS named origin,
+which is a config value. So building it early costs nothing that has to be
+redone; it only means the tool is authenticated before anything can reach it.
+
+## Sub-steps, and why it is split
+
+The phase does not fit in one session, so it is split the way every large phase
+here has been (13.1–13.6, 6.1–6.5). Each ends in something runnable.
+
+| Step | What it is | Status |
+|---|---|---|
+| **11.1a** | The Identity module exists and migrates. Sixth `DbContext`, `identity` schema, seven tables, its own `__EFMigrationsHistory`. **No sign-in yet, nothing enforced.** | **Done 2026-09-04** |
+| **11.1b** | Register and sign in. `AddIdentity*` wiring in `Jobkeep.Api`, the endpoints, and the **named-origin CORS policy** — the trap below, which fires here and not later | Next |
+| **11.1c** | The client half: a login route, a route guard in `App.tsx`, `credentials: 'include'` on the one `request()`, and a 401 branch on `ApiError` | |
+| **11.2** | Owner scoping. `OwnerUserId`, the EF global query filter, ~two dozen slices re-scoped, `CreatedBy`/`UpdatedBy` become real foreign keys | |
+| **11.3** | Postgres RLS — the second layer — plus the test that disables the EF filter and proves the database still refuses | |
+
+**The split is along "what can be verified", not "what is convenient".** 11.1a is
+a schema you can look at; 11.1b is an account you can create; 11.2 is a second
+user who cannot see the first's rows; 11.3 is that same guarantee with the
+application's own filter switched off.
+
+### 11.1a, as built
+
+Ten projects became eleven: `src/Jobkeep.Modules.Identity/`, a plain class
+library like every other module. That survives ASP.NET Core Identity, which is
+worth stating because it looks like it should not —
+`Microsoft.AspNetCore.Identity.EntityFrameworkCore` brings the **stores** (seven
+entity types and their EF mapping) and nothing that needs a web host. The
+middleware, the cookie handler and `AddIdentity*` are ASP.NET Core proper and
+land in `Jobkeep.Api` at 11.1b. The layering claim is unchanged: this project
+knows about a database, not about HTTP.
+
+Four decisions inside it, none of them re-openable without a reason:
+
+- **`JobkeepUser : IdentityUser<Guid>`, and the subclass is empty.** The Guid key
+  is the point: `IdentityUser`'s `TKey` defaults to `string` and stores a GUID's
+  text form, which would make this the only table in the database with a text
+  primary key — and would make 11.2's `OwnerUserId` a `varchar` foreign key on
+  every scoped table. The class exists now, empty, because Identity's machinery is
+  generic on the user type; introducing it later would touch every one of those
+  generic parameters, and introducing it now costs one empty class.
+- **The platform's table names are KEPT** — `AspNetUsers`, not `users`. They look
+  out of place beside `job_applications` and `match_results`, and they stay:
+  they are the names every Identity sample, tutorial and diagnostic tool uses, so
+  a reviewer opening the database recognises what it is in one glance. Renaming
+  buys cosmetic consistency at the price of a schema that no longer looks like the
+  thing it is. **The schema qualifier does the real separating.**
+- **`ModelConventions.ApplyDatabaseDefaults` is deliberately NOT called** — the
+  only context in the repo that skips it. It exists to put a floor under writers
+  that are not EF: `gen_random_uuid()` on Guid primary keys, `now()` on the audit
+  pair. Neither applies. None of Identity's types is `IAuditable`, and three of the
+  seven have **composite keys made of foreign keys** (`AspNetUserRoles` is
+  `(UserId, RoleId)`, both Guid, both primary-key properties by that convention's
+  test). Defaulting those to a random uuid puts a default on a foreign key column
+  where the only row it can produce is one that fails the constraint. **A default
+  that can only generate an error is worse than no default.**
+- **The audit interceptor IS registered**, and is a deliberate no-op — nothing here
+  is `IAuditable` or `ISoftDeletable`. Keeping "every module context is built the
+  same way" true is worth more than saving one delegate.
+
+**Seven tables, not four.** `IdentityUserContext` would drop roles and give four.
+Not taken: roles are what an interviewer asks about next, and adding them later is
+a migration against a table that already has rows. This is the trade recorded in
+decision 3 below, and it is the one place in this repo where the ponytail ladder
+was overruled on purpose.
+
+**Schema moved — diagrams deliberately not redrawn, frozen until 1.0.** A sixth
+schema and seven new tables would have triggered both `docs/diagrams/*.svg` under
+the old rule. Logged here so the eventual redraw is a list rather than an
+investigation; 11.2 will add to it.
+
+**The trap it actually hit:** `src/Dockerfile` copies each `.csproj` by name
+before restoring, and a new project has to be added to that list. It fails *late*
+and misleadingly — restore succeeds against the projects it was given, then the
+build dies on a `ProjectReference` to a directory nobody copied, which reads like
+a compiler error. The Dockerfile now says so above the list.
 
 ## Decided 2026-09-04, before any code — do not re-litigate
 

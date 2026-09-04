@@ -62,6 +62,7 @@
     <ProjectReference Include="../Jobkeep.Modules.Match/Jobkeep.Modules.Match.csproj" />
     <ProjectReference Include="../Jobkeep.Modules.Documents/Jobkeep.Modules.Documents.csproj" />
     <ProjectReference Include="../Jobkeep.Modules.Skills/Jobkeep.Modules.Skills.csproj" />
+    <ProjectReference Include="../Jobkeep.Modules.Identity/Jobkeep.Modules.Identity.csproj" />
   </ItemGroup>
 
 </Project>
