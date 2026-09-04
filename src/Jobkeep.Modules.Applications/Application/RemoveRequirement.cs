@@ -1,4 +1,4 @@
-using Jobkeep.SharedKernel;
+﻿using Jobkeep.SharedKernel;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
 
@@ -39,9 +39,19 @@ public class RemoveRequirementHandler : IRequestHandler<RemoveRequirement, Slice
             return SliceResult<bool>.NotFound(
                 $"Requirement {requirementId} not found on application {applicationId}.");
 
-        // A hard delete, consistent with the rest of the app today. Soft delete is
-        // step 2 of the remediation plan in security-and-data-audit.md, and it is
-        // a schema change, so it is deliberately not smuggled in here.
+        // Still a HARD delete, and since Phase 8 that is a deliberate exception
+        // rather than the house style it used to be.
+        //
+        // Soft delete landed for the three entities with a delete slice, and a
+        // job requirement is not one of them: it is a child row owned by a
+        // posting, it has no independent lifecycle, and it survives its parent's
+        // archive untouched precisely so a restore brings it back. Removing one
+        // BY HAND is a different act — you are correcting the ad, not putting it
+        // away — and there is nothing to restore it to.
+        //
+        // ISoftDeletable's comment carries the rule this follows: a row is
+        // soft-deletable when a USER can end its life, and a requirement's life
+        // ends when the posting's does.
         _db.JobRequirements.Remove(requirement);
         await _db.SaveChangesAsync(ct);
         return SliceResult<bool>.Ok(true);
