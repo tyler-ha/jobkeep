@@ -1,7 +1,7 @@
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
 
 import Applications from './routes/Applications';
-import AtsCheck from './routes/AtsCheck';
+import MatchCheck from './routes/MatchCheck';
 import Insights from './routes/Insights';
 import JobPost from './routes/JobPost';
 import Pipeline from './routes/Pipeline';
@@ -18,7 +18,7 @@ const NAV = [
   { to: '/pipeline', label: 'Pipeline' },
   { to: '/resumes', label: 'Résumés' },
   { to: '/upload', label: 'Upload' },
-  { to: '/ats-check', label: 'ATS check' },
+  { to: '/match-check', label: 'Match check' },
   { to: '/insights', label: 'Insights' },
 ];
 
@@ -63,10 +63,10 @@ export default function App() {
               the uploader, /upload/:id is the draft beside the document. The
               wire is unmoved — the API is still /imports. See lib/api.ts. */}
           <Route path="/upload/:id" element={<Upload />} />
-          <Route path="/ats-check" element={<AtsCheck />} />
-          {/* The board needs a job. The bare /ats-check above is the picker;
+          <Route path="/match-check" element={<MatchCheck />} />
+          {/* The board needs a job. The bare /match-check above is the picker;
               this is what every link on the app actually points at. */}
-          <Route path="/applications/:id/ats-check" element={<AtsCheck />} />
+          <Route path="/applications/:id/match-check" element={<MatchCheck />} />
           <Route path="/insights" element={<Insights />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

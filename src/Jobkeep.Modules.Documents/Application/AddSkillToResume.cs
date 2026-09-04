@@ -23,12 +23,12 @@ namespace Jobkeep.Modules.Documents;
 // That run reported `PostgreSQL` as a missing skill against a CV that names
 // PostgreSQL in prose, because the resume's structured skill list said `SQL`. The
 // gap is a set difference over skill ROWS, not over resume text (see
-// Modules/Ats/CheckAts.cs), so the honest fix for a near-miss like that is to let
+// Modules/Match/RunMatchCheck.cs), so the honest fix for a near-miss like that is to let
 // the user say "yes, I have this" and have it land as a row. Without this slice
 // the only way to correct it was to re-import the whole document.
 //
 // It is also what backs the CV-centre drag in the Phase 6 front end: dragging a
-// missing skill from the ATS check onto your resume is exactly this call.
+// missing skill from the match check onto your resume is exactly this call.
 //
 // ---------------------------------------------------------------------------
 // The boundary
@@ -103,7 +103,7 @@ public class AddSkillToResumeHandler : IRequestHandler<AddSkillToResume, SliceRe
 
         // Reuse the shared skill row if one exists. This is the whole reason the
         // table is shared: the row this finds is the same row the posting side
-        // links to, which is what makes the ATS check's gap a join rather than a
+        // links to, which is what makes the match check's gap a join rather than a
         // string comparison across two tables.
         //
         // Phase 13.2c — through ISkillCatalog rather than against `skills`

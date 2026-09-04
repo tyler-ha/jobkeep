@@ -196,7 +196,7 @@ public class DocumentTextExtractor : IDocumentTextExtractor
 
         // A scanned PDF is a picture of a document. It opens fine, has pages, and
         // yields no text — and the failure this guards against is silent: an
-        // empty resume stored successfully, and a Phase 5 ATS check that
+        // empty resume stored successfully, and a Phase 5 match check that
         // cheerfully reports you match none of the keywords. Say it out loud
         // instead. OCR would fix it properly and is a different project.
         if (cleaned.Length < _options.MinTextChars)

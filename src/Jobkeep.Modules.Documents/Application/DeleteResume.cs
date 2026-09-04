@@ -1,5 +1,5 @@
 using Jobkeep.Contracts.Applications;
-using Jobkeep.Contracts.Ats;
+using Jobkeep.Contracts.Match;
 using Jobkeep.Modules.Documents.Domain;
 using Jobkeep.SharedKernel;
 using Mediator;
@@ -23,11 +23,11 @@ namespace Jobkeep.Modules.Documents;
 // ---------------------------------------------------------------------------
 // Two refusals, and what they are not
 // ---------------------------------------------------------------------------
-// `job_applications.ResumeId` and `ats_results.ResumeId` were both RESTRICT until
+// `job_applications.ResumeId` and `match_results.ResumeId` were both RESTRICT until
 // 13.3b. Both pointed into this table from another module's schema, and a foreign
 // key that spans a boundary is the thing this phase is removing, so both are gone
 // from Postgres and both are asked here instead — through IApplicationContract
-// and IAtsContract, one count each.
+// and IMatchContract, one count each.
 //
 // **This is weaker than RESTRICT and the difference is not academic.** A foreign
 // key refuses inside the transaction that attempts the delete; two counts and a
@@ -42,7 +42,7 @@ namespace Jobkeep.Modules.Documents;
 //     résumé it names at the same moment.
 //   * The residue is the case the read path already handles. ApplicationDetail
 //     leaves ResumeLabel null when the résumé is gone and says so in a comment;
-//     GetAtsResult does the same. Neither renders a blank chip or throws.
+//     GetMatchResult does the same. Neither renders a blank chip or throws.
 //   * The alternatives are worse at this size. A distributed transaction across
 //     four schemas re-couples exactly what the phase decoupled, and the real
 //     answer at service scale — a saga with a compensating action, or making the
@@ -58,12 +58,12 @@ public class DeleteResumeHandler : IRequestHandler<DeleteResume, SliceResult<boo
 {
     private readonly DocumentsDbContext _db;
     private readonly IApplicationContract _applications;
-    private readonly IAtsContract _ats;
+    private readonly IMatchContract _ats;
 
     public DeleteResumeHandler(
         DocumentsDbContext db,
         IApplicationContract applications,
-        IAtsContract ats)
+        IMatchContract ats)
     {
         _db = db;
         _applications = applications;
@@ -87,7 +87,7 @@ public class DeleteResumeHandler : IRequestHandler<DeleteResume, SliceResult<boo
         var checks = await _ats.CountResultsForResumeAsync(id, ct);
         if (checks > 0)
             return SliceResult<bool>.Invalid(
-                $"'{resume.Label}' was judged by {checks} stored ATS check(s). "
+                $"'{resume.Label}' was judged by {checks} stored match check(s). "
                 + "Delete those applications first — re-running a check is cheap, "
                 + "but a result whose résumé is gone cannot be explained.");
 

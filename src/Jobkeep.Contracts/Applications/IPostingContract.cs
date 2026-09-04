@@ -9,7 +9,7 @@ using Jobkeep.Contracts.Skills;
 namespace Jobkeep.Contracts.Applications;
 
 // The public contract Applications exposes about a POSTING — the ad behind an
-// application. Its callers are the Ai module (Phase 4) and the Ats module (13.2e).
+// application. Its callers are the Ai module (Phase 4) and the Match module (13.2e).
 //
 // ---------------------------------------------------------------------------
 // The two-method cap is LIFTED at 13.2e, and that is not the cap failing
@@ -24,8 +24,8 @@ namespace Jobkeep.Contracts.Applications;
 // required a contract only for a WRITE. Under that rule the only methods this
 // interface could ever need were its writes, plus the read that feeds one — so
 // two really was the whole list, and a third method genuinely would have meant
-// something was in the wrong module. AtsModule.cs cited this cap by name as the
-// reason Ats could read `posting_skills` directly instead of asking for a
+// something was in the wrong module. MatchModule.cs cited this cap by name as the
+// reason Match could read `posting_skills` directly instead of asking for a
 // GetPostingSkills method.
 //
 // What changed: Phase 13 reverses decision 17. The question is no longer "is this
@@ -38,7 +38,7 @@ namespace Jobkeep.Contracts.Applications;
 // rule underneath the number: does a proposed method name a fact about a POSTING,
 // or a question the caller has about its own feature? The four below are the
 // first kind. "Which of this posting's skills is my résumé missing" is the second
-// kind, and it stays in Ats — which is why the skill gap moved to Ats's own code
+// kind, and it stays in Match — which is why the skill gap moved to Match's own code
 // rather than becoming a fifth method here. That test bounds the list by what a
 // posting IS; a count bounds it by nothing once the count is wrong.
 //

@@ -5,7 +5,7 @@ using Jobkeep.SharedKernel;
 namespace Jobkeep.Modules.Applications.Domain;
 
 // A structured requirement line from the ad. Kept structured (not just prose)
-// so the ATS check (Phase 5) can reason specifically about must-haves.
+// so the match check (Phase 5) can reason specifically about must-haves.
 public class JobRequirement : IAuditable
 {
     public Guid Id { get; set; } = Guid.NewGuid();

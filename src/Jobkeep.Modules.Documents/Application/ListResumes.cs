@@ -11,12 +11,12 @@ namespace Jobkeep.Modules.Documents;
 // Why this only arrives in Phase 6
 // ---------------------------------------------------------------------------
 // Until now `resumes` had no read surface at all. Phase 4.5 created the rows and
-// Phase 5 read them from inside the ATS check, but the only route under /resumes
+// Phase 5 read them from inside the match check, but the only route under /resumes
 // was POST /resumes/{id}/skills — so a résumé was reachable only by remembering
 // the id of the import that made it. That was survivable while the client was
 // Swagger and the ids were in front of you; it stops being survivable the moment
 // a screen has to offer a *picker*, which is what both the Résumés screen and the
-// ATS check need.
+// match check need.
 //
 // Not paged, for the same reason ListImports is not: you keep two or three
 // résumé versions, not two hundred. The MaxListSize cap is shared with the review
@@ -64,7 +64,7 @@ public class ListResumesHandler : IRequestHandler<ListResumes, SliceResult<List<
         var items = await _db.Resumes
             .AsNoTracking()
             // Most recently touched first. UpdatedAtUtc rather than CreatedAtUtc
-            // because adding a skill to a résumé is what the ATS check's drag
+            // because adding a skill to a résumé is what the match check's drag
             // does, and the version you just corrected is the one you are working
             // on. (A8 in the audit notes these timestamps are not yet maintained
             // by an interceptor — this ordering inherits that weakness rather

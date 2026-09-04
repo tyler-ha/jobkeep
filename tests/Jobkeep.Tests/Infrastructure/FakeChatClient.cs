@@ -1,4 +1,4 @@
-using Microsoft.Extensions.AI;
+﻿using Microsoft.Extensions.AI;
 
 namespace Jobkeep.Tests.Infrastructure;
 
@@ -41,7 +41,7 @@ public sealed class FakeChatClient(string json) : IChatClient
     /// unreachable.
     ///
     /// <para>
-    /// Added in Phase 5, and it tests something the canned-reply mode cannot. The ATS
+    /// Added in Phase 5, and it tests something the canned-reply mode cannot. The match
     /// check has four stages and only one of them needs a model, so an outage there is
     /// supposed to <em>degrade</em>: it returns the skill gap and the formatting notes
     /// with a warning rather than failing. That is a behavioural promise, and the only

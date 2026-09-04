@@ -25,7 +25,7 @@ public record ResumeRef(Guid Id, string Label);
 //
 // The rule is not "a CV never crosses". It is "each caller gets what its own
 // question needs". Applications asks whether an id exists, so it gets two
-// fields. The ATS check's entire feature is reading the CV — judging free-text
+// fields. The match check's entire feature is reading the CV — judging free-text
 // requirement coverage against it and warning when the extraction looks
 // truncated — so a contract that withheld the text would not be protecting
 // anything, it would be refusing the feature. Two DTOs rather than one fat one
@@ -75,7 +75,7 @@ public enum ResumeSourceFormat { PlainText, Markdown, Pdf, Docx }
 // proposed method name a fact about a RÉSUMÉ, or a question the caller has about
 // its own feature? All three below are the first kind — what this résumé is
 // called, what it says, which skills it lists. "Which skills does posting X ask
-// for that this résumé lacks" is the second kind, and it stays in Ats, which is
+// for that this résumé lacks" is the second kind, and it stays in Match, which is
 // the module that has that question.
 //
 // The distinction has teeth. The first kind is bounded by what a résumé IS, so

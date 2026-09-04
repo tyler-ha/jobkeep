@@ -6,7 +6,7 @@ namespace Jobkeep.SharedKernel;
 // `resumes.Label` — and until this phase all three did it case-sensitively, so
 // "C#" and "c#" were two rows in the table whose entire purpose is
 // deduplication. That cost something measurable: a duplicate split one skill's
-// count in `/stats/skill-demand`, and the Phase 5 ATS check matches skill
+// count in `/stats/skill-demand`, and the Phase 5 match check matches skill
 // *rows*, so a difference of case read as a missing skill on a real CV.
 //
 // The fix has two halves that must agree:

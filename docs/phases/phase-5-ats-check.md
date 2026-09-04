@@ -2,6 +2,13 @@
 
 **Status: Done** (2026-08-28)
 
+> **Renamed 2026-09-04.** Everything this document calls the "ATS check" is now the
+> **match check** — `Jobkeep.Modules.Match`, `match_results`,
+> `/applications/{id}/match-check`, GraphQL `runMatchCheck` / `matchResult`. The rest of
+> this file is left as the dated record of what was decided in Phase 5; the reasoning for
+> the rename is the `docs/backlog.md` row and the block in `CLAUDE.md`. The Postgres
+> *schema* is still `ats`, on purpose — see `MatchResultConfiguration.cs`.
+
 ## Goal
 
 Compare a stored resume against a job description and return matched vs.

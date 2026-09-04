@@ -365,7 +365,7 @@ public class ImportTests(PostgresFixture fixture) : IntegrationTestBase(fixture)
 
             Assert.Equal("backend-focused", resume.Label);
             Assert.Equal("Jane Doe", resume.FullName);
-            // The verbatim extracted text, not the draft — Phase 5's ATS check
+            // The verbatim extracted text, not the draft — Phase 5's match check
             // compares against the document, not against the model's summary.
             Assert.Contains("University of Melbourne", resume.SourceText);
 

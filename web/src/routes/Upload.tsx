@@ -285,7 +285,7 @@ function Uploader({
   /* Three cues, not one. --pop is 1.45 on the ground, under WCAG's 3.0 non-text
    * threshold, so the amber ground CANNOT carry this state by itself: the zone
    * also changes its outline and its wording, and every cue survives colour
-   * being removed. Same construction as .board-cv on the ATS check. */
+   * being removed. Same construction as .board-cv on the match check. */
   const Icon = dragging ? FileDown : file ? FileCheck2 : FileUp;
   const headline = dragging
     ? 'Drop it here'
@@ -667,7 +667,7 @@ function Review({ id }: { id: string }) {
             </div>
             {/* This screen's one held moment, and the only amber it spends.
                 Every other screen has one — Today's backlog count, Insights'
-                top skill, the ATS match percentage — and the rule from
+                top skill, the match check percentage — and the rule from
                 PRODUCT.md is one per screen, in the display face, under the
                 marker stroke.
 
@@ -907,7 +907,7 @@ function ResumeForm({
         </div>
         <Lines
           label="One per line"
-          hint="These rows are what the ATS check compares against, and matching is exact. Write the words the ads use."
+          hint="These rows are what the match check compares against, and matching is exact. Write the words the ads use."
           values={draft.skills}
           editable={editable}
           onChange={(v) => set('skills', v)}
@@ -1235,7 +1235,7 @@ function PostingForm({
           </button>
         )}
         <p className="panel-foot">
-          The must-have flag is what splits the ATS check's two stages. A nice-to-have you
+          The must-have flag is what splits the match check's two stages. A nice-to-have you
           have not got is a note; a must-have you have not got is the gap.
         </p>
       </section>

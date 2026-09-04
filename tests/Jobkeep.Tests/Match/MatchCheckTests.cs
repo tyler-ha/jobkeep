@@ -8,10 +8,10 @@ using Jobkeep.Tests.Infrastructure;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Jobkeep.Tests.Ats;
+namespace Jobkeep.Tests.Match;
 
 /// <summary>
-/// Phase 5 — the ATS check, with everything real except the model.
+/// Phase 5 — the match check, with everything real except the model.
 ///
 /// <para>
 /// The centre of gravity here is the skill gap, and it is worth saying why these
@@ -34,12 +34,12 @@ namespace Jobkeep.Tests.Ats;
 /// links to has to be the same one the posting made.
 /// </para>
 /// </summary>
-public class AtsTests(PostgresFixture fixture) : IntegrationTestBase(fixture)
+public class MatchCheckTests(PostgresFixture fixture) : IntegrationTestBase(fixture)
 {
     /// <summary>
     /// A client against the real app with the model swapped. Same construction as
     /// AnalyzerTests.AppWithModel — last registration wins for a single resolve, so
-    /// this replaces the Ollama client without the shared fixture knowing Ats exists.
+    /// this replaces the Ollama client without the shared fixture knowing Match exists.
     /// </summary>
     private (HttpClient Client, FakeChatClient Model) AppWithModel(FakeChatClient fake)
     {
@@ -137,7 +137,7 @@ public class AtsTests(PostgresFixture fixture) : IntegrationTestBase(fixture)
 
         var resumeId = await SeedResumeAsync("mine", ["C#", "PostgreSQL"]);
 
-        var response = await client.PostAsync($"/applications/{id}/ats-check?resumeId={resumeId}", null, Ct);
+        var response = await client.PostAsync($"/applications/{id}/match-check?resumeId={resumeId}", null, Ct);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         using var body = await BodyAsync(response);
@@ -150,7 +150,7 @@ public class AtsTests(PostgresFixture fixture) : IntegrationTestBase(fixture)
         // And on the database, not just the response body.
         await WithDbAsync(async db =>
         {
-            var stored = await db.AtsResults.SingleAsync(Ct);
+            var stored = await db.MatchResults.SingleAsync(Ct);
             Assert.Equal(resumeId, stored.ResumeId);
             Assert.Equal(["Kubernetes"], stored.MissingMustHaveKeywords);
             Assert.Equal(["Terraform"], stored.MissingNiceToHaveKeywords);
@@ -170,7 +170,7 @@ public class AtsTests(PostgresFixture fixture) : IntegrationTestBase(fixture)
         var resumeId = await SeedResumeAsync("mine", []);
 
         using var body = await BodyAsync(
-            await client.PostAsync($"/applications/{id}/ats-check?resumeId={resumeId}", null, Ct));
+            await client.PostAsync($"/applications/{id}/match-check?resumeId={resumeId}", null, Ct));
 
         Assert.Empty(Names(body.RootElement, "missingMustHaveSkills"));
         Assert.Equal(["Rust"], Names(body.RootElement, "missingNiceToHaveSkills"));
@@ -198,7 +198,7 @@ public class AtsTests(PostgresFixture fixture) : IntegrationTestBase(fixture)
         var resumeId = await SeedResumeAsync("mine", []);
 
         using var body = await BodyAsync(
-            await client.PostAsync($"/applications/{id}/ats-check?resumeId={resumeId}", null, Ct));
+            await client.PostAsync($"/applications/{id}/match-check?resumeId={resumeId}", null, Ct));
 
         Assert.Equal(
             ["aws", "C#", "terraform"],
@@ -220,7 +220,7 @@ public class AtsTests(PostgresFixture fixture) : IntegrationTestBase(fixture)
         await client.AddSkillAsync(id, "Go", Ct, isRequired: true);
 
         using var body = await BodyAsync(
-            await client.PostAsync($"/applications/{id}/ats-check", null, Ct));
+            await client.PostAsync($"/applications/{id}/match-check", null, Ct));
 
         Assert.Equal(resumeId, body.RootElement.GetProperty("resumeId").GetGuid());
         Assert.Equal("linked", body.RootElement.GetProperty("resumeLabel").GetString());
@@ -247,7 +247,7 @@ public class AtsTests(PostgresFixture fixture) : IntegrationTestBase(fixture)
         var resumeId = await SeedResumeAsync("mine", []);
 
         using var body = await BodyAsync(
-            await client.PostAsync($"/applications/{id}/ats-check?resumeId={resumeId}", null, Ct));
+            await client.PostAsync($"/applications/{id}/match-check?resumeId={resumeId}", null, Ct));
 
         // The requirements really were numbered into the prompt, must-have first —
         // without that the model's answer of "[1]" would be meaningless and the
@@ -273,7 +273,7 @@ public class AtsTests(PostgresFixture fixture) : IntegrationTestBase(fixture)
 
         var resumeId = await SeedResumeAsync("mine", []);
 
-        var response = await client.PostAsync($"/applications/{id}/ats-check?resumeId={resumeId}", null, Ct);
+        var response = await client.PostAsync($"/applications/{id}/match-check?resumeId={resumeId}", null, Ct);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         using var body = await BodyAsync(response);
@@ -288,7 +288,7 @@ public class AtsTests(PostgresFixture fixture) : IntegrationTestBase(fixture)
         // every written requirement" — the same failure DocumentImport.Warning
         // exists to prevent.
         await WithDbAsync(async db =>
-            Assert.Contains("did not respond", (await db.AtsResults.SingleAsync(Ct)).Warning));
+            Assert.Contains("did not respond", (await db.MatchResults.SingleAsync(Ct)).Warning));
     }
 
     [Fact]
@@ -302,7 +302,7 @@ public class AtsTests(PostgresFixture fixture) : IntegrationTestBase(fixture)
 
         var resumeId = await SeedResumeAsync("mine", ["C#"]);
 
-        var response = await client.PostAsync($"/applications/{id}/ats-check?resumeId={resumeId}", null, Ct);
+        var response = await client.PostAsync($"/applications/{id}/match-check?resumeId={resumeId}", null, Ct);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Null(model.LastPrompt);
@@ -322,9 +322,9 @@ public class AtsTests(PostgresFixture fixture) : IntegrationTestBase(fixture)
         var docx = await SeedResumeAsync("from-docx", [], format: SourceFormat.Docx);
 
         using var fromPdf = await BodyAsync(
-            await client.PostAsync($"/applications/{id}/ats-check?resumeId={pdf}", null, Ct));
+            await client.PostAsync($"/applications/{id}/match-check?resumeId={pdf}", null, Ct));
         using var fromDocx = await BodyAsync(
-            await client.PostAsync($"/applications/{id}/ats-check?resumeId={docx}", null, Ct));
+            await client.PostAsync($"/applications/{id}/match-check?resumeId={docx}", null, Ct));
 
         Assert.Contains(Names(fromPdf.RootElement, "formattingRiskNotes"),
             n => n.Contains("imported from a PDF"));
@@ -345,7 +345,7 @@ public class AtsTests(PostgresFixture fixture) : IntegrationTestBase(fixture)
             "nameless", [], fullName: null, email: null, location: null);
 
         using var body = await BodyAsync(
-            await client.PostAsync($"/applications/{id}/ats-check?resumeId={resumeId}", null, Ct));
+            await client.PostAsync($"/applications/{id}/match-check?resumeId={resumeId}", null, Ct));
 
         var note = Assert.Single(Names(body.RootElement, "formattingRiskNotes"),
             n => n.Contains("could not find your"));
@@ -368,9 +368,9 @@ public class AtsTests(PostgresFixture fixture) : IntegrationTestBase(fixture)
             "fine", [], sourceText: new string('x', 3262), experiences: 3);
 
         using var short_ = await BodyAsync(
-            await client.PostAsync($"/applications/{id}/ats-check?resumeId={lossy}", null, Ct));
+            await client.PostAsync($"/applications/{id}/match-check?resumeId={lossy}", null, Ct));
         using var full = await BodyAsync(
-            await client.PostAsync($"/applications/{id}/ats-check?resumeId={fine}", null, Ct));
+            await client.PostAsync($"/applications/{id}/match-check?resumeId={fine}", null, Ct));
 
         Assert.Contains(Names(short_.RootElement, "formattingRiskNotes"),
             n => n.Contains("characters of text were extracted"));
@@ -385,7 +385,7 @@ public class AtsTests(PostgresFixture fixture) : IntegrationTestBase(fixture)
     [Fact]
     public async Task Check_Twice_UpdatesTheSameRowRatherThanInsertingASecond()
     {
-        // ats_results is 1:1 with the application and the FK is unique, so a second
+        // match_results is 1:1 with the application and the FK is unique, so a second
         // insert would throw rather than duplicate. Re-checking after importing a
         // better resume is a normal thing to do, so it has to be an update path.
         var (client, _) = AppWithModel(EvidencesNothing);
@@ -395,14 +395,14 @@ public class AtsTests(PostgresFixture fixture) : IntegrationTestBase(fixture)
         var first = await SeedResumeAsync("first", []);
         var second = await SeedResumeAsync("second", ["C#"]);
 
-        await client.PostAsync($"/applications/{id}/ats-check?resumeId={first}", null, Ct);
-        var response = await client.PostAsync($"/applications/{id}/ats-check?resumeId={second}", null, Ct);
+        await client.PostAsync($"/applications/{id}/match-check?resumeId={first}", null, Ct);
+        var response = await client.PostAsync($"/applications/{id}/match-check?resumeId={second}", null, Ct);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         await WithDbAsync(async db =>
         {
-            var stored = await db.AtsResults.SingleAsync(Ct);
+            var stored = await db.MatchResults.SingleAsync(Ct);
             // Latest wins, and ResumeId is what says which resume the survivor judged.
             Assert.Equal(second, stored.ResumeId);
             Assert.Equal(["C#"], stored.MatchedKeywords);
@@ -422,12 +422,12 @@ public class AtsTests(PostgresFixture fixture) : IntegrationTestBase(fixture)
         await writer.AddRequirementAsync(id, "AWS certification", Ct, isMustHave: false);
 
         var resumeId = await SeedResumeAsync("mine", []);
-        await writer.PostAsync($"/applications/{id}/ats-check?resumeId={resumeId}", null, Ct);
+        await writer.PostAsync($"/applications/{id}/match-check?resumeId={resumeId}", null, Ct);
 
         // A fresh app whose model would throw if touched. This is the assertion —
         // reading a stored result must not depend on Ollama being up.
         var (reader, model) = AppWithModel(FakeChatClient.Unreachable());
-        var response = await reader.GetAsync($"/applications/{id}/ats-check", Ct);
+        var response = await reader.GetAsync($"/applications/{id}/match-check", Ct);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Null(model.LastPrompt);
@@ -442,7 +442,7 @@ public class AtsTests(PostgresFixture fixture) : IntegrationTestBase(fixture)
     public async Task Get_ReturnsNotFound_WhenNoCheckHasBeenRun()
     {
         var id = await Client.CreateApplicationAsync("Canva", "Engineer", Ct);
-        var response = await Client.GetAsync($"/applications/{id}/ats-check", Ct);
+        var response = await Client.GetAsync($"/applications/{id}/match-check", Ct);
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
@@ -454,7 +454,7 @@ public class AtsTests(PostgresFixture fixture) : IntegrationTestBase(fixture)
     public async Task Check_ReturnsNotFound_ForAnApplicationThatDoesNotExist()
     {
         var (client, _) = AppWithModel(EvidencesNothing);
-        var response = await client.PostAsync($"/applications/{Guid.NewGuid()}/ats-check", null, Ct);
+        var response = await client.PostAsync($"/applications/{Guid.NewGuid()}/match-check", null, Ct);
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
@@ -466,7 +466,7 @@ public class AtsTests(PostgresFixture fixture) : IntegrationTestBase(fixture)
         var (client, model) = AppWithModel(EvidencesNothing);
         var id = await client.CreateApplicationAsync("Canva", "Engineer", Ct);
 
-        var response = await client.PostAsync($"/applications/{id}/ats-check", null, Ct);
+        var response = await client.PostAsync($"/applications/{id}/match-check", null, Ct);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Contains("not linked to a resume", await response.Content.ReadAsStringAsync(Ct));
@@ -483,7 +483,7 @@ public class AtsTests(PostgresFixture fixture) : IntegrationTestBase(fixture)
         var id = await client.CreateApplicationAsync("Canva", "Engineer", Ct);
         var unknown = Guid.NewGuid();
 
-        var response = await client.PostAsync($"/applications/{id}/ats-check?resumeId={unknown}", null, Ct);
+        var response = await client.PostAsync($"/applications/{id}/match-check?resumeId={unknown}", null, Ct);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Contains($"Resume {unknown} not found.", await response.Content.ReadAsStringAsync(Ct));
@@ -494,7 +494,7 @@ public class AtsTests(PostgresFixture fixture) : IntegrationTestBase(fixture)
     // -----------------------------------------------------------------------
 
     [Fact]
-    public async Task CheckAts_ReturnsTheSameBuckets_OverRestAndGraphQL()
+    public async Task RunMatchCheck_ReturnsTheSameBuckets_OverRestAndGraphQL()
     {
         var (client, _) = AppWithModel(EvidencesNothing);
         var graphql = new GraphQLClient(client);
@@ -507,12 +507,12 @@ public class AtsTests(PostgresFixture fixture) : IntegrationTestBase(fixture)
         var resumeId = await SeedResumeAsync("mine", ["C#"]);
 
         using var rest = await BodyAsync(
-            await client.PostAsync($"/applications/{id}/ats-check?resumeId={resumeId}", null, Ct));
+            await client.PostAsync($"/applications/{id}/match-check?resumeId={resumeId}", null, Ct));
 
         var gql = await graphql.QueryAsync(
             """
             mutation ($id: UUID!, $resumeId: UUID) {
-              checkAts(applicationId: $id, resumeId: $resumeId) {
+              runMatchCheck(applicationId: $id, resumeId: $resumeId) {
                 matchedSkills
                 missingMustHaveSkills
                 missingNiceToHaveSkills
@@ -522,7 +522,7 @@ public class AtsTests(PostgresFixture fixture) : IntegrationTestBase(fixture)
             new { id, resumeId });
 
         Assert.False(gql.HasErrors);
-        var mutation = gql.Data!.Value.GetProperty("checkAts");
+        var mutation = gql.Data!.Value.GetProperty("runMatchCheck");
 
         Assert.Equal(Names(rest.RootElement, "matchedSkills"), Names(mutation, "matchedSkills"));
         Assert.Equal(Names(rest.RootElement, "missingMustHaveSkills"), Names(mutation, "missingMustHaveSkills"));
@@ -540,10 +540,10 @@ public class AtsTests(PostgresFixture fixture) : IntegrationTestBase(fixture)
         var graphql = new GraphQLClient(client);
         var unknown = Guid.NewGuid();
 
-        var rest = await client.GetAsync($"/applications/{unknown}/ats-check", Ct);
+        var rest = await client.GetAsync($"/applications/{unknown}/match-check", Ct);
         var gql = await graphql.QueryAsync(
             """
-            query ($id: UUID!) { atsResult(applicationId: $id) { checkedAtUtc } }
+            query ($id: UUID!) { matchResult(applicationId: $id) { checkedAtUtc } }
             """,
             new { id = unknown });
 

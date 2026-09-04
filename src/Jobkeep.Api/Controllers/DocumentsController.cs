@@ -184,7 +184,7 @@ public class DocumentsController : ControllerBase
         => (await sender.Send(new AddSkillToResume(id, request), ct)).ToHttpResult();
 
     // DELETE /resumes/{id}/skills/{skillName} — the inverse of the above, and
-    // what makes the ATS check's drag undoable. 204: the resource is gone, and
+    // what makes the match check's drag undoable. 204: the resource is gone, and
     // there is nothing useful to say about it.
     //
     // The name is a path segment, so a skill containing a slash cannot be
@@ -222,7 +222,7 @@ public class DocumentsController : ControllerBase
 
     // DELETE /resumes/{id} — the endpoint DiscardImport's error message has
     // been naming since Phase 4.5. 400, not 409, when an application or a
-    // stored ATS check still points at it: every other refusal on both
+    // stored match check still points at it: every other refusal on both
     // surfaces goes through SliceResult.Invalid, and one route inventing a
     // third status code is the surface-specific behaviour the parity suite
     // exists to stop. DeleteResume.cs carries the argument for the checks

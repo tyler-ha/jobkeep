@@ -10,7 +10,7 @@ namespace Jobkeep.Modules.Skills.Domain;
 // DIFFERENT strings name one thing. Everything downstream then counts them
 // separately: the demand chart splits one skill's total in two, and the skill
 // gap reports a skill as missing that the CV names under its other name.
-// `docs/phases/phase-5-ats-check.md` found exactly that against a real CV.
+// `docs/phases/phase-5-match-check.md` found exactly that against a real CV.
 //
 // WHY A TABLE AND NOT A DICTIONARY IN CODE
 // ----------------------------------------

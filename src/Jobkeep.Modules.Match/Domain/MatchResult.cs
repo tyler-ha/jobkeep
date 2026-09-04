@@ -1,14 +1,14 @@
-namespace Jobkeep.Modules.Ats.Domain;
+namespace Jobkeep.Modules.Match.Domain;
 
 // Phase 5 output — 1:1 with an application. The keyword lists map to Postgres
 // text[] columns via Npgsql (no child tables needed for simple string arrays).
 //
 // PHASE 13.3b — this class was declared in the same file as JobApplication,
-// which is where it belonged while one project held every entity. It is Ats'
+// which is where it belonged while one project held every entity. It is Match'
 // table, so it moved here, and both of its navigation properties went in the
-// move: `ats_results` is now its own schema and neither `job_applications` nor
+// move: `match_results` is now its own schema and neither `job_applications` nor
 // `resumes` is reachable from it.
-public class AtsResult
+public class MatchResult
 {
     public Guid Id { get; set; } = Guid.NewGuid();
 
@@ -19,7 +19,7 @@ public class AtsResult
     // with its application is gone. Deleting an application therefore leaves an
     // orphan here until 13.3c adds the delete notification that replaces it.
     // Named rather than left implicit: an orphaned result is invisible (nothing
-    // reads ats_results except by application id), which is exactly the kind of
+    // reads match_results except by application id), which is exactly the kind of
     // gap that gets found by a row count two phases later.
     public Guid ApplicationId { get; set; }
 
@@ -32,7 +32,7 @@ public class AtsResult
     // Nullable only so existing rows survive the migration; every row this phase
     // writes sets it.
     //
-    // 13.3b dropped this FK too, and GetAtsResult.cs already says what happens
+    // 13.3b dropped this FK too, and GetMatchResult.cs already says what happens
     // then: the label comes back null rather than the read failing. That was a
     // documented impossibility while the RESTRICT held it shut, and it is
     // reachable now.
@@ -48,7 +48,7 @@ public class AtsResult
     public List<string> MissingNiceToHaveKeywords { get; set; } = new();
 
     // The model half's output: free-text requirements the resume shows no
-    // evidence for. Empty when the model was unreachable — see CheckAts.cs, which
+    // evidence for. Empty when the model was unreachable — see RunMatchCheck.cs, which
     // degrades rather than failing, because three of its four stages need no model.
     public List<string> UnmetRequirements { get; set; } = new();
 

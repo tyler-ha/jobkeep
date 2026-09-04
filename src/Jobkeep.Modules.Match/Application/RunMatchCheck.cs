@@ -3,13 +3,13 @@ using System.Text.Json;
 using Jobkeep.Contracts.Applications;
 using Jobkeep.Contracts.Documents;
 using Jobkeep.Contracts.Skills;
-using Jobkeep.Modules.Ats.Domain;
+using Jobkeep.Modules.Match.Domain;
 using Jobkeep.SharedKernel;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
 
-namespace Jobkeep.Modules.Ats;
+namespace Jobkeep.Modules.Match;
 
 // Slice: compare a stored resume against the posting an application points at,
 // and report what the job asks for that the resume never mentions.
@@ -73,8 +73,8 @@ namespace Jobkeep.Modules.Ats;
 //
 //   * The three reads are no longer ONE SNAPSHOT. Someone adding a skill to the
 //     resume between call two and call three would be reported as missing it.
-//     Harmless, and already the feature's shape: an ATS result is a stored
-//     judgement about a moment, which is the whole argument GetAtsResult.cs makes
+//     Harmless, and already the feature's shape: a match result is a stored
+//     judgement about a moment, which is the whole argument GetMatchResult.cs makes
 //     for storing it at all.
 //   * A posting skill whose catalog row is missing is DROPPED, not rendered
 //     blank. Impossible today — the foreign key guarantees the row — and a real
@@ -92,9 +92,9 @@ namespace Jobkeep.Modules.Ats;
 // the candidate was. A number out of 100 would have averaged that away into a
 // digit. A list of specific missing things cannot.
 
-// The response DTO. Not the AtsResult entity — same rule as every other slice
+// The response DTO. Not the MatchResult entity — same rule as every other slice
 // (architecture.md A2).
-public record AtsCheckResponse(
+public record MatchCheckResponse(
     Guid ApplicationId,
     Guid? ResumeId,
     string? ResumeLabel,
@@ -110,7 +110,7 @@ public record AtsCheckResponse(
 //
 // It was this module's own projection of `resumes`, and every field on it is now
 // on IResumeContract's ResumeContent — including the experience count, which was
-// the one field that looked like it belonged to Ats and does not: "how many roles
+// the one field that looked like it belonged to Match and does not: "how many roles
 // did the import find" is a fact about a resume, and stage 4 below is merely the
 // first thing to ask.
 
@@ -131,11 +131,11 @@ internal sealed class CoverageDraft
     public List<int> EvidencedRequirementNumbers { get; set; } = new();
 }
 
-public record CheckAts(
+public record RunMatchCheck(
     Guid ApplicationId,
-    Guid? ResumeId = null) : IRequest<SliceResult<AtsCheckResponse>>;
+    Guid? ResumeId = null) : IRequest<SliceResult<MatchCheckResponse>>;
 
-public class CheckAtsHandler : IRequestHandler<CheckAts, SliceResult<AtsCheckResponse>>
+public class RunMatchCheckHandler : IRequestHandler<RunMatchCheck, SliceResult<MatchCheckResponse>>
 {
     // A resume long enough to say something and short enough for a 3B model's
     // context window. The real CV this was built against is 3,262 characters, so
@@ -158,7 +158,7 @@ public class CheckAtsHandler : IRequestHandler<CheckAts, SliceResult<AtsCheckRes
     // One table, and it is the only one this module owns. Everything else this
     // slice needs arrives through a contract - which is the entire substance of
     // 13.2e, since before it this field was AppDbContext and reached all thirteen.
-    private readonly AtsDbContext _db;
+    private readonly MatchDbContext _db;
     private readonly IApplicationContract _applications;
     private readonly IPostingContract _postings;
     private readonly IResumeContract _resumes;
@@ -166,8 +166,8 @@ public class CheckAtsHandler : IRequestHandler<CheckAts, SliceResult<AtsCheckRes
     private readonly IChatClient _chat;
     private readonly ModelOptions _model;
 
-    public CheckAtsHandler(
-        AtsDbContext db,
+    public RunMatchCheckHandler(
+        MatchDbContext db,
         IApplicationContract applications,
         IPostingContract postings,
         IResumeContract resumes,
@@ -184,8 +184,8 @@ public class CheckAtsHandler : IRequestHandler<CheckAts, SliceResult<AtsCheckRes
         _model = model;
     }
 
-    public async ValueTask<SliceResult<AtsCheckResponse>> Handle(
-        CheckAts message, CancellationToken ct)
+    public async ValueTask<SliceResult<MatchCheckResponse>> Handle(
+        RunMatchCheck message, CancellationToken ct)
     {
         var (applicationId, resumeId) = message;
         // ---------------------------------------------------------------
@@ -194,7 +194,7 @@ public class CheckAtsHandler : IRequestHandler<CheckAts, SliceResult<AtsCheckRes
         var application = await _applications.GetRefAsync(applicationId, ct);
 
         if (application is null)
-            return SliceResult<AtsCheckResponse>.NotFound($"Application {applicationId} not found.");
+            return SliceResult<MatchCheckResponse>.NotFound($"Application {applicationId} not found.");
 
         // The argument wins over the link, so you can check the same application
         // against a second resume without editing it. The link is the default
@@ -202,7 +202,7 @@ public class CheckAtsHandler : IRequestHandler<CheckAts, SliceResult<AtsCheckRes
         var wantedResumeId = resumeId ?? application.ResumeId;
 
         if (wantedResumeId is null)
-            return SliceResult<AtsCheckResponse>.Invalid(
+            return SliceResult<MatchCheckResponse>.Invalid(
                 "This application is not linked to a resume, and no resumeId was supplied. "
               + "Link one to the application or pass ?resumeId= to check against a specific resume.");
 
@@ -212,7 +212,7 @@ public class CheckAtsHandler : IRequestHandler<CheckAts, SliceResult<AtsCheckRes
         // wrong is the id the caller supplied. Mirrors the check the Phase 4.5
         // review added to CreateApplication.cs, which had the same choice to make.
         if (resume is null)
-            return SliceResult<AtsCheckResponse>.Invalid($"Resume {wantedResumeId} not found.");
+            return SliceResult<MatchCheckResponse>.Invalid($"Resume {wantedResumeId} not found.");
 
         // ---------------------------------------------------------------
         // Stage 2 — the skill gap. Three calls, deterministic, free.
@@ -308,18 +308,18 @@ public class CheckAtsHandler : IRequestHandler<CheckAts, SliceResult<AtsCheckRes
         // contract that fails leaves nothing half-written: the check simply does
         // not produce a result, and the previous stored one — if any — is
         // untouched. The one contract method in this project that SAVES,
-        // ISkillCatalog.FindOrCreateAsync, is not called here; Ats never invents a
+        // ISkillCatalog.FindOrCreateAsync, is not called here; Match never invents a
         // skill, it only resolves ids a link row already guarantees exist.
         //
         // Keep it that way. Moving a contract call below this line would put a
         // foreign SaveChanges between building this row and committing it, which
         // is exactly the flush CommitImport.CommitResumeAsync is written to avoid.
         // ---------------------------------------------------------------
-        var stored = await _db.AtsResults.FirstOrDefaultAsync(r => r.ApplicationId == applicationId, ct);
+        var stored = await _db.MatchResults.FirstOrDefaultAsync(r => r.ApplicationId == applicationId, ct);
         if (stored is null)
         {
-            stored = new AtsResult { ApplicationId = applicationId };
-            _db.AtsResults.Add(stored);
+            stored = new MatchResult { ApplicationId = applicationId };
+            _db.MatchResults.Add(stored);
         }
 
         stored.ResumeId = resume.Id;
@@ -333,7 +333,7 @@ public class CheckAtsHandler : IRequestHandler<CheckAts, SliceResult<AtsCheckRes
 
         await _db.SaveChangesAsync(ct);
 
-        return SliceResult<AtsCheckResponse>.Ok(new AtsCheckResponse(
+        return SliceResult<MatchCheckResponse>.Ok(new MatchCheckResponse(
             applicationId,
             resume.Id,
             resume.Label,
@@ -382,7 +382,7 @@ public class CheckAtsHandler : IRequestHandler<CheckAts, SliceResult<AtsCheckRes
         ChatResponse response;
         try
         {
-            response = await _chat.GetResponseAsync(prompt, AtsSchema.Options, ct);
+            response = await _chat.GetResponseAsync(prompt, MatchSchema.Options, ct);
         }
         catch (Exception ex) when (ex is HttpRequestException
                                    || (ex is TaskCanceledException && !ct.IsCancellationRequested))
@@ -396,7 +396,7 @@ public class CheckAtsHandler : IRequestHandler<CheckAts, SliceResult<AtsCheckRes
 
         try
         {
-            var draft = JsonSerializer.Deserialize<CoverageDraft>(response.Text, AtsSchema.Json);
+            var draft = JsonSerializer.Deserialize<CoverageDraft>(response.Text, MatchSchema.Json);
             // A malformed reply is treated as "evidenced nothing" rather than as an
             // outage: the model answered, it just answered unusably, and reporting
             // every requirement as unmet is the direction this stage already errs in.
@@ -459,7 +459,7 @@ public class CheckAtsHandler : IRequestHandler<CheckAts, SliceResult<AtsCheckRes
 
 // Request settings for stage 3, built once. Same construction and the same
 // reasoning as AiSchema in AnalyzePosting.cs — see that file for what was measured.
-internal static class AtsSchema
+internal static class MatchSchema
 {
     // RequireAllProperties is the load-bearing one: without it the generated schema
     // marks nothing required, `{}` becomes a legal reply, and a 3B model offered

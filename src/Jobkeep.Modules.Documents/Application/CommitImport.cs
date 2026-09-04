@@ -164,7 +164,7 @@ public class CommitImportHandler : IRequestHandler<CommitImport, SliceResult<Com
             Phone = Clip(draft.Phone, 50),
             Location = Clip(draft.Location, 200),
             Headline = draft.Headline,          // text, no column cap
-            // The verbatim extracted text, not the draft. Phase 5's ATS check
+            // The verbatim extracted text, not the draft. Phase 5's match check
             // reads this: comparing a posting against the structured summary
             // would compare it against what the model chose to keep, which is
             // exactly the layer this phase exists to make optional.

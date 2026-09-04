@@ -7,7 +7,7 @@ using Jobkeep.Contracts.Shared;
 using Jobkeep.Modules.Applications;
 using Jobkeep.Modules.Documents.Domain;
 using Jobkeep.Modules.Skills.Domain;
-using Jobkeep.Tests.Ats;
+using Jobkeep.Tests.Match;
 using Jobkeep.Tests.Infrastructure;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
@@ -22,7 +22,7 @@ namespace Jobkeep.Tests.Documents;
 /// The assertion that matters most is not "a row appeared". It is that the row
 /// this slice writes points at the <em>same</em> shared <c>skills</c> row the
 /// posting side already made, because that identity is the only thing that makes
-/// the ATS check's gap a join rather than a string comparison. So these tests
+/// the match check's gap a join rather than a string comparison. So these tests
 /// count rows in <c>skills</c>, not just links in <c>resume_skills</c>.
 /// </para>
 ///
@@ -39,13 +39,13 @@ public class ResumeSkillTests(PostgresFixture fixture) : IntegrationTestBase(fix
         { "evidencedRequirementNumbers": [] }
         """;
 
-    /// <summary>The app with the model swapped, for the ATS re-check at the end.</summary>
+    /// <summary>The app with the model swapped, for the match re-check at the end.</summary>
     private HttpClient AppWithModel(string json) => Fixture.App
         .WithWebHostBuilder(b => b.ConfigureServices(s => s.AddSingleton<IChatClient>(new FakeChatClient(json))))
         .CreateClient();
 
     /// <summary>
-    /// Seeds a bare résumé with no skills. Unlike AtsTests.SeedResumeAsync this does
+    /// Seeds a bare résumé with no skills. Unlike MatchCheckTests.SeedResumeAsync this does
     /// not resolve existing skill rows — the point here is that the slice under test
     /// is what puts them on.
     /// </summary>
@@ -105,7 +105,7 @@ public class ResumeSkillTests(PostgresFixture fixture) : IntegrationTestBase(fix
     {
         // The join this whole design rests on. A posting makes "C#"; the résumé then
         // claims "C#"; there must be exactly ONE row in `skills` afterwards, or the
-        // ATS check is comparing two different rows that merely spell the same.
+        // match check is comparing two different rows that merely spell the same.
         var applicationId = await Client.CreateApplicationAsync("Canva", "Backend Engineer", Ct);
         await Client.AddSkillAsync(applicationId, "C#", Ct, isRequired: true);
 
@@ -248,7 +248,7 @@ public class ResumeSkillTests(PostgresFixture fixture) : IntegrationTestBase(fix
     // -----------------------------------------------------------------------
 
     [Fact]
-    public async Task Add_ClearsAMissingMustHave_OnTheNextAtsCheck()
+    public async Task Add_ClearsAMissingMustHave_OnTheNextMatchCheck()
     {
         // Phase 5's verification, run against the real CV and a real Melbourne ad,
         // reported PostgreSQL as a missing must-have because the CV names it in
@@ -265,7 +265,7 @@ public class ResumeSkillTests(PostgresFixture fixture) : IntegrationTestBase(fix
 
         // Before: the near-miss.
         using (var before = await BodyAsync(
-            await client.PostAsync($"/applications/{applicationId}/ats-check?resumeId={resumeId}", null, Ct)))
+            await client.PostAsync($"/applications/{applicationId}/match-check?resumeId={resumeId}", null, Ct)))
         {
             Assert.Equal(
                 ["PostgreSQL"],
@@ -277,9 +277,9 @@ public class ResumeSkillTests(PostgresFixture fixture) : IntegrationTestBase(fix
         Assert.Equal(HttpStatusCode.OK, (await AddAsync(client, resumeId, "PostgreSQL")).StatusCode);
 
         // After: matched, and nothing missing. Re-checking overwrites the stored
-        // row (ats_results is 1:1 with the application), so the latest answer wins.
+        // row (match_results is 1:1 with the application), so the latest answer wins.
         using (var after = await BodyAsync(
-            await client.PostAsync($"/applications/{applicationId}/ats-check?resumeId={resumeId}", null, Ct)))
+            await client.PostAsync($"/applications/{applicationId}/match-check?resumeId={resumeId}", null, Ct)))
         {
             Assert.Equal(
                 ["PostgreSQL"],
@@ -290,7 +290,7 @@ public class ResumeSkillTests(PostgresFixture fixture) : IntegrationTestBase(fix
 
         await WithDbAsync(async db =>
         {
-            var stored = await db.AtsResults.SingleAsync(Ct);
+            var stored = await db.MatchResults.SingleAsync(Ct);
             Assert.Empty(stored.MissingMustHaveKeywords);
         });
     }

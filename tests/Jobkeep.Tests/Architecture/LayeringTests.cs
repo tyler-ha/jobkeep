@@ -24,7 +24,7 @@ public class LayeringTests
         "Jobkeep.Modules.Applications",
         "Jobkeep.Modules.Analytics",
         "Jobkeep.Modules.Ai",
-        "Jobkeep.Modules.Ats",
+        "Jobkeep.Modules.Match",
         "Jobkeep.Modules.Documents",
         "Jobkeep.Modules.Skills",
         "Jobkeep.Api",

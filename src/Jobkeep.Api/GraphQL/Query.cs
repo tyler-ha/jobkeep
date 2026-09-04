@@ -2,14 +2,14 @@ using Jobkeep.Modules.Ai;
 using Jobkeep.Modules.Analytics;
 using Jobkeep.Modules.Applications;
 using Jobkeep.Modules.Applications.Domain;
-using Jobkeep.Modules.Ats;
+using Jobkeep.Modules.Match;
 using Jobkeep.Modules.Documents;
 using Jobkeep.Modules.Documents.Domain;
 using Mediator;
 
 // PHASE 13.4 — namespace aliases, and they are not cosmetic. Every resolver
-// below is named for the field it publishes (`GetApplication`, `CheckAts`), and
-// 13.4 gave the request record the same name — so a bare `new CheckAts(...)`
+// below is named for the field it publishes (`GetApplication`, `RunMatchCheck`), and
+// 13.4 gave the request record the same name — so a bare `new RunMatchCheck(...)`
 // inside this class binds to the METHOD and does not compile. Aliasing the five
 // module namespaces keeps the call sites one line each; the alternative is
 // fully-qualified type names on every field, or renaming resolvers and changing
@@ -18,7 +18,7 @@ using Apps = Jobkeep.Modules.Applications;
 using Stats = Jobkeep.Modules.Analytics;
 using Ai = Jobkeep.Modules.Ai;
 using Docs = Jobkeep.Modules.Documents;
-using Ats = Jobkeep.Modules.Ats;
+using Match = Jobkeep.Modules.Match;
 
 namespace Jobkeep.Api.GraphQL;
 
@@ -30,7 +30,7 @@ namespace Jobkeep.Api.GraphQL;
 // straight from IJobApplicationRepository, which had two consequences:
 //
 //   * A1 — the repository's include graph eager-loaded company, skills,
-//     requirements, AI analysis and ATS result on every call, whatever the
+//     requirements, AI analysis and match result on every call, whatever the
 //     client asked for. A query selecting one field cost five round-trips.
 //   * A7 — because HotChocolate builds the schema from resolver return types,
 //     publishing JobApplication published its navigation properties too. A
@@ -134,13 +134,13 @@ public class Query
         CancellationToken ct)
         => (await sender.Send(new Docs.GetResume(id), ct)).ValueOrThrow();
 
-    // Phase 5 — the stored ATS check. A query, not a mutation, because it reads
-    // and nothing else; the checkAts mutation is what computes it. Same split as
+    // Phase 5 — the stored match check. A query, not a mutation, because it reads
+    // and nothing else; the runMatchCheck mutation is what computes it. Same split as
     // analysis/analyzePosting above, and for the same reason: the answer is
     // stored so that reading it back cannot quietly become a different answer.
-    public async Task<AtsCheckResponse> GetAtsResult(
+    public async Task<MatchCheckResponse> GetMatchResult(
         Guid applicationId,
         [Service] ISender sender,
         CancellationToken ct)
-        => (await sender.Send(new Ats.GetAtsResult(applicationId), ct)).ValueOrThrow();
+        => (await sender.Send(new Match.GetMatchResult(applicationId), ct)).ValueOrThrow();
 }

@@ -30,7 +30,7 @@ namespace Jobkeep.Tests.Documents;
 /// The second is that removing a skill from a résumé deletes the
 /// <c>resume_skills</c> join row and leaves the shared <c>skills</c> row standing.
 /// That row may be linked to any number of postings, and the whole reason the
-/// skills table is shared is that the ATS check's gap is a join on skill id.
+/// skills table is shared is that the match check's gap is a join on skill id.
 /// "Take C# off my CV" must not mean "C# is no longer a skill".
 /// </para>
 /// </summary>
@@ -317,7 +317,7 @@ public class ResumeReadTests(PostgresFixture fixture) : IntegrationTestBase(fixt
     }
 
     [Fact]
-    public async Task RemoveSkill_RoundTripsWithAdd_WhichIsTheAtsDragUndone()
+    public async Task RemoveSkill_RoundTripsWithAdd_WhichIsTheMatchDragUndone()
     {
         var id = await SeedResumeAsync("mine");
 

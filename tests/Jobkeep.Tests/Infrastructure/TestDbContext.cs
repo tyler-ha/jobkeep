@@ -4,15 +4,15 @@ using Jobkeep.Modules.Ai.Domain;
 using Jobkeep.Modules.Analytics;
 using Jobkeep.Modules.Applications;
 using Jobkeep.Modules.Applications.Domain;
-using Jobkeep.Modules.Ats;
-using Jobkeep.Modules.Ats.Domain;
+using Jobkeep.Modules.Match;
+using Jobkeep.Modules.Match.Domain;
 using Jobkeep.Modules.Documents;
 using Jobkeep.Modules.Documents.Domain;
 using Jobkeep.Modules.Skills;
 using Jobkeep.Modules.Skills.Domain;
 using Jobkeep.Persistence;
 using Jobkeep.Tests.Architecture;
-using Jobkeep.Tests.Ats;
+using Jobkeep.Tests.Match;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jobkeep.Tests.Infrastructure;
@@ -24,7 +24,7 @@ namespace Jobkeep.Tests.Infrastructure;
 /// PHASE 13.3b split <c>AppDbContext</c> into six per-module contexts. That is the
 /// deliverable and it is not negotiable in <c>src/</c>. But <b>122 call sites across
 /// 15 test files</b> reach a context directly to ARRANGE rows, several of them mixing
-/// modules in a single block — <c>AtsTests.SeedResumeAsync</c> reads <c>db.Skills</c>
+/// modules in a single block — <c>MatchCheckTests.SeedResumeAsync</c> reads <c>db.Skills</c>
 /// while writing <c>db.Resumes</c>. Rewriting all 122 into six contexts would be a
 /// large, mechanical, entirely un-reviewable diff attached to a change whose whole
 /// value is that behaviour did not move.
@@ -65,7 +65,7 @@ public class TestDbContext(DbContextOptions<TestDbContext> options) : DbContext(
         typeof(SkillsDbContext).Assembly,
         typeof(DocumentsDbContext).Assembly,
         typeof(AiDbContext).Assembly,
-        typeof(AtsDbContext).Assembly,
+        typeof(MatchDbContext).Assembly,
         typeof(AnalyticsDbContext).Assembly,
     ];
 
@@ -77,7 +77,7 @@ public class TestDbContext(DbContextOptions<TestDbContext> options) : DbContext(
     public DbSet<JobRequirement> JobRequirements => Set<JobRequirement>();
     public DbSet<JobApplication> JobApplications => Set<JobApplication>();
     public DbSet<AiAnalysis> AiAnalyses => Set<AiAnalysis>();
-    public DbSet<AtsResult> AtsResults => Set<AtsResult>();
+    public DbSet<MatchResult> MatchResults => Set<MatchResult>();
 
     public DbSet<DocumentImport> DocumentImports => Set<DocumentImport>();
     public DbSet<Resume> Resumes => Set<Resume>();

@@ -1,7 +1,7 @@
 # Jobkeep
 
 A personal job-application tracker with AI-powered job description
-analysis and ATS compatibility checking. Built as a portfolio project:
+analysis and CV-to-ad match checking. Built as a portfolio project:
 C# / ASP.NET Core backend (REST + GraphQL), PostgreSQL via EF Core,
 deployed serverless on AWS, AI features via Ollama (local) or a hosted
 API (deployed).
@@ -198,9 +198,9 @@ Three callers, and **they are not equally dependent on it**:
 |---|---|---|
 | `Modules/Ai/AnalyzePosting.cs` — "Analyse the ad" | Seniority, a 2–3 sentence summary, and **every technology named in the ad**, from `job_postings.Description` | 500, with a message naming the endpoint. Nothing is stored. |
 | `Modules/Documents/DocumentStructurer.cs` — the upload pipeline | Structure for an uploaded PDF/DOCX/text: a résumé's roles and education, or a job ad's title, company, skills and requirements | The import blocks for up to 180s and then fails. Text extraction itself never touches the model. |
-| `Modules/Ats/CheckAts.cs` — the ATS check | **Only free-text requirement coverage.** | **Degrades, does not fail** — three of the four stages need no model. The warning is stored, so a later read cannot mistake an empty `UnmetRequirements` for "every requirement met". |
+| `Modules.Match/RunMatchCheck.cs` — the match check | **Only free-text requirement coverage.** | **Degrades, does not fail** — three of the four stages need no model. The warning is stored, so a later read cannot mistake an empty `UnmetRequirements` for "every requirement met". |
 
-The ATS row is the one worth reading twice. **The skill gap is a SQL set
+The match row is the one worth reading twice. **The skill gap is a SQL set
 difference, not a model call** — a posting's skills and a résumé's skills are rows
 in the same `skills` table joined on the same `SkillId`, so "what does this ad ask
 for that this CV does not have" is a join. Exact, instant, free, and it cannot
@@ -244,7 +244,7 @@ Jobkeep/
     ├── Jobkeep.Modules.Applications/   # a module = Domain/ + Application/ + Infrastructure/
     ├── Jobkeep.Modules.Analytics/      #   read-only reporting
     ├── Jobkeep.Modules.Ai/             #   owns ai_analyses
-    ├── Jobkeep.Modules.Ats/            #   owns ats_results
+    ├── Jobkeep.Modules.Match/          #   owns match_results
     ├── Jobkeep.Modules.Documents/      #   owns document_imports + the résumé tables
     └── Jobkeep.Api/                    # the only project that knows about HTTP
         ├── Program.cs                  #   wiring only: DI, middleware, Map* calls

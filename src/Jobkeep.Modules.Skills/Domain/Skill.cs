@@ -47,6 +47,6 @@ public class Skill : IAuditable
     // row is reachable from both sides, so "skills the postings ask for, minus
     // skills my resume mentions" is still a comparison of ids rather than of two
     // vocabularies. What changed is that the comparison happens in a module that
-    // holds both id sets (Ats, via two contract calls) instead of in a SQL join
+    // holds both id sets (Match, via two contract calls) instead of in a SQL join
     // that would not survive the split.
 }

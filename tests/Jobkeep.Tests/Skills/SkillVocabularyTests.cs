@@ -59,7 +59,7 @@ public class SkillVocabularyTests(PostgresFixture fixture) : IntegrationTestBase
     /// <summary>
     /// The defect that motivated the phase, stated as a test: the dev database held
     /// <c>Agile</c> AND <c>Agile Methodologies</c> as separate rows, so one skill's
-    /// demand count was split in two and the ATS check read the difference as a gap.
+    /// demand count was split in two and the match check read the difference as a gap.
     /// </summary>
     [Fact]
     public async Task Find_or_create_resolves_an_alias_to_the_canonical_row()

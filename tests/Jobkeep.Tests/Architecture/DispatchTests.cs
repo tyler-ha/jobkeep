@@ -5,7 +5,7 @@ using Jobkeep.Contracts.Skills;
 using Jobkeep.Modules.Ai;
 using Jobkeep.Modules.Analytics;
 using Jobkeep.Modules.Applications;
-using Jobkeep.Modules.Ats;
+using Jobkeep.Modules.Match;
 using Jobkeep.Modules.Documents;
 
 namespace Jobkeep.Tests.Architecture;
@@ -45,7 +45,7 @@ public class DispatchTests
         typeof(Jobkeep.Modules.Applications.GetApplication).Assembly,
         typeof(Jobkeep.Modules.Analytics.StatusFunnel).Assembly,
         typeof(Jobkeep.Modules.Ai.GetAnalysis).Assembly,
-        typeof(Jobkeep.Modules.Ats.CheckAts).Assembly,
+        typeof(Jobkeep.Modules.Match.RunMatchCheck).Assembly,
         typeof(Jobkeep.Modules.Documents.GetResume).Assembly,
         typeof(Jobkeep.Modules.Skills.SkillsModule).Assembly,
     ];

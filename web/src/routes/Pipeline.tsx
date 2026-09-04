@@ -37,7 +37,7 @@ import { formatDateOnly } from '../lib/format';
  * amber ground and the card goes back where it came from. Only a real failure
  * gets the alert red.
  *
- * As on the ATS board, dnd-kit's KeyboardSensor is deliberately not mounted and
+ * As on the match board, dnd-kit's KeyboardSensor is deliberately not mounted and
  * the grip stays out of the accessibility tree. Every card carries a "Move to"
  * select instead, which is one control instead of press-arrow-arrow-press, does
  * not need a live region to be usable, and works on a phone.

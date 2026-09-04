@@ -6,8 +6,8 @@ namespace Jobkeep.Modules.Applications.Domain;
 
 // Aggregate root: YOUR record of applying to a posting.
 //
-// PHASE 13.3b — AtsResult used to be declared in this file, directly below, and
-// it now lives in Jobkeep.Modules.Ats. Two classes in one file was fine while
+// PHASE 13.3b — MatchResult used to be declared in this file, directly below, and
+// it now lives in Jobkeep.Modules.Match. Two classes in one file was fine while
 // one project held every entity; it is not fine when the file has to be in two
 // assemblies at once.
 public class JobApplication : IAuditable
@@ -53,9 +53,9 @@ public class JobApplication : IAuditable
     // returned so a client can tell "no résumé" from "résumé missing".
     public Guid? ResumeId { get; set; }
 
-    // Deliberately no AtsResult navigation since 13.3b. The result is Ats' table
-    // in Ats' schema; the 1:1 is expressed by ats_results.ApplicationId and read
-    // through the Ats module, not by walking a property from here.
+    // Deliberately no MatchResult navigation since 13.3b. The result is Match' table
+    // in Match' schema; the 1:1 is expressed by match_results.ApplicationId and read
+    // through the Match module, not by walking a property from here.
 
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;

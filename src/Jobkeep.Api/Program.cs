@@ -11,7 +11,7 @@ using Jobkeep.Modules.Ai;
 using Jobkeep.Modules.Analytics;
 using Jobkeep.Modules.Applications;
 using Jobkeep.Modules.Applications.Domain;
-using Jobkeep.Modules.Ats;
+using Jobkeep.Modules.Match;
 using Jobkeep.Modules.Documents;
 using Jobkeep.Modules.Skills;
 using Jobkeep.Persistence;
@@ -91,7 +91,7 @@ AddModuleContext<ApplicationsDbContext>("applications");
 AddModuleContext<SkillsDbContext>("skills");
 AddModuleContext<DocumentsDbContext>("documents");
 AddModuleContext<AiDbContext>("ai");
-AddModuleContext<AtsDbContext>("ats");
+AddModuleContext<MatchDbContext>("ats");
 
 // Analytics reads three views published by Applications and owns no tables, so
 // it gets a context but no migrations history — there is nothing for it to
@@ -171,11 +171,11 @@ builder.Services.AddModelClient(builder.Configuration);
 // both in Jobkeep.Contracts, and its csproj carries no module reference at all.
 builder.Services.AddDocumentsModule(builder.Configuration);
 
-// Phase 5. Owns `ats_results` and, since 13.2e, names nothing else. It used to
+// Phase 5. Owns `match_results` and, since 13.2e, names nothing else. It used to
 // read five tables it did not own; all five are now contract calls, which is what
-// AtsModule.cs argues at length. Still no IConfiguration: the two limits this
+// MatchModule.cs argues at length. Still no IConfiguration: the two limits this
 // module imposes on its one model call are constants rather than settings.
-builder.Services.AddAtsModule();
+builder.Services.AddMatchModule();
 
 // ---------------------------------------------------------------------------
 // CORS, for the Phase 6 front end
@@ -318,7 +318,7 @@ if (app.Environment.IsDevelopment())
     scope.ServiceProvider.GetRequiredService<SkillsDbContext>().Database.Migrate();
     scope.ServiceProvider.GetRequiredService<DocumentsDbContext>().Database.Migrate();
     scope.ServiceProvider.GetRequiredService<AiDbContext>().Database.Migrate();
-    scope.ServiceProvider.GetRequiredService<AtsDbContext>().Database.Migrate();
+    scope.ServiceProvider.GetRequiredService<MatchDbContext>().Database.Migrate();
 
     // PHASE 14 — the starting skill vocabulary, immediately after the Skills
     // migration that creates the two tables it writes to.

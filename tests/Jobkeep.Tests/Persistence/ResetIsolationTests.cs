@@ -1,6 +1,6 @@
 using Jobkeep.Modules.Ai.Domain;
 using Jobkeep.Modules.Applications.Domain;
-using Jobkeep.Modules.Ats.Domain;
+using Jobkeep.Modules.Match.Domain;
 using Jobkeep.Modules.Documents.Domain;
 using Jobkeep.Modules.Skills.Domain;
 using Jobkeep.Tests.Infrastructure;
@@ -54,7 +54,7 @@ public sealed class ResetIsolationTests(PostgresFixture fixture) : IntegrationTe
             // ai and ats — both are rows that 13.3b made possible to orphan, which is
             // also what makes them easy to seed here without a real workflow.
             db.AiAnalyses.Add(new AiAnalysis { PostingId = postingId, Summary = "seeded" });
-            db.AtsResults.Add(new AtsResult { ApplicationId = applicationId });
+            db.MatchResults.Add(new MatchResult { ApplicationId = applicationId });
 
             await db.SaveChangesAsync(Ct);
         });
@@ -67,7 +67,7 @@ public sealed class ResetIsolationTests(PostgresFixture fixture) : IntegrationTe
             Assert.Equal(1, await db.Skills.CountAsync(Ct));
             Assert.Equal(1, await db.Resumes.CountAsync(Ct));
             Assert.Equal(1, await db.AiAnalyses.CountAsync(Ct));
-            Assert.Equal(1, await db.AtsResults.CountAsync(Ct));
+            Assert.Equal(1, await db.MatchResults.CountAsync(Ct));
         });
 
         await Fixture.ResetAsync();
@@ -81,7 +81,7 @@ public sealed class ResetIsolationTests(PostgresFixture fixture) : IntegrationTe
             Assert.Equal(0, await db.Skills.CountAsync(Ct));            // skills
             Assert.Equal(0, await db.Resumes.CountAsync(Ct));           // documents
             Assert.Equal(0, await db.AiAnalyses.CountAsync(Ct));        // ai
-            Assert.Equal(0, await db.AtsResults.CountAsync(Ct));        // ats
+            Assert.Equal(0, await db.MatchResults.CountAsync(Ct));        // ats
         });
     }
 

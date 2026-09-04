@@ -21,25 +21,25 @@ import {
   addResumeSkill,
   asApiError,
   getApplication,
-  getAtsResult,
+  getMatchResult,
   getResume,
   listApplications,
   listResumes,
   removeResumeSkill,
-  runAtsCheck,
+  runMatchCheck,
   updateApplication,
   type ApplicationDetail,
   type ApplicationListItem,
-  type AtsCheckResponse,
+  type MatchCheckResponse,
   type ResumeDetail,
   type ResumeSummary,
 } from '../lib/api';
 import { formatDateOnly, formatInstant } from '../lib/format';
 
-/* The ATS check.
+/* The match check.
  *
  * Two routes, one screen, because a screen owns its use case end to end:
- * /ats-check with no application is the picker, /applications/:id/ats-check is
+ * /match-check with no application is the picker, /applications/:id/match-check is
  * the board. The approved artboard only draws the board — it is reached from an
  * application — but the navigation has an entry for it, and an entry that
  * cannot answer "which job?" would be a dead end.
@@ -51,7 +51,7 @@ import { formatDateOnly, formatInstant } from '../lib/format';
  * missing. It is not the synonym fix, and the copy here does not pretend it is.
  */
 
-export default function AtsCheck() {
+export default function MatchCheck() {
   const { id } = useParams();
   return id ? <Board applicationId={id} /> : <Picker />;
 }
@@ -70,7 +70,7 @@ function Picker() {
 
   return (
     <Screen
-      title="ATS check"
+      title="Match check"
       lede="Pick the job you want to check a résumé against."
     >
       {error && <Failure error={error} what="load your applications" />}
@@ -85,7 +85,7 @@ function Picker() {
         <ul className="pick-list">
           {items.map((a) => (
             <li key={a.id}>
-              <Link to={`/applications/${a.id}/ats-check`} className="pick">
+              <Link to={`/applications/${a.id}/match-check`} className="pick">
                 <span className="pick-role">{a.title}</span>
                 <span className="quiet">{a.company}</span>
                 <StatusChip status={a.status} />
@@ -110,7 +110,7 @@ function Board({ applicationId }: { applicationId: string }) {
   const [resumes, setResumes] = useState<ResumeSummary[]>([]);
   const [resumeId, setResumeId] = useState<string | null>(null);
   const [resume, setResume] = useState<ResumeDetail | null>(null);
-  const [check, setCheck] = useState<AtsCheckResponse | null>(null);
+  const [check, setCheck] = useState<MatchCheckResponse | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
   const [running, setRunning] = useState(false);
   const [dragging, setDragging] = useState<string | null>(null);
@@ -153,24 +153,24 @@ function Board({ applicationId }: { applicationId: string }) {
        * paint. */
       const detail = getResume(resumeId);
       try {
-        let next: AtsCheckResponse;
+        let next: MatchCheckResponse;
         try {
           next = opts.rerun
-            ? await runAtsCheck(applicationId, resumeId)
-            : await getAtsResult(applicationId);
+            ? await runMatchCheck(applicationId, resumeId)
+            : await getMatchResult(applicationId);
         } catch (e) {
           const err = asApiError(e);
           /* Nothing stored yet — 404 is what "never checked" looks like here.
            * Run it: three of its four stages are SQL, so this is cheap, and the
            * user came to this screen to see an answer rather than a prompt. */
           if (!err.isMissing || opts.rerun) throw err;
-          next = await runAtsCheck(applicationId, resumeId);
+          next = await runMatchCheck(applicationId, resumeId);
         }
-        /* ats_results is 1:1 with the application, so the stored row may have
+        /* match_results is 1:1 with the application, so the stored row may have
          * judged a different résumé than the one now selected. Showing it under
          * this résumé's name would be a lie; re-run instead. */
         if (!opts.rerun && next.resumeId !== resumeId) {
-          next = await runAtsCheck(applicationId, resumeId);
+          next = await runMatchCheck(applicationId, resumeId);
         }
         setCheck(next);
         setResume(await detail);
@@ -286,12 +286,12 @@ function Board({ applicationId }: { applicationId: string }) {
           <ChevronRight size={14} aria-hidden />
           <Link to={`/applications/${applicationId}`}>{posting.company.name}</Link>
           <ChevronRight size={14} aria-hidden />
-          <span>ATS check</span>
+          <span>Match check</span>
         </nav>
 
         <header className="post-head">
           <div>
-            <h1>ATS check</h1>
+            <h1>Match check</h1>
             <p className="post-facts">
               {posting.company.name} · {posting.title}
               {check.checkedAtUtc && <> · checked {formatInstant(check.checkedAtUtc)}</>}

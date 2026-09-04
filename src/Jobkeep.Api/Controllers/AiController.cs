@@ -14,7 +14,7 @@ namespace Jobkeep.Api.Controllers;
 // leak the module layout into the public API, which is the thing module
 // boundaries are supposed to be free to change.
 //
-// Three controllers therefore share the /applications prefix (this one, Ats and
+// Three controllers therefore share the /applications prefix (this one, Match and
 // Applications itself). Attribute routing is fine with that as long as the
 // templates differ, and the controller NAME is what Swagger tags by — so the
 // grouping in the UI still follows the module, exactly as WithTags("Ai") did.

@@ -29,9 +29,9 @@ export class ApiError extends Error {
     return this.status === 400;
   }
 
-  /* A 404 is not always a failure either. `GET /applications/{id}/ats-check`
+  /* A 404 is not always a failure either. `GET /applications/{id}/match-check`
    * answers 404 for "never checked" as well as for "no such application" —
-   * GetAtsResult.cs says so in a comment and declines to spend a second query
+   * GetMatchResult.cs says so in a comment and declines to spend a second query
    * distinguishing them. The Job post screen reads that as an invitation. */
   get isMissing() {
     return this.status === 404;
@@ -275,15 +275,15 @@ export interface AnalysisSummaryResponse {
   analyzedAtUtc: string;
 }
 
-/* ---- Ats ---------------------------------------------------------------- */
+/* ---- Match ---------------------------------------------------------------- */
 
-/** CheckAts.cs. Returned by both POST (run it) and GET (read the stored one),
+/** RunMatchCheck.cs. Returned by both POST (run it) and GET (read the stored one),
  *  deliberately the same DTO so the two routes cannot drift apart.
  *
  *  There is no score, and that is a decision, not a gap: the real-CV test found
  *  the biggest ATS risk was the parser losing the candidate's name, which a
  *  number out of 100 would have averaged away into a digit. */
-export interface AtsCheckResponse {
+export interface MatchCheckResponse {
   applicationId: string;
   resumeId: string | null;
   resumeLabel: string | null;
@@ -540,17 +540,17 @@ export const analyzePosting = (id: string) =>
 export const getAnalysis = (id: string) =>
   api.get<AnalysisSummaryResponse>(`/applications/${id}/analysis`);
 
-/** POST runs the check and overwrites the stored row — ats_results is 1:1 with
+/** POST runs the check and overwrites the stored row — match_results is 1:1 with
  *  the application and latest wins. `resumeId` overrides the linked résumé so
  *  the same job can be checked against a second CV without editing it. */
-export const runAtsCheck = (id: string, resumeId?: string) =>
-  api.post<AtsCheckResponse>(
-    `/applications/${id}/ats-check${resumeId ? `?resumeId=${resumeId}` : ''}`,
+export const runMatchCheck = (id: string, resumeId?: string) =>
+  api.post<MatchCheckResponse>(
+    `/applications/${id}/match-check${resumeId ? `?resumeId=${resumeId}` : ''}`,
   );
 
 /** GET reads the stored result without recomputing. 404 means "never checked". */
-export const getAtsResult = (id: string) =>
-  api.get<AtsCheckResponse>(`/applications/${id}/ats-check`);
+export const getMatchResult = (id: string) =>
+  api.get<MatchCheckResponse>(`/applications/${id}/match-check`);
 
 export const listResumes = () => api.get<ResumeSummary[]>('/resumes');
 

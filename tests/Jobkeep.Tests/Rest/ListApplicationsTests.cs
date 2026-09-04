@@ -312,7 +312,7 @@ public sealed class ListApplicationsTests(PostgresFixture fixture) : Integration
     {
         // This is what pins the A1 fix. The retired repository answered every read with a
         // five-part include graph behind AsSplitQuery — company, skills, requirements, AI
-        // analysis and ATS result — whatever the caller wanted. A list row now projects
+        // analysis and match result — whatever the caller wanted. A list row now projects
         // to named columns, and this test fails the moment someone reintroduces an eager
         // load, because the extra properties would reappear on the wire.
         var id = await Client.CreateApplicationAsync(
