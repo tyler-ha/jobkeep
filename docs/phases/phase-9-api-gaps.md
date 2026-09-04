@@ -2,6 +2,35 @@
 
 **Status: Planned.** Not started.
 
+> **Three premises in this plan expired after it was written (checked 2026-09-04).
+> Read this box before anything below it.**
+>
+> 1. **Decision 17 is REVERSED.** Item 1 below argues that projecting another
+>    module's table is "legal under decision 17 and needs no contract". **Phase 13
+>    reversed that: every crossing needs a contract now, reads included.** So item 1
+>    is *not* "a change to one projection expression" — it needs a method on
+>    `IMatchContract`, and the test for whether it belongs there is the one in
+>    `CLAUDE.md`: does it name a **fact about the thing**, or a **question the
+>    caller has about its own feature**? A per-application match summary for a list
+>    row is arguably the second kind, which is the design question item 1 actually
+>    opens. **Settle that before writing code.**
+> 2. **`Ats` is `Match` and `ats_results` is `match_results`** (renamed 2026-09-04).
+>    The module is `Jobkeep.Modules.Match`, the contract `Jobkeep.Contracts.Match`,
+>    the routes `/applications/{id}/match-check`. The Postgres *schema* is still
+>    `ats`, deliberately. Names below are pre-rename and were left as written.
+> 3. **Phase 10 is DROPPED**, so the "Next" line at the bottom is dead and the
+>    "they come before the deploy" argument no longer has a deploy to come before.
+>    The reasoning still holds against *whatever* deploy replaces it.
+>
+> Nothing else about the three gaps changed — they are all still real, and all
+> three screens still work around them.
+>
+> **And the estimate below deserves the same suspicion.** Phase 8's front-end
+> estimate was wrong by an order of magnitude in exactly this way: it was written
+> against a *planned* UI, before Phase 6 shipped, and costed the conversion of
+> affordances that never existed. This doc's "LOW–MEDIUM, entirely additive" is of
+> the same vintage. **Re-check it against `web/` before trusting it.**
+
 ## Why these exist, and why they are one phase
 
 All three were found the same way, in step 6.3: by **building the screen**, not by
@@ -92,4 +121,7 @@ thing it is there to detect.
 
 ## Next
 
-[Phase 10](phase-10-aws-deploy.md) — the deploy, unparked.
+~~[Phase 10](phase-10-aws-deploy.md) — the deploy, unparked.~~ **The AWS deploy was
+dropped on 2026-09-04** (`architecture.md` decision 22) and a free host is still to
+be chosen. Nothing is scheduled after this phase; see the roadmap table in
+[`docs/README.md`](../README.md).
