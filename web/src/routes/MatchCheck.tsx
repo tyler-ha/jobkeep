@@ -447,8 +447,8 @@ function Board({ applicationId }: { applicationId: string }) {
             <p className="prose-sm">
               The skill gap is a set difference over the shared skills table — exact,
               instant, and free. Only the written requirements above are answered by a
-              model, which is why the check still runs when the model is down and{' '}
-              <span className="marked">says so</span> instead of failing.
+              model, which is why the check still runs when the model is down and says
+              so instead of failing.
             </p>
             {check.formattingRiskNotes.length > 0 && (
               <ul className="notes">

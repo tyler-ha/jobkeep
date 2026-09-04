@@ -362,7 +362,10 @@ export default function JobPost() {
           </section>
 
           <section className="panel">
-            <h2>What the model read</h2>
+            <div className="panel-head">
+              <h2>What the model read</h2>
+              <span className="badge-ai">AI read</span>
+            </div>
             {analysis ? (
               <>
                 <p className="quiet">

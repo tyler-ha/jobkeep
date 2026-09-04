@@ -848,7 +848,7 @@ function Review({ id }: { id: string }) {
                 seeing that here is the difference between "the model is bad"
                 and "there was nothing to read". */}
             <p className="upload-figure">
-              <span className="marked">
+              <span className="figure-num">
                 {imported.extractedText.length.toLocaleString('en-AU')}
               </span>
               <span className="upload-figure-label">characters read</span>

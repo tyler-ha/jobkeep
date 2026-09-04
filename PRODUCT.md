@@ -141,37 +141,67 @@ landed 2026-09-01. The rest are in the gap register in `docs/architecture.md`.
 
 ## Brand Commitments
 
-Name: **JobKeep**. Visual direction: **"Marked Up"**, approved and published as a
-design canvas of eight app screens at 1440×900.
+Name: **JobKeep**. The earlier visual direction, "Marked Up" (recruiter blue /
+hiring green / marker amber, with a hand-drawn highlighter-stroke device), was
+**superseded 2026-09-04** at the user's explicit request — a job search is
+stressful, and the tool should read as encouraging rather than municipal. The
+highlighter-stroke identity device was dropped outright rather than
+recoloured.
 
-Recorded here because the user made them binding, and **not to be re-derived,
-re-opened, or expanded**. Two earlier palettes were rejected before this one
-landed.
+The palette went through two rounds the same day. First the user asked for it
+to be chosen for them (*"engaging, clear, bright... encourage"*), which
+produced a violet/emerald/gold direction. The user then reviewed four further
+candidate directions (shown as mini nav-rail previews) and **chose a fifth
+instead: the "HealthRate" reference image** shown earlier in the session — a
+cream-and-lime health dashboard. What follows is that final pick; the violet
+round is superseded in turn, not layered underneath it.
 
-- Palette — the job-board family, not tech-startup: primary `#1A5CD6` recruiter
-  blue, secondary `#0E8A5F` hiring green, pop `#FFC53D` marker amber, on a warm
-  off-white `#F7F5F1` ground with white cards. Ink `#16181D`, muted `#5E6470`,
-  rule `#E4E0D8`, alert `#D93A3A`. Tokens are named `--pri` / `--sec` / `--pop`.
-- Blue and green may take whole surfaces; **amber may not** — one held moment per
-  screen, plus two functional uses (the hot drop zone, and the tile that just
-  landed).
-- **A missing skill never uses the alert red.** Missing is a task, not an error,
-  and that tone rule runs through the copy.
+Recorded here because the user made this binding the same way the previous
+direction was — **not a standing invitation to re-derive it again per
+screen.** A future change of this scope should again be a deliberate,
+user-confirmed decision, not incremental drift.
+
+- Palette — teal (`--pri`, the primary/action colour), moss green (`--sec`,
+  "growth" / Offer), lime (`--pop`, "encourage", the one held-moment colour),
+  on a warm cream ground with white cards: primary `#0B6E63`, secondary
+  `#4A7C2F`, pop `#C7D92E`, ground `#F7F2E6`. Ink `#16181D`, muted `#5E6470`,
+  rule `#E4E0D8`, alert `#D93A3A` — the neutrals and alert are unchanged from
+  the original "Marked Up" values; `--rule-strong` was re-measured and
+  darkened to `#8A8171` because this ground is warmer/darker than the
+  intermediate violet-palette ground and the old border value fell under the
+  3.0 non-text threshold against it. Tokens are named `--pri` / `--sec` /
+  `--pop`.
+- One field beyond the three-hue ramp: the nav rail is a committed solid dark
+  teal (`--nav-ground` `#0A2B27`), not tinted — the one bold, page-scale color
+  move in this redesign, deliberately bounded to the chrome so the task
+  surface next to it stays quiet and scannable. The wordmark and the active
+  nav item are the one lime moment in the chrome.
+- Teal and moss may take whole surfaces; **lime may not** — one held moment
+  per screen, plus the same two functional uses as before (the hot drop zone,
+  and the tile that just landed).
+- **A missing skill never uses the alert red.** Missing is a task, not an
+  error, and that tone rule runs through the copy — unchanged by either
+  recolour.
 - Type: Archivo (variable, `wdth 118`) display, Onest body, IBM Plex Mono for
-  anything the parser counts. Google Fonts only.
-- Every hand-drawn icon carries exactly one amber highlighter stroke through the
-  part that matters.
+  anything the parser counts. Google Fonts only — **unchanged**. Operate
+  surfaces are well served by workhorse type; recolouring did not require a
+  new voice.
 
-**Lift exact token values from the canvas artboards rather than re-deriving
-colours.**
+**Lift exact token values from `web/src/styles/tokens.css` rather than
+re-deriving colours** — the canvas artboards under "Evidence on Hand" below
+describe the original superseded direction, and neither does the intermediate
+violet round documented in `tokens.css`'s own history comment.
 
 ## Evidence on Hand
 
-- **Design canvas** (the approved deliverable, 8 screens):
+- **Design canvas** (the *original* "Marked Up" deliverable, 8 screens —
+  **superseded 2026-09-04**; kept as history, not as current evidence):
   `https://claude.ai/code/artifact/4592a539-9306-42c3-b6ce-9f3536eca60d`
   Draft doc (the rules in prose):
   `https://claude.ai/code/artifact/717252de-9f29-4e5a-8d09-9ae691a31bb4`
   Sources: `%TEMP%\jobkeep-canvas-v2\` — 14 `.dc.html` artboards + `canvas.json`.
+  No replacement canvas was generated for the new palette — see Brand
+  Commitments; `web/src/styles/tokens.css` is the current source of truth.
 - **Seeded demo data in the dev database**, which is real working evidence and
   the right thing to build against: application `a1f74664` (REA Group, Senior
   Backend Engineer, Melbourne); résumé `c4d9af56` ("demo-cv", 5 skills); résumé
@@ -212,51 +242,57 @@ never put the real email or address in a mockup — published mockups use
 **Required bar: WCAG 2.2 AA**, confirmed 2026-08-29. Chosen as a defensible
 interview claim and a real constraint, not decoration.
 
-Contrast ratios were measured against the approved palette on 2026-08-29. The
-palette is binding and does **not** change; what follows are the usage rules AA
-imposes on it, and they must be respected as the screens are built.
+Contrast ratios were re-measured against the current palette on 2026-09-04 —
+twice that day, once for the violet round and again for the teal/lime round
+that replaced it (see Brand Commitments). The neutrals are carried from the
+original "Marked Up" measurement except `--rule-strong`, re-measured and
+darkened for this warmer ground; the alert red is unchanged. What follows are
+the usage rules AA imposes on the palette as it now stands.
 
-| Token | on white | on `#F7F5F1` | Ruling |
+| Token | on white | on `#F7F2E6` | Ruling |
 |---|---|---|---|
-| `--pri` `#1A5CD6` | 5.92 | 5.44 | Passes AA text everywhere. White on blue = 5.92, so a blue button with a white label is safe. |
-| `--sec` `#0E8A5F` | 4.36 | 4.00 | **Fails AA body text by a hair.** Use for large/bold text (≥24px, or ≥18.66px bold) and for UI boundaries only. White on green = 4.36 — a green button needs a large or bold label. |
-| `--pop` `#FFC53D` | 1.58 | 1.45 | **Never carries text, and never carries a boundary or state on its own** (below the 3.0 non-text threshold). But **ink on amber = 11.25**, its strongest pairing — so amber works as a *ground* under dark ink, which is exactly the highlighter idea. |
-| `--ink` `#16181D` | 17.76 | 16.31 | Safe everywhere. |
-| `--muted` `#5E6470` | 5.94 | 5.46 | Passes AA text. Safe for secondary copy. |
-| `--rule` `#E4E0D8` | 1.32 | 1.21 | Decorative hairline only. **Cannot be the sole boundary of an input or control** — those need something ≥3.0. |
-| `--alert` `#D93A3A` | 4.55 | 4.18 | Passes on white, **fails on the warm ground**. White on red = 4.55, so a filled alert is fine; red text on the page ground is not. |
+| `--pri` `#0B6E63` | 6.13 | — | Passes AA text everywhere. White on teal = 6.13, so a filled button with a white label is safe. |
+| `--sec` `#4A7C2F` | 4.98 | — | Passes AA text at the base, unlike the two earlier palettes' secondary — this moss green can carry a filled button label directly. |
+| `--pop` `#C7D92E` | 1.57 | 1.38 | **Never carries text, and never carries a boundary or state on its own** (below the 3.0 non-text threshold). But **ink on lime = 11.33**, its strongest pairing yet — lime works as a *ground* under dark ink. |
+| `--ink` `#16181D` | 17.76 | 15.61 | Safe everywhere. |
+| `--muted` `#5E6470` | 5.94 | 5.22 | Passes AA text. Safe for secondary copy. |
+| `--rule` `#E4E0D8` | 1.32 | 1.16 | Decorative hairline only. **Cannot be the sole boundary of an input or control** — those need something ≥3.0. |
+| `--rule-strong` `#8A8171` | 3.85 | 3.38 | The border a control may rely on. Darkened from the violet round's `#958C7B` (2.92 on this ground — a fail) because this cream ground is warmer/darker than that round's bright ivory. |
+| `--alert` `#D93A3A` | 4.55 | 4.00 | Passes on white, **fails on the warm ground**. White on red = 4.55, so a filled alert is fine; red text on the page ground is not. |
+| `--nav-ground` `#0A2B27` | — (background only) | | The one committed field: a solid dark-teal nav rail. White text on it is 15.14; see the ramp note below for the label colors used on it. |
 
-### The palette is really a nine-token ramp
+### The palette is really a nine-token ramp, plus one committed field
 
-Measured from the approved artboards on 2026-08-29. The brand names three hues,
-but the boards consistently use a **dark shade** and a **pale tint** of each, and
-those six values are currently unnamed — they appear as raw hex, 145 times across
-the eight screens. `tokens.css` must name them, or every component re-derives its
-own dark blue and they drift apart.
+Same structure as both earlier rounds: each brand hue is a **base**, a
+**dark** (for text) and a **tint** (for surfaces) — the underlying problem
+didn't change, only the hues did.
 
 | | base | dark (text) | tint (surface) |
 |---|---|---|---|
-| Blue | `--pri` `#1A5CD6` | `--pri-dark` `#0F3E96` | `--pri-tint` `#E4EDFC` |
-| Green | `--sec` `#0E8A5F` | `--sec-dark` `#0A6446` | `--sec-tint` `#DFF3E9` |
-| Amber | `--pop` `#FFC53D` | `--pop-dark` `#7A5200` | `--pop-tint` `#FFF2CF` |
+| Teal | `--pri` `#0B6E63` | `--pri-dark` `#084B44` | `--pri-tint` `#DCF3EF` |
+| Moss | `--sec` `#4A7C2F` | `--sec-dark` `#2F5A1E` | `--sec-tint` `#E4F0D9` |
+| Lime | `--pop` `#C7D92E` | `--pop-dark` `#6B7318` | `--pop-tint` `#F3F6D8` |
 
 **The rule that makes AA automatic: on a tinted surface, the label is always the
 `-dark`, never the base.** Every dark-on-tint pair passes AA text comfortably —
-blue 8.29, green 6.20, amber 6.21. The base hues do not: `--sec` on `--sec-tint`
-is 3.76 and **fails** AA text. Follow the rule and the contrast question stops
-needing to be asked per component.
+teal 8.62, moss 6.83, lime 4.64. The base hues do not (moss's base is the one
+exception that also passes on white, but --sec-dark is still the safer,
+correct choice on a tint).
 
-This also answers the amber problem above: `--pop` cannot carry text at 1.58, but
-**`--pop-dark` `#7A5200` reaches 6.92 on white and 6.36 on the ground.** Amber
-text is available; it is just never the base token.
+This also answers the lime problem above: `--pop` cannot carry text at 1.57, but
+**`--pop-dark` `#6B7318` reaches 5.13 on white.** Lime text is available; it is
+just never the base token.
 
-Two strays should collapse rather than become tokens: `#EFECE6` and `#EDEFF3`
-(one use each) sit at 1.08 and 1.06 against `--ground` — differences no eye can
-resolve. Use `--ground`.
+One field sits outside the ramp: `--nav-ground` `#0A2B27` (the nav rail) with
+`--nav-muted` `#A9C2B0` (7.95 on it) for inactive labels, white for hover, and
+`--pop` itself for the wordmark and the active item's background (9.66 on
+`--nav-ground`, paired with `--ink` at 11.33). This is a background this
+specific component owns, not a fourth ramp hue other components should reach
+for.
 
 Two consequences that are design work, not compliance paperwork:
 
-- **The hot drop zone cannot be signalled by amber alone** — it fails the 3.0
+- **The hot drop zone cannot be signalled by lime alone** — it fails the 3.0
   non-text threshold. It needs a second, non-colour cue (shape, outline, motion,
   or ink). The same applies to the just-landed tile.
 - **The dnd-kit drag needs a full keyboard path.** dnd-kit supports this, but it

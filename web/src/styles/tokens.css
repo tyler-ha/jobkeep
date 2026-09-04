@@ -1,69 +1,81 @@
-/* JobKeep design tokens — "Marked Up"
+/* JobKeep design tokens
  *
- * Lifted from the approved canvas artboards (%TEMP%\jobkeep-canvas-v2\), not
- * re-derived. Two earlier palettes were rejected for looking like a dev tool
- * rather than something that sits in a tab next to Seek and LinkedIn all day.
+ * Recolored a second time, 2026-09-04, at the user's request — after
+ * reviewing four candidate directions, the user chose a fifth: the palette
+ * from the "HealthRate" reference image (a cream-and-lime health dashboard)
+ * shown earlier in the session. Same brief as the first recolour —
+ * engaging, clear, bright, encouraging — a different family: teal + moss +
+ * lime instead of violet + emerald + gold.
  *
- * The brief names three hues. The artboards actually use a dark shade and a
- * pale tint of each — 145 raw hex occurrences across the eight screens, none
- * of them named. Naming them here is the whole point of this file: without it
- * every component re-derives its own dark blue and they drift apart.
+ * Same three-hue-ramp structure as both earlier palettes — base / dark /
+ * tint per hue — because the underlying problem (a component needing a
+ * color for a fill vs. a tinted surface vs. small text) didn't change, only
+ * the hues did. Every number below was re-measured against the new hex
+ * values; none are carried over from the violet palette.
  *
  * THE RULE THAT MAKES WCAG 2.2 AA AUTOMATIC:
  *   On a tinted surface, the label is always the -dark, never the base.
- * Measured 2026-08-29. Dark-on-tint passes AA text everywhere (blue 8.29,
- * green 6.20, amber 6.21). Base-on-tint does not: --sec on --sec-tint is
- * 3.76 and FAILS. Follow the rule and contrast stops being a per-component
- * question.
+ * Dark-on-tint passes AA text everywhere (teal 8.62, moss 6.83, lime 4.64).
+ * Follow the rule and contrast stops being a per-component question.
  */
 
 :root {
   /* ---- Brand ramp ------------------------------------------------------ */
 
-  /* Blue — recruiter blue. Passes AA text on every ground; the only hue that
-   * may carry small text as its base. White-on-blue is 5.92, so a filled blue
-   * button with a white label is safe. */
-  --pri: #1a5cd6;
-  --pri-dark: #0f3e96; /* 9.77 on white — text, hover, and pressed states */
-  --pri-tint: #e4edfc; /* surface only; label it with --pri-dark */
+  /* Teal — the primary action colour, echoing the reference's "Book Now"
+   * trust color. White-on-pri is 6.13, stronger than either earlier
+   * palette's primary — plenty of headroom for a white button label. */
+  --pri: #0b6e63;
+  --pri-dark: #084b44; /* 10.00 on white — text, hover, and pressed states */
+  --pri-tint: #dcf3ef; /* surface only; label it with --pri-dark */
 
-  /* Green — hiring green. NOTE: the base is 4.36 on white and 4.00 on the
-   * ground, so it misses AA body text by a hair. Use it for fills, large or
-   * bold type, and UI boundaries. For anything set small, use --sec-dark. */
-  --sec: #0e8a5f;
-  --sec-dark: #0a6446; /* 7.18 on white — this is the green that carries text */
-  --sec-tint: #dff3e9;
+  /* Moss green — "growth" / Offer. Unlike the two earlier greens, the base
+   * itself clears AA text at 4.98 on white, so it can carry a filled button
+   * label directly — --sec-dark stays the tint-surface pairing. */
+  --sec: #4a7c2f;
+  --sec-dark: #2f5a1e; /* 8.08 on white — this is the green for tinted surfaces */
+  --sec-tint: #e4f0d9;
 
-  /* Amber — marker amber. The identity colour, and the most constrained one.
-   * At 1.58 on white it can never carry text, and it falls below the 3.0
-   * non-text threshold, so it can never be the sole carrier of a state or a
-   * boundary either — the hot drop zone needs a second, non-colour cue.
-   * What it IS good at: being a ground. Ink on amber is 11.25, its strongest
-   * pairing, which is exactly the highlighter idea. */
-  --pop: #ffc53d;
-  --pop-dark: #7a5200; /* 6.92 on white — amber text is available, just never the base */
-  --pop-tint: #fff2cf;
+  /* Lime — "encourage". The one held-moment colour, matching the reference's
+   * "4.8" rating badge, and the most constrained one. Bright yellow-greens
+   * never clear a text threshold on a light ground: lime is 1.57 on white
+   * and 1.38 on --ground, both under the 3.0 non-text floor, so it can never
+   * be the sole carrier of a state or a boundary either — a drop zone or a
+   * drag target needs a second, non-colour cue. What it IS good at: being a
+   * ground. Ink on lime is 11.33, its strongest pairing yet. */
+  --pop: #c7d92e;
+  --pop-dark: #6b7318; /* 5.13 on white — lime text is available, just never the base */
+  --pop-tint: #f3f6d8;
+
+  /* The nav rail is the one committed field in this redesign — a bounded,
+   * bold surface rather than an accent scattered over the neutral ground, so
+   * the content area stays quiet and scannable while the chrome carries the
+   * identity. White text is 15.14 on it; the sage below is for inactive
+   * labels; the wordmark and active item use --pop (lime), 9.66 on it. */
+  --nav-ground: #0a2b27;
+  --nav-muted: #a9c2b0; /* 7.95 on --nav-ground — passes AA text */
 
   /* ---- Neutrals -------------------------------------------------------- */
 
-  /* The warm ground was explicitly praised in review. It is what separates
-   * this from the two rejected cool-grey attempts; do not cool it down. */
-  --ground: #f7f5f1;
+  /* Warmer and more cream than the ivory of the violet palette, matching the
+   * reference's soft beige dashboard ground. Darker than before, which is
+   * why --rule-strong below was re-measured and adjusted — a lighter border
+   * that cleared the old bright-ivory ground no longer clears this one. */
+  --ground: #f7f2e6;
   --card: #ffffff;
-  --ink: #16181d; /* 17.76 on white */
-  --muted: #5e6470; /* 5.94 on white — passes AA, safe for secondary copy */
-  --rule: #e4e0d8; /* 1.32 — decorative hairline ONLY. Never an input's sole border. */
+  --ink: #16181d; /* 17.76 on white, 15.61 on --ground */
+  --muted: #5e6470; /* 5.94 on white, 5.22 on --ground — passes AA, safe for secondary copy */
+  --rule: #e4e0d8; /* 1.32 on white, 1.16 on --ground — decorative hairline ONLY. Never an input's sole border. */
 
-  /* The border a control is allowed to rely on. WCAG puts non-text UI
-   * boundaries at 3.0, and this is the lightest warm neutral that clears it
-   * against BOTH grounds — 3.33 on white, 3.05 on --ground. Anything lighter
-   * looks calmer and fails; --rule itself is 1.32 and is decoration only.
-   * Measured, because the first value chosen here was picked by eye and came
-   * in at 1.87. */
-  --rule-strong: #958c7b;
+  /* The border a control is allowed to rely on. Darkened from the violet
+   * palette's #958C7B — that value cleared 3.0 against the brighter ivory
+   * ground but fell to 2.92 against this warmer, darker cream. WCAG puts
+   * non-text UI boundaries at 3.0: this clears it against BOTH grounds —
+   * 3.85 on white, 3.38 on --ground. */
+  --rule-strong: #8a8171;
 
   /* Reserved for genuine failures. Passes on white (4.55) but FAILS on the
-   * warm ground (4.18), so red text never sits directly on --ground; put it
+   * warm ground (4.00), so red text never sits directly on --ground; put it
    * on --card, or fill it and use white.
    *
    * A MISSING SKILL NEVER USES THIS. Missing is a task, not an error, and

@@ -126,7 +126,7 @@ function Funnel({ funnel }: { funnel: ApplicationFunnel }) {
           actually in anything". Amber is the ground behind it, never the ink —
           --pop is 1.58 on white and can never carry text. */}
       <p className="insight-figure">
-        <span className="marked num">{live}</span>
+        <span className="figure-num num">{live}</span>
         <span className="insight-figure-label">
           still live, of <span className="num">{funnel.total}</span>
         </span>

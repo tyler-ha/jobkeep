@@ -120,9 +120,8 @@ ol {
 
 /* ---- Browser surfaces --------------------------------------------------- */
 
-/* Selection is amber, because the product is called Marked Up and selecting
- * text is the closest thing a browser has to running a highlighter over it.
- * Ink on amber is 11.25, so selected text stays comfortably legible. */
+/* Selection picks up the lime accent rather than a browser default blue.
+ * Ink on lime is 11.33, so selected text stays comfortably legible. */
 ::selection {
   background: var(--pop);
   color: var(--ink);
@@ -165,32 +164,6 @@ ol {
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--muted);
-}
-
-/* ---- The marker ---------------------------------------------------------- */
-
-/* The identity device. A highlighter swipe behind text — not a border, not a
- * pill. The ends are slightly uneven because a real marker stroke is, and the
- * inset keeps it off the text's own baseline so it reads as ink laid under
- * the words rather than a background colour applied to them.
- *
- * This replaces the 3px coloured left border used on the artboards. That
- * pattern is the single most recognisable tell of generated UI, and it was
- * never on-identity here: the brand's device is a marker stroke, not a tab. */
-.marked {
-  position: relative;
-  display: inline;
-  isolation: isolate;
-}
-
-.marked::before {
-  content: '';
-  position: absolute;
-  z-index: -1;
-  inset: 0.08em -0.28em 0.02em -0.24em;
-  background: var(--pop);
-  border-radius: 0.55em 0.35em 0.5em 0.3em / 0.5em 0.6em 0.35em 0.45em;
-  transform: rotate(-0.45deg);
 }
 
 /* Screen-reader-only, for the label a control needs but the layout does not. */
