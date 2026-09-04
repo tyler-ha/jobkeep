@@ -1,6 +1,7 @@
 using Mediator;
+using Jobkeep.Contracts.Documents;
 
-namespace Jobkeep.Modules.Applications;
+namespace Jobkeep.Contracts.Applications;
 
 // PHASE 13.3c: the two events that replace the two CASCADEs 13.3b dropped. The
 // namespace is deliberately Jobkeep.Modules.Applications -- 13.6 renames

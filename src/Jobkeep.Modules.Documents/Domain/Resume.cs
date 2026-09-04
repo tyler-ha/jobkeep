@@ -1,6 +1,9 @@
 using System.Text.Json.Serialization;
+using Jobkeep.Contracts.Shared;
+using Jobkeep.Contracts.Skills;
+using Jobkeep.SharedKernel;
 
-namespace Jobkeep.Models;
+namespace Jobkeep.Modules.Documents.Domain;
 
 // A resume, as its own aggregate.
 //

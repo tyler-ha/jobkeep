@@ -1,7 +1,9 @@
 using System.Linq.Expressions;
-using Jobkeep.Models;
-using Jobkeep.Modules.Documents;
-using Jobkeep.Modules.Skills;
+using Jobkeep.Contracts.Applications;
+using Jobkeep.Contracts.Documents;
+using Jobkeep.Contracts.Shared;
+using Jobkeep.Contracts.Skills;
+using Jobkeep.Modules.Applications.Domain;
 
 namespace Jobkeep.Modules.Applications;
 

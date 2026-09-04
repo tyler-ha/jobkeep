@@ -1,4 +1,4 @@
-using Jobkeep.Models;
+using Jobkeep.Modules.Ats.Domain;
 using Jobkeep.Persistence;
 using Microsoft.EntityFrameworkCore;
 

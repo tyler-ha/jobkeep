@@ -1,6 +1,8 @@
 using System.Text.Json.Serialization;
+using Jobkeep.Contracts.Shared;
+using Jobkeep.Contracts.Skills;
 
-namespace Jobkeep.Models;
+namespace Jobkeep.Modules.Applications.Domain;
 
 // Join row (many-to-many) between a posting and a shared skill.
 //   IsRequired = must-have vs nice-to-have.

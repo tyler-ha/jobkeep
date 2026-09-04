@@ -163,10 +163,13 @@ Full reasoning, the extraction triggers, and the decision record are in
   data layer — GraphQL didn't replace REST. Added in Phase 2b. This dual
   surface is a *portfolio* choice, not an industry norm: no comparable
   product ships a public API. Don't imply otherwise.
-- **Storage**: **PostgreSQL via EF Core** (Phase 2). Schema lives in
-  `src/Data/AppDbContext.cs` (Fluent API, one place) with EF migrations in
-  `src/Migrations/`. An earlier draft of Phase 2 used DynamoDB; that was
-  dropped in favour of a normalized relational model — see the Phase 2 doc.
+- **Storage**: **PostgreSQL via EF Core** (Phase 2). Since Phase 13.3b the schema
+  is **13 tables in five Postgres schemas**, one per table-owning module, each with
+  its own `DbContext`, its own Fluent API configuration (`<Module>/Persistence/`),
+  its own migrations (`<Module>/Migrations/`) and its own `__EFMigrationsHistory`.
+  **Seven foreign keys, not thirteen** — the six that crossed a schema are enforced
+  in application code since 13.3c. An earlier draft of Phase 2 used DynamoDB; that
+  was dropped in favour of a normalized relational model — see the Phase 2 doc.
 - **AI calls**: behind `Microsoft.Extensions.AI`'s `IChatClient` (Phase 4), so
   Ollama (local, free) and a hosted API are swappable via config, not code
   changes. Registered in `src/Shared/ModelClient.cs`, **not** in the Ai module —
@@ -180,90 +183,98 @@ Full reasoning, the extraction triggers, and the decision record are in
 
 ### Where new code goes
 
-> **PHASE 13 IS IN PROGRESS AND THIS SECTION IS OUT OF DATE.** As of 13.3c
-> (2026-09-02) `src/` is **ten projects**: six modules, plus SharedKernel,
-> Contracts, Persistence and Api. (This said "nine" from 13.1 until 13.3c counted
-> the `.csproj` files — the Skills promotion was never added to the total.) Each module now holds its own entities
-> (`<Module>/Domain/`), its own EF configuration and `DbContext`
-> (`<Module>/Persistence/`) and its own migrations, in its own Postgres schema — see
-> `docs/phases/phase-13-clean-architecture.md` for the
-> target shape and the reference rule (*a module never references another module*),
-> which `tests/Jobkeep.Tests/Architecture/ModuleBoundaryTests.cs` enforces. The
-> vertical-slice rules below still describe how a **use case** is written, and that
-> has not changed; only the paths have. This section is rewritten in full at 13.6,
-> deliberately last, so it is rewritten once rather than after every step.
-
-New feature work goes in a **module**, as a **slice per use case**:
+**Rewritten at Phase 13.6 (2026-09-03), when the shape stopped moving.**
+`src/` is **ten projects**: six modules, plus SharedKernel, Contracts, Persistence
+and Api.
 
 ```
-src/Modules/<Module>/<UseCase>.cs   — request + handler + response, together
-src/Modules/<Module>/<Module>Module.cs — DI + MapGroup routes for that module
-src/Shared/                          — SliceResult + cross-cutting contracts
-src/Data/AppDbContext.cs             — the schema, in one place (Fluent API)
-src/Program.cs                       — wiring only (DI, middleware, Map* calls)
+src/Jobkeep.Modules.<X>/Application/<UseCase>.cs   request + handler + response, together
+src/Jobkeep.Modules.<X>/Domain/                    entities, enums, pure rules
+src/Jobkeep.Modules.<X>/Persistence/               <X>DbContext + Fluent API config
+src/Jobkeep.Modules.<X>/Infrastructure/            this module's own contract impl
+src/Jobkeep.Modules.<X>/Migrations/                its schema, its own history table
+src/Jobkeep.Modules.<X>/<X>Module.cs               DI registration
+src/Jobkeep.Contracts/<X>/                         how OTHER modules reach this one
+src/Jobkeep.SharedKernel/                          SliceResult, NaturalKey, IAuditable
+src/Jobkeep.Api/Controllers/<X>Controller.cs       the routes
+src/Jobkeep.Api/GraphQL/                           Query.cs, Mutation.cs
+src/Jobkeep.Api/Program.cs                         wiring only
 ```
 
-A new slice is a new file plus two lines in `<Module>Module.cs` (register the
-handler, map the route) — `Program.cs` only ever calls `Add*Module()` /
-`Map*Module()`.
+Modules: `Applications` (core), `Analytics` (read-only), `Ai`, `Documents`, `Ats`,
+`Skills`, `Identity` (later, Phase 11).
 
-Modules: `Applications` (core), `Analytics` (read-only), `Ai` (Phase 4),
-`Documents` (Phase 4.5), `Ats` (Phase 5), `Identity` (later).
+**A new slice is one file plus two lines**: register the handler in `<X>Module.cs`,
+add an action to `<X>Controller.cs`. `Program.cs` only ever calls `Add*Module()`;
+routing is one `MapControllers()`.
 
-**Two rules that matter:**
-- **A slice owns its use case end to end.** Handlers use `AppDbContext`
-  directly — EF's `DbContext` is already a unit-of-work plus a repository, so
-  a hand-written repository over it is a layer that mostly forwards calls.
-- **A module never *writes* another module's tables.** Modules share one
-  database. Reading across the boundary is free; writing needs a contract on
-  the owning module, or a call to one of its own use cases, because a second
-  writer re-decides invariants the owner owns. This is what keeps a future
-  service extraction a code-move rather than a redesign. Narrowed to writes in
-  Phase 5 — architecture.md decision 17; the old wording ("never reads another
-  module's tables") is superseded.
+**Five rules that matter:**
 
-### Migration state (read this before editing `src/`)
+- **A slice owns its use case end to end.** The handler takes **its own module's**
+  `DbContext` directly, validates in the handler (not at either edge), and returns a
+  **response DTO**, never an EF entity. EF's `DbContext` is already a unit-of-work
+  plus a repository; wrapping it adds a layer that mostly forwards calls. Don't
+  reintroduce a repository, a service layer or an `Api/Endpoints/*.cs` file — all
+  three existed and all three were deleted.
+- **Every crossing between modules goes through `Jobkeep.Contracts`, reads
+  included.** There is no project reference to cross with, so this is the compiler's
+  rule, not a convention. It **reverses decision 17** ("reads are free"), which was a
+  correct answer to *is this safe?* and the wrong answer to *can this module be
+  lifted out?* — a `SELECT` across a boundary is exactly what stops working when the
+  boundary becomes a network.
+- **Whether a method belongs on a contract is a question about the method, not a
+  count.** Does it name a **fact about the thing**, or a **question the caller has
+  about its own feature**? The second kind stays with the caller. That test replaced
+  `IPostingContract`'s old two-method cap, and it is why the ATS skill gap never
+  became a fifth method.
+- **`Domain/` knows nothing of EF or of the rest of its module.** Entities are the
+  layer that survives an extraction unchanged. Mapping goes in `Persistence/`,
+  behaviour in a slice. Pinned by `Architecture/LayeringTests.cs`.
+- **A namespace begins with the name of the project that holds it.** Also pinned by
+  `LayeringTests`. Not cosmetic — before 13.6, `Jobkeep.Modules.Skills` named both
+  the module and Contracts, and that is how `DispatchTests` came to check none of
+  Skills' handlers behind a line that compiled and passed.
 
-> **Superseded in part by Phase 13.** The Phase 2.1-2.3 migration described below
-> did finish, and its rules about *how a slice is written* still hold. What has
-> changed is where the files live: since 13.1 each module is its own project, and
-> since 13.3b each module holds its own entities and its own `DbContext`. The
-> quarantine project those things passed through, `Jobkeep.Infrastructure.Data`, is
-> **deleted**, and so is `AppDbContext`.
+**A cross-module CASCADE is a notification; a cross-module RESTRICT is a contract
+check.** The asymmetry is the point: a cascade is a consequence, announced *after*
+the publisher commits; a restrict is a question, asked *before*. Publish after
+`SaveChangesAsync`, never before — on failure that leaves an invisible orphan rather
+than destroying work on a row that survived. There is **no outbox**; that is written
+down, not forgotten, and it is Phase 15's.
 
-**The migration is finished.** It ran incrementally across Phases 2.1-2.3 so each
-phase stayed runnable, and as of Phase 2.3 (2026-08-26) `src/` has **one** shape:
-every use case is a slice under `Modules/Applications/`. `Endpoints/`,
-`Repositories/` and `Models/Dtos.cs` no longer exist — don't go looking for them,
-and don't recreate them.
+**`ISkillCatalog.FindOrCreateAsync` SAVES** — call it before adding anything of your
+own to the change tracker, or a failure after its save leaves the skill rows
+committed and yours not. `CommitImport.CommitResumeAsync` gets the order right and
+says why at length.
 
-Two files in `Modules/Applications/` are shared by several slices, and the
+Two files in `Applications/Application/` are shared by several slices, and the
 distinction matters because it is the one the repository got wrong:
+`ApplicationDetail.cs` holds the detail response records plus the EF projection;
+`CompanyLookup.cs` holds one find-or-create. **Neither owns *access*** — every slice
+still writes its own query, and a slice needing something different writes it rather
+than growing these. Prefer a flat `.Select(...)` projection to `Include(...)`; an
+include graph is how the over-fetch in A1 got there.
 
-- `ApplicationDetail.cs` — the detail response records plus the EF projection
-  expression, used by the get / create / update slices.
-- `CompanyLookup.cs` — find-or-create a company by name, used by create and update.
+### Superseded rules, kept so the reversals stay legible
 
-Neither owns *access*. Every slice still writes its own query; a slice that needs
-something different writes it rather than growing these files. A repository owns the
-queries themselves, which is why every use case had to become one of its methods,
-and why it kept growing.
+Each of these was a rule in an earlier version of this file, and each was reversed
+for a reason worth being able to say out loud:
 
-The rules:
+- *"Never bypass `IJobApplicationRepository`"* — the interface is deleted
+  (Phase 2.3, decision 5).
+- *"Keep `Program.cs` as the single place endpoints are defined"* — routes moved to
+  modules, then to controllers (Phase 13.5, decision 7, which also **reversed** the
+  standing recommendation to avoid controllers).
+- *"A module only queries the tables it owns"* → *"only a **write** needs a
+  contract"* (Phase 5, decision 17) → *"**every** crossing needs a contract"*
+  (Phase 13, decision 19). The middle version is the one to stop quoting.
+- *"`skills` is owned by nobody, deliberately"* — it is the `Skills` module's, since
+  Phase 13.2. A table with no owner has no context and no schema.
 
-- Write every use case as a slice in a module. A slice handler takes `AppDbContext`
-  directly, validates in the handler (not at either edge), and returns a **response
-  DTO**, never an EF entity.
-- Don't reintroduce a repository, a service layer, or a `Endpoints/*.cs` file. If a
-  phase doc says to add a method to `IJobApplicationRepository` (Phase 2.4 does),
-  write a slice instead and correct the phase doc — which is what 2.1 and 2.3 did.
-- Prefer a flat `.Select(...)` projection to `Include(...)`. Every read in `src/`
-  projects; an include graph is how the over-fetch in A1 got there.
-
-Superseded rules from earlier versions of this file, kept here so their
-reversal is legible: *"never bypass `IJobApplicationRepository`"* and *"keep
-`Program.cs` as the single place endpoints are defined"* are both retired, and
-the interface they protected is deleted. See `docs/architecture.md` decision 5.
+The Phase 2.1-2.3 slice migration and the Phase 13.1-13.3b project split are both
+**finished**. `Endpoints/`, `Repositories/`, `Models/Dtos.cs`, `AppDbContext` and
+`Jobkeep.Infrastructure.Data` no longer exist — don't go looking for them, and don't
+recreate them.
 
 ## What good looks like here
 
@@ -422,7 +433,7 @@ dotnet build Jobkeep.slnx
 dotnet run --project Jobkeep.Api
 ```
 
-Since Phase 13.1 there are several projects under `src/` (nine, as of 13.3b), so a
+Since Phase 13.1 there are several projects under `src/` (**ten**, as of 13.3c), so a
 bare `dotnet build` / `dotnet run` in that directory fails with **MSB1011** — name the
 solution or the project, as above. `docker compose up --build` is unaffected and remains the
 normal way to start the stack.
@@ -682,12 +693,21 @@ Three of its four stages compare a CV to an ad, which is not what the industry
 calls an ATS check. It is a `docs/backlog.md` row and **must not start before
 13.5**, which rewrites the same endpoints.
 
-**Currently up next: Phase 13.6 — namespaces, docs, decision record.** Read
-`docs/phases/phase-13-clean-architecture.md` §13.6; it is the live plan, and Phase 13
-was rewritten on 2026-09-01 when the user confirmed **microservices is the
-destination**. **13.1 through 13.5 are DONE**; only 13.6 remains. (This line has
-twice named a step that had already landed — 13.4 at `24fbb49`, then 13.5 — so check
-the branch before trusting it.)
+**PHASE 13 IS DONE (2026-09-03). 13.6 landed with it** — namespaces, this file's
+"Where new code goes", `architecture.md` sections 1-3 and decisions 5, 6, 7, 12, 13,
+15, 17 superseded in place, plus decisions 19-21 added. Suite 283 → 285. No
+migration; **no schema moved, so EF reports no drift** — the five model snapshots
+name entity types by CLR full name and were rewritten with the rename, which is the
+one trap in that step. Two rules from it are in "Where new code goes" above; the
+whole record is `docs/phases/phase-13-clean-architecture.md` §13.6.
+
+**Nothing is scheduled next.** The live candidates, none started: the **match-check
+rename** (unblocked by 13.5, a `docs/backlog.md` row), **Phase 6.5 group 6** (the
+upload's 180-second synchronous model call — a 1.0 blocker), **Phase 6 step 6.4**
+(the README), and the **`docs/token-log.md` backfill** (Phases 8-13 have no rows and
+Phase 14's is provisional; the ledger's own rule says do it in a *fresh* session).
+(This line has three times named a step that had already landed — 13.4 at `24fbb49`,
+then 13.5, then 13.6 — so check the branch before trusting it.)
 
 **13.5 LANDED 2026-09-03** (suite 268 → 283, no migration, no `web/` change). The
 29 routes are five `[ApiController]` classes in `src/Jobkeep.Api/Controllers/` and
@@ -778,10 +798,10 @@ data layer changed with it:
 - **Five schemas, five migration histories:** `applications`, `skills`, `documents`,
   `ai`, `ats`. Analytics has a context and neither, because it owns no tables; it reads
   three views that live in `applications`. `Program.cs` migrates five contexts, not six.
-- **Entities kept `namespace Jobkeep.Models`.** Deliberate: the boundary is the project
-  reference graph, and **13.6 renames every namespace in one pass**. The two shared
-  enums in `Jobkeep.Contracts/Shared/SharedEnums.cs` are in that namespace too, which
-  reads oddly on purpose.
+- ~~**Entities kept `namespace Jobkeep.Models`.**~~ **Done at 13.6**, in one pass as
+  planned. Entities are `Jobkeep.Modules.<X>.Domain`, the shared enums are
+  `Jobkeep.Contracts.Shared`, and `Jobkeep.Shared` / `Jobkeep.GraphQL` are gone. The
+  rule and the bug it uncovered are in "Where new code goes" above.
 - **`ApplicationStatus` and `SkillSource` are in Contracts, not copied.** Both appear in
   two modules' response DTOs, so both reach the GraphQL schema, and two CLR enums of one
   name is a schema-**build** failure. `PostingRequirementKind` and `ResumeSourceFormat`
@@ -955,8 +975,8 @@ should be written:
   against that one read-only buys nothing, because a `SELECT` across a boundary is
   precisely what stops working when the boundary becomes a network. **Every crossing
   needs a contract now, reads included.** 13.2e duly added the `GetPostingSkills`
-  method this bullet used to say was unnecessary. Decision 17 is superseded in
-  `architecture.md` at 13.6, along with 6, 7 and 13.
+  method this bullet used to say was unnecessary. **Decision 17 is now superseded in
+  `architecture.md`** (13.6), along with 5, 6, 7, 12, 13 and 15.
 - **Use a model only where a query cannot answer.** The plan said to prompt the
   model for the keyword match; it shipped as a SQL set difference over the shared
   `skills` table, which is exact, instant and free. The model now answers only

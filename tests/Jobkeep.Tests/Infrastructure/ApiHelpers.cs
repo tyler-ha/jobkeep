@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using Jobkeep.Modules.Applications;
 
 namespace Jobkeep.Tests.Infrastructure;
 

@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Jobkeep.Contracts.Skills;
 
 namespace Jobkeep.Modules.Skills;
 

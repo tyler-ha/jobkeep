@@ -1,4 +1,6 @@
-namespace Jobkeep.Models;
+using Jobkeep.Contracts.Applications;
+using Jobkeep.Contracts.Shared;
+namespace Jobkeep.Modules.Applications.Domain;
 
 // Stored as strings in Postgres (HasConversion<string> in each entity's
 // configuration) so rows stay self-documenting when you eyeball the table in

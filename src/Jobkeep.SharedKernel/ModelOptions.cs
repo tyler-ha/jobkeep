@@ -1,4 +1,4 @@
-namespace Jobkeep.Shared;
+namespace Jobkeep.SharedKernel;
 
 // PHASE 13.1: ModelOptions lives in Jobkeep.SharedKernel and the registration
 // stays in Jobkeep.Api. Three modules (Ai, Ats, Documents) inject these settings;

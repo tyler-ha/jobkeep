@@ -1,4 +1,7 @@
-namespace Jobkeep.Modules.Applications;
+using Jobkeep.Contracts.Ats;
+using Jobkeep.Contracts.Documents;
+using Jobkeep.Contracts.Shared;
+namespace Jobkeep.Contracts.Applications;
 
 // PHASE 13.2: the interface and its DTOs live in Jobkeep.Contracts; the
 // implementation lives with the module that owns the tables. The namespace is

@@ -23,7 +23,7 @@ namespace Jobkeep.Modules.Documents.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("Jobkeep.Models.DocumentImport", b =>
+            modelBuilder.Entity("Jobkeep.Modules.Documents.Domain.DocumentImport", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -95,7 +95,7 @@ namespace Jobkeep.Modules.Documents.Migrations
                     b.ToTable("document_imports", "documents");
                 });
 
-            modelBuilder.Entity("Jobkeep.Models.Resume", b =>
+            modelBuilder.Entity("Jobkeep.Modules.Documents.Domain.Resume", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -167,7 +167,7 @@ namespace Jobkeep.Modules.Documents.Migrations
                     b.ToTable("resumes", "documents");
                 });
 
-            modelBuilder.Entity("Jobkeep.Models.ResumeEducation", b =>
+            modelBuilder.Entity("Jobkeep.Modules.Documents.Domain.ResumeEducation", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -200,7 +200,7 @@ namespace Jobkeep.Modules.Documents.Migrations
                     b.ToTable("resume_educations", "documents");
                 });
 
-            modelBuilder.Entity("Jobkeep.Models.ResumeExperience", b =>
+            modelBuilder.Entity("Jobkeep.Modules.Documents.Domain.ResumeExperience", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -241,7 +241,7 @@ namespace Jobkeep.Modules.Documents.Migrations
                     b.ToTable("resume_experiences", "documents");
                 });
 
-            modelBuilder.Entity("Jobkeep.Models.ResumeSkill", b =>
+            modelBuilder.Entity("Jobkeep.Modules.Documents.Domain.ResumeSkill", b =>
                 {
                     b.Property<Guid>("ResumeId")
                         .ValueGeneratedOnAdd()
@@ -265,9 +265,9 @@ namespace Jobkeep.Modules.Documents.Migrations
                     b.ToTable("resume_skills", "documents");
                 });
 
-            modelBuilder.Entity("Jobkeep.Models.ResumeEducation", b =>
+            modelBuilder.Entity("Jobkeep.Modules.Documents.Domain.ResumeEducation", b =>
                 {
-                    b.HasOne("Jobkeep.Models.Resume", "Resume")
+                    b.HasOne("Jobkeep.Modules.Documents.Domain.Resume", "Resume")
                         .WithMany("Educations")
                         .HasForeignKey("ResumeId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -276,9 +276,9 @@ namespace Jobkeep.Modules.Documents.Migrations
                     b.Navigation("Resume");
                 });
 
-            modelBuilder.Entity("Jobkeep.Models.ResumeExperience", b =>
+            modelBuilder.Entity("Jobkeep.Modules.Documents.Domain.ResumeExperience", b =>
                 {
-                    b.HasOne("Jobkeep.Models.Resume", "Resume")
+                    b.HasOne("Jobkeep.Modules.Documents.Domain.Resume", "Resume")
                         .WithMany("Experiences")
                         .HasForeignKey("ResumeId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -287,9 +287,9 @@ namespace Jobkeep.Modules.Documents.Migrations
                     b.Navigation("Resume");
                 });
 
-            modelBuilder.Entity("Jobkeep.Models.ResumeSkill", b =>
+            modelBuilder.Entity("Jobkeep.Modules.Documents.Domain.ResumeSkill", b =>
                 {
-                    b.HasOne("Jobkeep.Models.Resume", "Resume")
+                    b.HasOne("Jobkeep.Modules.Documents.Domain.Resume", "Resume")
                         .WithMany("ResumeSkills")
                         .HasForeignKey("ResumeId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -298,7 +298,7 @@ namespace Jobkeep.Modules.Documents.Migrations
                     b.Navigation("Resume");
                 });
 
-            modelBuilder.Entity("Jobkeep.Models.Resume", b =>
+            modelBuilder.Entity("Jobkeep.Modules.Documents.Domain.Resume", b =>
                 {
                     b.Navigation("Educations");
 

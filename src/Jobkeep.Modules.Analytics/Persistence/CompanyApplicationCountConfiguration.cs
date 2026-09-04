@@ -1,4 +1,4 @@
-using Jobkeep.Modules.Applications;
+using Jobkeep.Contracts.Applications;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 

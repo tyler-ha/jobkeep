@@ -1,4 +1,4 @@
-using Jobkeep.Shared;
+using Jobkeep.Contracts.Applications;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Jobkeep.Modules.Applications;

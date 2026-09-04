@@ -1,4 +1,4 @@
-namespace Jobkeep.Models;
+namespace Jobkeep.Modules.Ats.Domain;
 
 // Phase 5 output — 1:1 with an application. The keyword lists map to Postgres
 // text[] columns via Npgsql (no child tables needed for simple string arrays).

@@ -1,5 +1,5 @@
-using Jobkeep.Modules.Applications;
-using Jobkeep.Shared;
+using Jobkeep.Contracts.Applications;
+using Jobkeep.SharedKernel;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 

@@ -1,10 +1,10 @@
 using System.ComponentModel;
 using System.Text.Json;
-using Jobkeep.Models;
-using Jobkeep.Modules.Applications;
-using Jobkeep.Modules.Documents;
-using Jobkeep.Modules.Skills;
-using Jobkeep.Shared;
+using Jobkeep.Contracts.Applications;
+using Jobkeep.Contracts.Documents;
+using Jobkeep.Contracts.Skills;
+using Jobkeep.Modules.Ats.Domain;
+using Jobkeep.SharedKernel;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;

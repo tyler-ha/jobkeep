@@ -1,4 +1,3 @@
-using Jobkeep.Shared;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Jobkeep.Modules.Analytics;

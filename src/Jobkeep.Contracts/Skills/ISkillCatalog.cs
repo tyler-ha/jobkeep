@@ -1,6 +1,7 @@
-﻿using Jobkeep.Models;
+﻿using Jobkeep.Contracts.Applications;
+using Jobkeep.Contracts.Shared;
 
-namespace Jobkeep.Modules.Skills;
+namespace Jobkeep.Contracts.Skills;
 
 // PHASE 13.2: the interface and its DTO live in Jobkeep.Contracts; the
 // implementation lives with the module that owns the table. The namespace is

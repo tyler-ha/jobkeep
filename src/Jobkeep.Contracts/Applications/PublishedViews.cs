@@ -1,6 +1,7 @@
-using Jobkeep.Models;
+using Jobkeep.Contracts.Shared;
+using Jobkeep.Contracts.Skills;
 
-namespace Jobkeep.Modules.Applications;
+namespace Jobkeep.Contracts.Applications;
 
 // ---------------------------------------------------------------------------
 // The three read models Applications PUBLISHES to Analytics

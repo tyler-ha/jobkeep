@@ -1,6 +1,8 @@
 using System.Text.Json.Serialization;
+using Jobkeep.Persistence;
+using Jobkeep.SharedKernel;
 
-namespace Jobkeep.Models;
+namespace Jobkeep.Modules.Applications.Domain;
 
 // An employer. Kept as its own row (unique Name) so multiple postings and
 // applications can share one company instead of duplicating it — that's what

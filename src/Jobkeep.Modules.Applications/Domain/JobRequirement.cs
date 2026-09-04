@@ -1,6 +1,8 @@
 using System.Text.Json.Serialization;
+using Jobkeep.Persistence;
+using Jobkeep.SharedKernel;
 
-namespace Jobkeep.Models;
+namespace Jobkeep.Modules.Applications.Domain;
 
 // A structured requirement line from the ad. Kept structured (not just prose)
 // so the ATS check (Phase 5) can reason specifically about must-haves.

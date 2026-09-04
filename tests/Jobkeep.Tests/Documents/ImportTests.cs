@@ -1,7 +1,12 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using Jobkeep.Models;
+using Jobkeep.Contracts.Applications;
+using Jobkeep.Contracts.Shared;
+using Jobkeep.Modules.Applications;
+using Jobkeep.Modules.Applications.Domain;
+using Jobkeep.Modules.Documents;
+using Jobkeep.Modules.Documents.Domain;
 using Jobkeep.Tests.Infrastructure;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;

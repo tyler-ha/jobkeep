@@ -1,4 +1,5 @@
-namespace Jobkeep.Shared;
+using Jobkeep.SharedKernel;
+namespace Jobkeep.Api;
 
 // The REST edge's translation of a SliceResult into a status code. Lives here
 // rather than inside each endpoint so the mapping (NotFound -> 404, Invalid ->

@@ -25,7 +25,7 @@ namespace Jobkeep.Modules.Skills.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("Jobkeep.Models.Skill", b =>
+            modelBuilder.Entity("Jobkeep.Modules.Skills.Domain.Skill", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -73,7 +73,7 @@ namespace Jobkeep.Modules.Skills.Migrations
                     b.ToTable("skills", "skills");
                 });
 
-            modelBuilder.Entity("Jobkeep.Models.SkillAlias", b =>
+            modelBuilder.Entity("Jobkeep.Modules.Skills.Domain.SkillAlias", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -105,9 +105,9 @@ namespace Jobkeep.Modules.Skills.Migrations
                     b.ToTable("skill_aliases", "skills");
                 });
 
-            modelBuilder.Entity("Jobkeep.Models.SkillAlias", b =>
+            modelBuilder.Entity("Jobkeep.Modules.Skills.Domain.SkillAlias", b =>
                 {
-                    b.HasOne("Jobkeep.Models.Skill", null)
+                    b.HasOne("Jobkeep.Modules.Skills.Domain.Skill", null)
                         .WithMany()
                         .HasForeignKey("SkillId")
                         .OnDelete(DeleteBehavior.Cascade)

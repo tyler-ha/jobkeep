@@ -2,16 +2,20 @@ using System.Text.Json.Serialization;
 // Phase 13.5: the Map*Module extensions 13.1 parked in Api/Endpoints/ are gone,
 // replaced by the controllers in Api/Controllers/. The Add*Module() half still
 // lives with its module and still does what a mediator cannot know about.
+using Jobkeep.Api;
 using Jobkeep.Api.Controllers;
-using Jobkeep.GraphQL;
+using Jobkeep.Api.GraphQL;
+using Jobkeep.Contracts.Applications;
+using Jobkeep.Contracts.Skills;
 using Jobkeep.Modules.Ai;
 using Jobkeep.Modules.Analytics;
 using Jobkeep.Modules.Applications;
+using Jobkeep.Modules.Applications.Domain;
 using Jobkeep.Modules.Ats;
 using Jobkeep.Modules.Documents;
 using Jobkeep.Modules.Skills;
 using Jobkeep.Persistence;
-using Jobkeep.Shared;
+using Jobkeep.SharedKernel;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.EntityFrameworkCore;

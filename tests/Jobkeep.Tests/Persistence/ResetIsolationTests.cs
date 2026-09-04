@@ -1,4 +1,8 @@
-using Jobkeep.Models;
+using Jobkeep.Modules.Ai.Domain;
+using Jobkeep.Modules.Applications.Domain;
+using Jobkeep.Modules.Ats.Domain;
+using Jobkeep.Modules.Documents.Domain;
+using Jobkeep.Modules.Skills.Domain;
 using Jobkeep.Tests.Infrastructure;
 
 namespace Jobkeep.Tests.Persistence;

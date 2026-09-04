@@ -1,6 +1,6 @@
 using System.Text.Json;
-using Jobkeep.Models;
-using Jobkeep.Shared;
+using Jobkeep.Modules.Documents.Domain;
+using Jobkeep.SharedKernel;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
 

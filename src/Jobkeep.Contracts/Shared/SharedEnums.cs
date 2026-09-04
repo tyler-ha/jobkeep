@@ -1,4 +1,7 @@
-namespace Jobkeep.Models;
+using Jobkeep.Contracts.Applications;
+using Jobkeep.Contracts.Documents;
+using Jobkeep.Contracts.Skills;
+namespace Jobkeep.Contracts.Shared;
 
 // ---------------------------------------------------------------------------
 // PHASE 13.3b — the two enums that could not follow their entity

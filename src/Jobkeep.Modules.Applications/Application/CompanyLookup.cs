@@ -1,5 +1,5 @@
-using Jobkeep.Models;
-using Jobkeep.Shared;
+using Jobkeep.Modules.Applications.Domain;
+using Jobkeep.SharedKernel;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jobkeep.Modules.Applications;

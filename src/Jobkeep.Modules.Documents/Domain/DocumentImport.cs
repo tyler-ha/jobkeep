@@ -1,4 +1,5 @@
-namespace Jobkeep.Models;
+using Jobkeep.SharedKernel;
+namespace Jobkeep.Modules.Documents.Domain;
 
 // What kind of document was uploaded. The user says which — it is not sniffed
 // from the content.

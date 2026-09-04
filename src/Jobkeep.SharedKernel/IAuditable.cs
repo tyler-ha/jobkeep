@@ -1,4 +1,4 @@
-namespace Jobkeep.Models;
+namespace Jobkeep.SharedKernel;
 
 // Phase 7. The two timestamps every independently-lifecycled row carries, and
 // the marker the interceptor looks for.

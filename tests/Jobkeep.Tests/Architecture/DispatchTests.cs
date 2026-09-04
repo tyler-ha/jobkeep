@@ -1,5 +1,12 @@
 using System.Reflection;
 using Mediator;
+using Jobkeep.Contracts.Applications;
+using Jobkeep.Contracts.Skills;
+using Jobkeep.Modules.Ai;
+using Jobkeep.Modules.Analytics;
+using Jobkeep.Modules.Applications;
+using Jobkeep.Modules.Ats;
+using Jobkeep.Modules.Documents;
 
 namespace Jobkeep.Tests.Architecture;
 
@@ -26,6 +33,13 @@ public class DispatchTests
     // Loaded through a type from each, because a referenced assembly is not in
     // the AppDomain until something touches it — and this test would otherwise
     // pass by finding nothing.
+    //
+    // 13.6 CORRECTED THE LAST ENTRY, and it is the best argument the namespace
+    // rename made for itself. It read ISkillCatalog, which lived in the namespace
+    // Jobkeep.Modules.Skills but in the ASSEMBLY Jobkeep.Contracts — so this list
+    // named Contracts twice and the Skills module not at all, and every handler in
+    // that module went unchecked while the line claiming to check it compiled and
+    // passed. A namespace that spans two projects is exactly how that hides.
     private static readonly Assembly[] ModuleAssemblies =
     [
         typeof(Jobkeep.Modules.Applications.GetApplication).Assembly,
@@ -33,7 +47,7 @@ public class DispatchTests
         typeof(Jobkeep.Modules.Ai.GetAnalysis).Assembly,
         typeof(Jobkeep.Modules.Ats.CheckAts).Assembly,
         typeof(Jobkeep.Modules.Documents.GetResume).Assembly,
-        typeof(Jobkeep.Modules.Skills.ISkillCatalog).Assembly,
+        typeof(Jobkeep.Modules.Skills.SkillsModule).Assembly,
     ];
 
     private static IEnumerable<Type> ConcreteTypes() => ModuleAssemblies
@@ -78,7 +92,11 @@ public class DispatchTests
             .Select(i => i.GetGenericArguments()[0])
             .ToHashSet();
 
-        var orphans = typeof(Jobkeep.Modules.Applications.ApplicationDeleted).Assembly
+        // Contracts, deliberately: a notification is part of a module's published
+        // face, so both events live there rather than in Applications. Before 13.6
+        // this line read Jobkeep.Modules.Applications.ApplicationDeleted and picked
+        // the same assembly by accident rather than on purpose.
+        var orphans = typeof(Jobkeep.Contracts.Applications.ApplicationDeleted).Assembly
             .GetTypes()
             .Where(t => t is { IsAbstract: false, IsInterface: false }
                         && typeof(INotification).IsAssignableFrom(t)

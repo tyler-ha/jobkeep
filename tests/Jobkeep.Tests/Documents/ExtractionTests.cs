@@ -1,7 +1,7 @@
 using System.IO.Compression;
-using Jobkeep.Models;
 using Jobkeep.Modules.Documents;
-using Jobkeep.Shared;
+using Jobkeep.Modules.Documents.Domain;
+using Jobkeep.SharedKernel;
 
 namespace Jobkeep.Tests.Documents;
 

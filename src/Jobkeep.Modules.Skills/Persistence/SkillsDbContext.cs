@@ -1,5 +1,7 @@
-using Jobkeep.Models;
+using Jobkeep.Contracts.Skills;
+using Jobkeep.Modules.Skills.Domain;
 using Jobkeep.Persistence;
+using Jobkeep.SharedKernel;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jobkeep.Modules.Skills;

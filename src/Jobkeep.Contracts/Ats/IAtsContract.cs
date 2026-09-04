@@ -1,4 +1,5 @@
-namespace Jobkeep.Modules.Ats;
+using Jobkeep.Contracts.Skills;
+namespace Jobkeep.Contracts.Ats;
 
 // PHASE 13.3c: Ats stops being a pure consumer.
 //

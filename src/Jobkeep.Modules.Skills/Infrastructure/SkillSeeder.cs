@@ -1,8 +1,10 @@
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Jobkeep.Models;
-using Jobkeep.Shared;
+using Jobkeep.Contracts.Shared;
+using Jobkeep.Contracts.Skills;
+using Jobkeep.Modules.Skills.Domain;
+using Jobkeep.SharedKernel;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 

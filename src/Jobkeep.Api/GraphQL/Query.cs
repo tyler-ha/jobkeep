@@ -1,9 +1,10 @@
 using Jobkeep.Modules.Ai;
 using Jobkeep.Modules.Analytics;
 using Jobkeep.Modules.Applications;
+using Jobkeep.Modules.Applications.Domain;
 using Jobkeep.Modules.Ats;
 using Jobkeep.Modules.Documents;
-using Jobkeep.Models;
+using Jobkeep.Modules.Documents.Domain;
 using Mediator;
 
 // PHASE 13.4 — namespace aliases, and they are not cosmetic. Every resolver
@@ -19,7 +20,7 @@ using Ai = Jobkeep.Modules.Ai;
 using Docs = Jobkeep.Modules.Documents;
 using Ats = Jobkeep.Modules.Ats;
 
-namespace Jobkeep.GraphQL;
+namespace Jobkeep.Api.GraphQL;
 
 // GraphQL read side. Both resolvers are thin adapters over the same slice
 // handlers the REST routes call, so a filter or a validation rule cannot mean

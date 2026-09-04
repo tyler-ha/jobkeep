@@ -1,6 +1,6 @@
-using Jobkeep.Models;
 using Jobkeep.Modules.Documents;
-using Jobkeep.Shared;
+using Jobkeep.Modules.Documents.Domain;
+using Jobkeep.SharedKernel;
 using Mediator;
 using Microsoft.AspNetCore.Mvc;
 
