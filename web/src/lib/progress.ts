@@ -7,13 +7,11 @@
  *
  * THE TRADEOFF, because it is the honest part and the interview material.
  *
- * This bar models the WAIT, not the transfer. `POST /imports` uploads at most
- * 5 MB to an API on localhost and then blocks synchronously on Ollama for up to
- * 180 seconds (`ModelOptions.TimeoutSeconds`, llama3.2:3b on CPU, plus the cost
- * of loading the weights on the first call after boot). So the transfer is
- * meaningless and the entire wait is the model — a byte-transfer progress bar
- * would show 100% within a frame and then lie for three minutes. `lib/api.ts`
- * uses plain `fetch`, which cannot report request-body progress anyway.
+ * This bar models the WAIT, not the transfer. The wait is the model: llama3.2:3b
+ * on CPU, up to `ModelOptions.TimeoutSeconds` (180), plus the cost of loading
+ * the weights on the first call after boot. A byte-transfer bar would show 100%
+ * within a frame and then lie for three minutes, and `lib/api.ts` uses plain
+ * `fetch`, which cannot report request-body progress anyway.
  *
  * The client genuinely cannot know when the model will answer. Given that, the
  * two honest options were a spinner or a decelerating estimate, and the user
@@ -22,10 +20,26 @@
  * done, it never reaches 100% until the response actually lands, and it is
  * labelled to the screen reader as an estimate.
  *
- * If this ever needs to become truthful, the shape is a 202 + poll, and it
- * needs a new `ImportStatus` value and a migration. `RestructureImport.cs`
- * (`POST /imports/{id}/reparse`) is where it would start — it already re-runs
- * the model over stored text without a re-upload.
+ * WHAT PHASE 6.5 GROUP 6 CHANGED, and what it did not.
+ *
+ * This comment used to end by saying that becoming truthful needed a 202 + poll,
+ * a new `ImportStatus` value AND A MIGRATION. The last of those was wrong, and
+ * checking it is what made the change affordable: `document_imports.Status` is
+ * `HasConversion<string>().HasMaxLength(20)` with no CHECK constraint, so a new
+ * enum value is a code change and nothing else. That was already known at 13.2c,
+ * when `CommitFailed` was added for exactly this reason.
+ *
+ * So the redesign happened. `POST /imports` returns as soon as the text is
+ * saved, the row sits in `Parsing`, and the review screen drives the model
+ * through `POST /imports/{id}/reparse` — the endpoint this comment already
+ * pointed at as the place it would start.
+ *
+ * The bar SURVIVES, because the wait did not disappear, it moved: it is now on
+ * the review screen, beside the extracted text, rather than under the upload
+ * button. What changed is that the client can finally observe the wait END —
+ * the reparse response is the transition, rather than an inference — so the
+ * estimate is bounded by a real event instead of running until something
+ * happens. The curve below is unchanged and its two properties still hold.
  */
 
 /** How long a parse usually takes. Measured during Phase 4: ~8.4s on a cold

@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text.Json;
 using Jobkeep.Modules.Documents.Domain;
 using Jobkeep.SharedKernel;
@@ -50,21 +50,18 @@ public class ImportDocumentHandler : IRequestHandler<ImportDocument, SliceResult
 {
     private readonly DocumentsDbContext _db;
     private readonly IDocumentTextExtractor _extractor;
-    private readonly IDocumentStructurer _structurer;
-    private readonly ModelOptions _model;
     private readonly DocumentOptions _options;
 
+    // IDocumentStructurer and ModelOptions were dependencies here until group 6.
+    // The upload no longer calls the model at all, so it no longer needs to know
+    // one exists — RestructureImport is where both moved to.
     public ImportDocumentHandler(
         DocumentsDbContext db,
         IDocumentTextExtractor extractor,
-        IDocumentStructurer structurer,
-        ModelOptions model,
         DocumentOptions options)
     {
         _db = db;
         _extractor = extractor;
-        _structurer = structurer;
-        _model = model;
         _options = options;
     }
 
@@ -124,10 +121,18 @@ public class ImportDocumentHandler : IRequestHandler<ImportDocument, SliceResult
         // half without touching the file. Phase 4 made the same call in miniature
         // — it saves the analysis row before writing skills, so a skill-write
         // failure does not lose the inference.
+
+        // Whether there is anything worth sending to the model at all. A scan
+        // with no text layer is finished the moment it is saved, so it goes
+        // straight to AwaitingReview rather than claiming a parse that will
+        // never be driven — a Parsing row nobody is going to structure is
+        // exactly the invisible-orphan state this status exists to remove.
+        var willParse = extracted.Text.Length >= _options.MinTextChars;
+
         var import = new DocumentImport
         {
             Kind = kind,
-            Status = ImportStatus.AwaitingReview,
+            Status = willParse ? ImportStatus.Parsing : ImportStatus.AwaitingReview,
             FileName = safeName,
             Format = extracted.Format,
             ByteCount = bytes.Length,
@@ -141,61 +146,57 @@ public class ImportDocumentHandler : IRequestHandler<ImportDocument, SliceResult
             // filename. Seeding the real shape here makes the response and the row
             // agree whatever happens next.
             DraftJson = JsonSerializer.Serialize(
-                EmptyDraft(kind, resolvedLabel), DraftMapper.Json),
+                EmptyDraft(kind, resolvedLabel, sourceUrl), DraftMapper.Json),
             Warning = extracted.Warning
         };
 
         _db.DocumentImports.Add(import);
         await _db.SaveChangesAsync(ct);
 
-        // A scan with no text layer stops here rather than being sent to the
-        // model. Asking a model to structure an empty string does not fail — it
-        // invents a plausible resume, which is the single worst outcome this
-        // feature could produce. The import is kept so the user can see what was
-        // extracted (nothing) and why.
-        if (extracted.Text.Length < _options.MinTextChars)
-            return SliceResult<ImportResponse>.Ok(ToResponse(import, EmptyDraft(kind, resolvedLabel)));
-
-        var structured = await _structurer.StructureAsync(
-            kind, extracted.Text, resolvedLabel, sourceUrl, ct);
-
-        if (structured.Status != ResultStatus.Ok)
-        {
-            // The model answered with something unusable. The row survives with
-            // the extraction intact and an explanation attached, so /reparse can
-            // try again and the user can still hand-fill the draft in the
-            // meantime. Returning Ok here rather than Invalid is deliberate: the
-            // upload succeeded, and the caller now owns a real import id.
-            import.Warning = Join(import.Warning, structured.Error);
-            import.UpdatedAtUtc = DateTime.UtcNow;
-            await _db.SaveChangesAsync(ct);
-            return SliceResult<ImportResponse>.Ok(ToResponse(import, EmptyDraft(kind, resolvedLabel)));
-        }
-
-        import.DraftJson = JsonSerializer.Serialize(structured.Value!.Draft, DraftMapper.Json);
-        import.ModelUsed = _model.Model;
-        import.Warning = Join(import.Warning, structured.Value.Warning);
-        import.UpdatedAtUtc = DateTime.UtcNow;
-        await _db.SaveChangesAsync(ct);
-
-        return SliceResult<ImportResponse>.Ok(ToResponse(import, structured.Value.Draft));
+        // -------------------------------------------------------------------
+        // And that is the whole upload. Phase 6.5 group 6.
+        // -------------------------------------------------------------------
+        // The model call used to be the next line, and it was the only slow
+        // thing here: everything above is byte work that finishes in
+        // milliseconds, while StructureAsync blocks for up to 180 seconds
+        // against llama3.2:3b on CPU. So this change is not "make the upload
+        // async" — it is "return at the save that already existed", and the
+        // reasoning for that early save transfers unchanged.
+        //
+        // Who runs the model now: the client, through POST /imports/{id}/reparse
+        // (RestructureImport.cs), which already re-ran it over stored text with
+        // no re-upload. That endpoint was written for a different reason and
+        // turns out to be this feature's entire second half.
+        //
+        // The alternative — an IHostedService with a Channel<Guid>, about forty
+        // lines and no new dependency — is REFUSED, and the reason is the deploy
+        // target. Lambda freezes the execution environment once the response is
+        // returned, so work queued to a background thread is not guaranteed to
+        // run, and when it does it may be on a later invocation or never. That
+        // buys a local demo with a production defect. (Ollama is not on Lambda
+        // either, so the AI story there is already unsolved — which is the
+        // argument for not adding a SECOND unsolved thing, not against.)
+        //
+        // The cost is written down in ImportStatus.Parsing: nothing on the
+        // server owns this row, so an abandoned parse stays Parsing until
+        // someone re-drives it from the queue.
+        return SliceResult<ImportResponse>.Ok(ToResponse(import, EmptyDraft(kind, resolvedLabel, sourceUrl)));
     }
-
-    private static string? Join(string? first, string? second) =>
-        (first, second) switch
-        {
-            (null, null) => null,
-            (null, var s) => s,
-            (var f, null) => f,
-            var (f, s) => $"{f} {s}"
-        };
 
     // An empty draft of the right shape, so a client rendering the review screen
     // always has the fields to fill in rather than a null it has to special-case.
-    internal static ImportDraft EmptyDraft(DocumentKind kind, string label) =>
+    // sourceUrl is seeded for the same reason the label is. Since group 6 the
+    // upload no longer calls the model, so the URL the user typed has nowhere
+    // else to live until they confirm — and /reparse reads it back OUT of the
+    // stored draft (RestructureImport.cs). Dropping it here would mean the
+    // parse that finishes the upload ran without the URL the upload was given.
+    // The three ReadDraft fallbacks below pass nothing, correctly: they are
+    // reconstructing a draft that failed to deserialize, and inventing a field
+    // for it is not their job.
+    internal static ImportDraft EmptyDraft(DocumentKind kind, string label, string? sourceUrl = null) =>
         kind == DocumentKind.Resume
             ? new ImportDraft(new ResumeDraft(label, null, null, null, null, null, [], [], [], []), null)
-            : new ImportDraft(null, new PostingDraft("", "", null, null, null, [], []));
+            : new ImportDraft(null, new PostingDraft("", "", null, null, sourceUrl, [], []));
 
     internal static ImportResponse ToResponse(DocumentImport import, ImportDraft draft) => new(
         import.Id,

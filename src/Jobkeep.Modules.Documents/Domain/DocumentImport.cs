@@ -25,6 +25,29 @@ public enum ImportStatus
     // correct it. This is the only state in which the draft can be edited.
     AwaitingReview,
 
+    // Phase 6.5 group 6. The text is extracted and durable, and the model has
+    // not structured it yet. The upload returns here instead of blocking for up
+    // to ModelOptions.TimeoutSeconds (180) on Ollama.
+    //
+    // PARSING IS A CLAIM, NOT A LOCK, and that is the accepted ceiling. Nothing
+    // on the server owns this row: the model is driven by the client, through
+    // POST /imports/{id}/reparse, for the reason RestructureImport.cs and the
+    // phase doc both give at length — the deploy target is Lambda, which freezes
+    // the execution environment once the response is returned, so a background
+    // worker would be a mechanism that silently stops working in production.
+    //
+    // So if the tab closes mid-parse, the row stays Parsing for ever. There is
+    // no lease, no timeout and no sweeper, the same position 13.3c took on
+    // domain events and for the same reason: the cheap recovery already exists.
+    // A Parsing row has its own tab in the queue, and opening it re-drives the
+    // parse. Anything more — a lease column, a reaper — is Phase 15's, next to
+    // the outbox.
+    //
+    // It also makes a state that used to be indistinguishable self-describing:
+    // a parse cancelled mid-flight used to leave a row reading AwaitingReview
+    // with an empty draft and no warning, which looked entirely normal.
+    Parsing,
+
     // Confirmed. The real rows exist and CommittedEntityId points at them.
     // Terminal — a committed import is a receipt, not a document to re-edit.
     Committed,

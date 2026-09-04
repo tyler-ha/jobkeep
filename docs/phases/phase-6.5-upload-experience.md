@@ -377,7 +377,7 @@ The only group with a backend half. Plan, for the session that picks it up:
   in `lib/api.ts`, `stubFetch` branches for **both** `POST /imports` and
   `POST /imports/text`, and one `user-event` test that types and submits.
 
-### Group 6 — the upload stops blocking (not started)
+### Group 6 — the upload stops blocking (DONE, 2026-09-04)
 
 **This REVERSES a decision written into Group 3 above and into the header comment
 of `web/src/lib/progress.ts`**, at the user's instruction on 2026-09-03: *"upload is
@@ -507,6 +507,59 @@ The tests that change: anything asserting `POST /imports` returns a populated dr
 now asserts `202` and `Parsing`, and the round trip through `/reparse` becomes the
 test that a draft eventually appears.
 
+#### What the plan got wrong — deviations, written down
+
+Four, and the first is the one that would have shipped a broken feature.
+
+**1. `/reparse` did NOT already accept a `Parsing` row.** The plan said steps 1
+and 3 "need no new agreement between them beyond the one new enum value", and
+that was wrong three times over. `RestructureImport` guarded on
+`Status != AwaitingReview`, so it would have refused every row the new upload
+creates; it never *set* `Status` at all, because the row was already
+`AwaitingReview` when it ran; and its model-failure path returns `Invalid`
+writing nothing, so a failed parse would have left the row in `Parsing` for ever
+with no explanation — strictly worse than the silent empty draft this group set
+out to fix. All three are now handled, and the failure path branches on
+`finishingUpload`: finishing an upload closes the row out into `AwaitingReview`
+with a warning (exactly what `POST /imports` used to return), while a re-parse a
+human pressed still reports `Invalid` and leaves the existing draft alone.
+
+**2. The scanned-PDF path does not go through `Parsing`.** A document with no
+text layer is finished the moment it is saved — nothing will ever be driven for
+it — so marking it `Parsing` would strand it in a state whose only exit is a
+parse that cannot happen. It stays `AwaitingReview`, and it is now the one upload
+path that still completes in a single request.
+
+**3. `POST /imports` still returns `201 Created`, not `202 Accepted`.** The plan
+asked for 202. It was not taken, because a resource genuinely *is* created and
+does have a URL — 202 is for "accepted, nothing to point at yet" — and because
+deviation 2 means the status would otherwise have to vary by document, making the
+wire contract depend on whether a PDF happened to have a text layer. The client
+branches on the `status` field, which is unambiguous either way.
+
+**4. No poller was built, and none is needed.** The plan's step 4 was "poll
+`GET /imports/{id}` until `Status != Parsing`". There is nothing to poll *for*:
+the model runs inside the client's own `/reparse` request, so its response IS the
+completion event. The review screen fires the reparse and sets state from what
+comes back. Navigating away does not cancel it — the request runs to completion
+and the server writes the row, so returning shows the finished draft. Only
+closing the tab strands the row, which is the ceiling `ImportStatus.Parsing`
+documents and the queue's "Still reading" tab recovers.
+
+Also done as planned: the `useNavigate` liveness guard (still latent, now
+guarded), the `progress.ts` header rewritten rather than deleted, and the bar
+moved from under the upload button to the review screen — the wait did not
+disappear, it moved, and the bar moved with it.
+
+#### Cost, as built
+
+No migration, as predicted. One enum value, one slice shortened by ~30 lines, one
+existing endpoint taught a second caller, one new queue tab. Suite **285 → 288**.
+The two shared test helpers (`ImportTests.PostImportAsync`,
+`ImportHardeningTests.ImportAsync`) now upload *and* reparse, because that pair is
+what "an import with a draft" means from here — 17 downstream tests were failing
+on a `Parsing` row until they did, which is the split proving it is real.
+
 ---
 
 ## Deviations from the plan
@@ -543,9 +596,7 @@ test that a draft eventually appears.
 
 ## What is still outstanding
 
-- **Group 4**, above.
-- **Group 6**, above — the upload stops blocking. Opened 2026-09-03; it
-  reverses a Group 3 decision at the user's instruction.
+- **Group 4**, above. It is now the only group left.
 - **The Phase 6 visual pass on the other seven screens.** Still blocked on the
   user's eyes: the Chrome extension has been disconnected for five sessions, so
   nothing in this phase has been *seen*, only reasoned about from the CSS.

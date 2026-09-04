@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -78,6 +78,12 @@ public class ImportHardeningTests(PostgresFixture fixture) : IntegrationTestBase
         return form;
     }
 
+    // An import with a DRAFT on it, which is what every test below means by
+    // "an import". Since Phase 6.5 group 6 that takes two requests, not one:
+    // POST /imports returns as soon as the text is saved, leaving the row in
+    // Parsing, and the model runs in POST /imports/{id}/reparse. The client
+    // drives that second call in the real app too (Upload.tsx), so doing it
+    // here is not a test-only shortcut — it is the same sequence.
     private async Task<Guid> ImportAsync(
         HttpClient client, string fixtureName, DocumentKind kind, string? label = null)
     {
@@ -85,7 +91,10 @@ public class ImportHardeningTests(PostgresFixture fixture) : IntegrationTestBase
             "/imports", Upload(FixtureBytes(fixtureName), fixtureName, kind, label), Ct);
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync(Ct));
-        return body.RootElement.GetProperty("id").GetGuid();
+        var id = body.RootElement.GetProperty("id").GetGuid();
+
+        (await client.PostAsync($"/imports/{id}/reparse", null, Ct)).EnsureSuccessStatusCode();
+        return id;
     }
 
     // ----------------------------------------------- null collections in a PUT
@@ -285,6 +294,10 @@ public class ImportHardeningTests(PostgresFixture fixture) : IntegrationTestBase
 
         using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync(Ct));
         var id = body.RootElement.GetProperty("id").GetGuid();
+
+        // Group 6: the upload leaves the row in Parsing, so the draft this
+        // confirm reads only exists after the model has run.
+        (await client.PostAsync($"/imports/{id}/reparse", null, Ct)).EnsureSuccessStatusCode();
 
         var confirm = await client.PostAsync($"/imports/{id}/confirm", null, Ct);
         Assert.Equal(HttpStatusCode.OK, confirm.StatusCode);

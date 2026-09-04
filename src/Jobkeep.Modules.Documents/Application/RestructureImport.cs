@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Jobkeep.Modules.Documents.Domain;
 using Jobkeep.SharedKernel;
 using Mediator;
@@ -52,9 +52,19 @@ public class RestructureImportHandler : IRequestHandler<RestructureImport, Slice
         if (import is null)
             return SliceResult<ImportResponse>.NotFound($"Import {id} not found.");
 
-        if (import.Status != ImportStatus.AwaitingReview)
+        // Two callers now, and the difference between them decides what a model
+        // failure means below. Phase 6.5 group 6 made this endpoint the second
+        // half of the upload, so it runs either as:
+        //
+        //   Parsing        — finishing an upload that deliberately returned
+        //                    before the model. The user has not seen a draft yet.
+        //   AwaitingReview — a human pressed "Read it again" on a draft that
+        //                    already exists.
+        if (import.Status is not (ImportStatus.AwaitingReview or ImportStatus.Parsing))
             return SliceResult<ImportResponse>.Invalid(
                 $"This import is {import.Status.ToString().ToLowerInvariant()} and can no longer be re-parsed.");
+
+        var finishingUpload = import.Status == ImportStatus.Parsing;
 
         if (import.ExtractedText.Length < _options.MinTextChars)
             return SliceResult<ImportResponse>.Invalid(
@@ -74,21 +84,55 @@ public class RestructureImportHandler : IRequestHandler<RestructureImport, Slice
             import.Kind, import.ExtractedText, label, sourceUrl, ct);
 
         if (structured.Status != ResultStatus.Ok)
-            // Unlike the upload path, this one reports the failure as Invalid
-            // rather than swallowing it into a warning. There, the caller had
-            // just uploaded a file and needed the import id back whatever the
-            // model did. Here the import already exists and the *only* thing
-            // asked for was a re-parse, so a failure is the answer to the
-            // question, and the previous draft is deliberately left untouched.
-            return SliceResult<ImportResponse>.Invalid(structured.Error!);
+        {
+            // A re-parse a human asked for reports the failure as Invalid rather
+            // than swallowing it into a warning: the import already exists and
+            // the *only* thing asked for was a re-parse, so a failure is the
+            // answer to the question, and the previous draft is left untouched.
+            if (!finishingUpload)
+                return SliceResult<ImportResponse>.Invalid(structured.Error!);
 
+            // Finishing an upload is the opposite case, and it is the behaviour
+            // the upload slice used to have inline: the caller has a real import
+            // and no draft, so the row must not be left claiming a parse that has
+            // stopped. It lands in AwaitingReview with the extraction intact and
+            // an explanation attached, which is exactly what POST /imports
+            // returned before group 6 moved this call out of it. The user can
+            // press "Read it again", or hand-fill the draft.
+            import.Status = ImportStatus.AwaitingReview;
+            import.Warning = Join(import.Warning, structured.Error);
+            import.UpdatedAtUtc = DateTime.UtcNow;
+            await _db.SaveChangesAsync(ct);
+            return SliceResult<ImportResponse>.Ok(
+                ImportDocumentHandler.ToResponse(import, ImportDocumentHandler.ReadDraft(import)));
+        }
+
+        // The one line that closes the Parsing state. On the re-parse path the
+        // row is already AwaitingReview and this changes nothing.
+        import.Status = ImportStatus.AwaitingReview;
         import.DraftJson = JsonSerializer.Serialize(structured.Value!.Draft, DraftMapper.Json);
         import.ModelUsed = _model.Model;
-        import.Warning = structured.Value.Warning;   // replaced, not appended: a fresh run's warnings
+        // Replaced on a re-parse — a fresh run's warnings are the current truth.
+        // Joined when finishing an upload, because the extraction's own warning
+        // (a partial text layer, say) is about the document, not about this run,
+        // and the upload slice used to join it for that reason.
+        import.Warning = finishingUpload
+            ? Join(import.Warning, structured.Value.Warning)
+            : structured.Value.Warning;
         import.UpdatedAtUtc = DateTime.UtcNow;
         await _db.SaveChangesAsync(ct);
 
         return SliceResult<ImportResponse>.Ok(
             ImportDocumentHandler.ToResponse(import, structured.Value.Draft));
     }
+
+    // Moved here from ImportDocument with the model call it belonged to.
+    private static string? Join(string? first, string? second) =>
+        (first, second) switch
+        {
+            (null, null) => null,
+            (null, var s) => s,
+            (var f, null) => f,
+            var (f, s) => $"{f} {s}"
+        };
 }

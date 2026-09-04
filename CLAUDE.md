@@ -720,13 +720,14 @@ name entity types by CLR full name and were rewritten with the rename, which is 
 one trap in that step. Two rules from it are in "Where new code goes" above; the
 whole record is `docs/phases/phase-13-clean-architecture.md` §13.6.
 
-**Nothing is scheduled next.** The live candidates, none started: the **match-check
-rename** (unblocked by 13.5, a `docs/backlog.md` row), **Phase 6.5 group 6** (the
-upload's 180-second synchronous model call — a 1.0 blocker), **Phase 6 step 6.4**
-(the README), and the **`docs/token-log.md` backfill** (Phases 8-13 have no rows and
-Phase 14's is provisional; the ledger's own rule says do it in a *fresh* session).
-(This line has three times named a step that had already landed — 13.4 at `24fbb49`,
-then 13.5, then 13.6 — so check the branch before trusting it.)
+**Nothing is scheduled next.** The live candidates, none started: **Phase 6.5
+group 4** (paste an ad's text — now the last group of that phase), **Phase 6 step
+6.4** (the README), the **Phase 6 visual pass** on the other seven screens, and the
+**`docs/token-log.md` backfill** (Phases 8-14 have no rows and Phase 14's is
+provisional; the ledger's own rule says do it in a *fresh* session).
+(This line has four times named a step that had already landed — 13.4 at `24fbb49`,
+then 13.5, then 13.6, then the match-check rename and group 6 — so check the branch
+before trusting it.)
 
 **13.5 LANDED 2026-09-03** (suite 268 → 283, no migration, no `web/` change). The
 29 routes are five `[ApiController]` classes in `src/Jobkeep.Api/Controllers/` and
@@ -910,13 +911,38 @@ is `varchar(20)` with no CHECK constraint — but a closed TypeScript union is a
 contract, so leaving it would have been a lie in a type.
 
 **Phase 6.5** (`docs/phases/phase-6.5-upload-experience.md`) is the Upload screen,
-opened 2026-09-01 by the first real feedback the front end has had. Groups 1-3 and
-5 are done — the import → upload rename (**UI wording only; the wire keeps
-`/imports`**), the drop zone, the timer-driven progress bar and the spacing.
+opened 2026-09-01 by the first real feedback the front end has had. Groups 1-3, 5
+and 6 are done — the import → upload rename (**UI wording only; the wire keeps
+`/imports`**), the drop zone, the timer-driven progress bar, the spacing, and
+**the upload no longer blocking on the model** (2026-09-04, see below).
 **Group 4 is what remains**: paste an ad's text through the same pipeline as a
-parsed file. It is the only group that touches `src/`. The phase doc has the whole
-plan; do not re-derive it, and do not re-argue the URL scraper — it is refused
-with reasons in `docs/backlog.md`.
+parsed file. The phase doc has the whole plan; do not re-derive it, and do not
+re-argue the URL scraper — it is refused with reasons in `docs/backlog.md`.
+
+**GROUP 6 LANDED 2026-09-04** (suite 285 → 288, no migration). `POST /imports` no
+longer calls the model: it extracts, saves, and returns with the row in a new
+`ImportStatus.Parsing`, and **the CLIENT drives the model afterwards** through the
+`POST /imports/{id}/reparse` endpoint that already existed. Four things worth not
+re-deriving:
+
+- **A background service was REFUSED, and the reason is Phase 10.** Lambda freezes
+  the execution environment once the response returns, so an `IHostedService` +
+  `Channel<Guid>` would be a mechanism that silently stops working on the deploy
+  target. Argued in `ImportDocument.cs` where the model call used to be.
+- **`Parsing` is a claim, not a lock.** Nothing on the server owns the row. Close
+  the tab mid-parse and it stays `Parsing` for ever — there is no lease, timeout or
+  sweeper, deliberately, because the recovery is the queue's new **"Still reading"**
+  tab: opening such a row re-drives the parse. Don't delete that tab, and don't
+  build a reaper; that is Phase 15's, next to the outbox.
+- **`/reparse` now has two callers and branches on which.** Finishing an upload
+  closes a model failure out into `AwaitingReview` with a warning; a re-parse a
+  human pressed still returns `Invalid` and leaves the existing draft untouched.
+  The plan assumed this endpoint already accepted a `Parsing` row — **it did not**,
+  and that was the one gap that would have shipped broken.
+- **No poller, and `POST /imports` still returns 201.** The model runs inside the
+  client's own `/reparse` request, so its response *is* the completion event. The
+  scanned-PDF path (no text layer) never enters `Parsing` at all, which is also why
+  the status code stayed 201 rather than becoming 202.
 
 **That refusal is about the SERVER fetching a URL, and it is not the last word on
 intake.** On 2026-09-01 the user named the real gap — *"we are missing the aspect that

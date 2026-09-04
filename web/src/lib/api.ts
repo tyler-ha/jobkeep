@@ -378,8 +378,25 @@ export type DocumentKind = 'Resume' | 'JobPosting';
  *  over or only closes the import out, so the screen does not have to.
  *
  *  It is EDITABLE, like AwaitingReview, and for the same reason: the user's next
- *  move is to fix something and press the button again. */
-export type ImportStatus = 'AwaitingReview' | 'Committed' | 'Discarded' | 'CommitFailed';
+ *  move is to fix something and press the button again.
+ *
+ *  `Parsing` arrived with Phase 6.5 group 6, when the upload stopped blocking on
+ *  the model. `POST /imports` now returns as soon as the text is extracted and
+ *  saved, and the CLIENT drives the model afterwards through
+ *  `POST /imports/{id}/reparse`. So this status is the one the review screen
+ *  acts on rather than merely displays: seeing it means "fire the reparse".
+ *
+ *  Nothing on the server owns a Parsing row — the reason is Lambda, and it is
+ *  argued in `ImportStatus.Parsing` on the backend. If the tab closes mid-parse
+ *  the row stays Parsing, which is why the queue has a tab for it: opening one
+ *  re-drives it. It is NOT editable and NOT confirmable; the draft does not
+ *  exist yet. */
+export type ImportStatus =
+  | 'AwaitingReview'
+  | 'Parsing'
+  | 'Committed'
+  | 'Discarded'
+  | 'CommitFailed';
 
 /** ListImports.cs. Deliberately WITHOUT the extracted text or the draft — a
  *  résumé is personal information and a list endpoint is the wrong place to
