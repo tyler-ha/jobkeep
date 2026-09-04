@@ -1,0 +1,52 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The Identity module — Phase 11.1a. Listed as "(later)" in CLAUDE.md since
+       Phase 2 and built last on purpose (architecture.md decision 22).
+
+       A plain class library like every other module. That survives ASP.NET Core
+       Identity, which is worth saying because it looks like it should not:
+       Microsoft.AspNetCore.Identity.EntityFrameworkCore brings the STORES — the
+       seven entity types and their EF mapping — and nothing that needs a web
+       host. The authentication middleware, the cookie handler and AddIdentity*
+       are ASP.NET Core proper and live in Jobkeep.Api, where the other wiring is.
+       So the layering claim holds unchanged: this project knows about a database,
+       not about HTTP.
+
+       REFERENCE RULE, enforced by tests/Jobkeep.Tests/Architecture/: this project
+       may reference SharedKernel, Contracts and Persistence. It may NOT reference
+       another Jobkeep.Modules.* project. -->
+  <PropertyGroup>
+    <RootNamespace>Jobkeep.Modules.Identity</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The one new dependency this phase adds, approved by the user on
+         2026-09-04 and recorded in docs/phases/phase-11-auth.md before any code.
+         It was chosen OVER the smaller option — a hand-rolled users table on
+         PasswordHasher<T> and cookie auth, both already in the shared framework
+         and therefore zero new packages — for lockout, 2FA and the token flows
+         that are already written and already audited, and because "I used the
+         platform's identity system" is the answer a .NET interviewer expects.
+
+         Pinned to the same 10.0.x line as everything else; it depends on EF Core,
+         so it is one more package to bump in lockstep (see the CS1705 note in
+         tests/Jobkeep.Tests/Jobkeep.Tests.csproj). -->
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Same three as every table-owning module, and the Npgsql provider for the
+         same reason: a module that owns tables owns their migrations, and a
+         migration names NpgsqlValueGenerationStrategy directly. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.11" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.11" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Jobkeep.SharedKernel/Jobkeep.SharedKernel.csproj" />
+    <ProjectReference Include="../Jobkeep.Contracts/Jobkeep.Contracts.csproj" />
+    <ProjectReference Include="../Jobkeep.Persistence/Jobkeep.Persistence.csproj" />
+  </ItemGroup>
+
+</Project>

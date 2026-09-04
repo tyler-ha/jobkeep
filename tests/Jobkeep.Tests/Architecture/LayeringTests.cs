@@ -27,6 +27,7 @@ public class LayeringTests
         "Jobkeep.Modules.Match",
         "Jobkeep.Modules.Documents",
         "Jobkeep.Modules.Skills",
+        "Jobkeep.Modules.Identity",
         "Jobkeep.Api",
     ];
 

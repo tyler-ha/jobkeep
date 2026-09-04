@@ -167,7 +167,8 @@ Full reasoning, the extraction triggers, and the decision record are in
   surface is a *portfolio* choice, not an industry norm: no comparable
   product ships a public API. Don't imply otherwise.
 - **Storage**: **PostgreSQL via EF Core** (Phase 2). Since Phase 13.3b the schema
-  is **13 tables in five Postgres schemas**, one per table-owning module, each with
+  is **20 tables in six Postgres schemas** (13 of them, in five schemas, until
+  Phase 11.1a added `identity` and Identity's seven), one per table-owning module, each with
   its own `DbContext`, its own Fluent API configuration (`<Module>/Persistence/`),
   its own migrations (`<Module>/Migrations/`) and its own `__EFMigrationsHistory`.
   **Seven foreign keys, not thirteen** — the six that crossed a schema are enforced
@@ -190,8 +191,9 @@ Full reasoning, the extraction triggers, and the decision record are in
 ### Where new code goes
 
 **Rewritten at Phase 13.6 (2026-09-03), when the shape stopped moving.**
-`src/` is **ten projects**: six modules, plus SharedKernel, Contracts, Persistence
-and Api.
+`src/` is **eleven projects**: seven modules, plus SharedKernel, Contracts,
+Persistence and Api. (It was ten until Phase 11.1a added `Jobkeep.Modules.Identity`
+on 2026-09-04.)
 
 ```
 src/Jobkeep.Modules.<X>/Application/<UseCase>.cs   request + handler + response, together
@@ -440,7 +442,7 @@ dotnet build Jobkeep.slnx
 dotnet run --project Jobkeep.Api
 ```
 
-Since Phase 13.1 there are several projects under `src/` (**ten**, as of 13.3c), so a
+Since Phase 13.1 there are several projects under `src/` (**eleven**, as of 11.1a), so a
 bare `dotnet build` / `dotnet run` in that directory fails with **MSB1011** — name the
 solution or the project, as above. `docker compose up --build` is unaffected and remains the
 normal way to start the stack.
@@ -456,7 +458,7 @@ dotnet tool restore
 
 # Since Phase 13.1 the model lives in one project and the connection string and
 # provider are resolved through another, so both have to be named. Since 13.3b there
-# are FIVE models — one per table-owning module, each with its own schema and its own
+# are SIX models — one per table-owning module, each with its own schema and its own
 # __EFMigrationsHistory — so the context has to be named too. Without all three flags
 # the command fails in a way that reads like a broken tool install.
 dotnet ef migrations add <Name> \
@@ -464,10 +466,11 @@ dotnet ef migrations add <Name> \
   --startup-project Jobkeep.Api \
   --context DocumentsDbContext
 
-# The five, with their schemas: ApplicationsDbContext (applications),
+# The six, with their schemas: ApplicationsDbContext (applications),
 # SkillsDbContext (skills), DocumentsDbContext (documents), AiDbContext (ai),
 # MatchDbContext (ats — the SCHEMA kept its old name on purpose; see
-# MatchResultConfiguration.cs). AnalyticsDbContext owns no tables and no migrations.
+# MatchResultConfiguration.cs) and, since Phase 11.1a, IdentityDbContext
+# (identity). AnalyticsDbContext owns no tables and no migrations.
 
 # The cheap check that a refactor did not move the schema. Run it per context.
 dotnet ef migrations has-pending-model-changes \
@@ -754,10 +757,44 @@ which stayed with its caller. `MatchSummary` is two integers on purpose — the
 keyword lists, the date and the warning are all left off, and the column
 deliberately cannot tell a stale check from a fresh one.
 
-**Nothing is scheduled next.** The live candidates: **Phase 6 step 6.4** (the
-README), the **Phase 6 visual pass** on the other seven screens, and the
-**`docs/token-log.md` backfill** (Phases 8-14 have no rows and Phase 14's is
-provisional; the ledger's own rule says do it in a *fresh* session).
+**PHASE 11 IS IN PROGRESS — started early, at the user's instruction on
+2026-09-04.** The phase doc's gate said *"this ships before whatever deploy
+replaces Phase 10, and not before"*; that is an argument about when auth becomes
+load-bearing, **not a dependency** — nothing in the phase needs a host, only the
+CORS named origin does, and that is config. It is **split into five runnable
+sub-steps** (11.1a, 11.1b, 11.1c, 11.2, 11.3) in `phase-11-auth.md`.
+
+**11.1a LANDED 2026-09-04**: `src/` is now **eleven projects**, there is a
+**sixth migrating context** and a **sixth schema, `identity`**, holding ASP.NET
+Core Identity's seven tables and its own `__EFMigrationsHistory`. Suite 332, no
+change — the new assertions are in `SmokeTests`. **Nothing is enforced yet and
+nobody can sign in**; that is 11.1b. Five things from it change how new code is
+written:
+
+- **`JobkeepUser : IdentityUser<Guid>` — the key is a Guid, not Identity's default
+  string.** Otherwise `OwnerUserId` becomes a `varchar` foreign key on every
+  scoped table at 11.2.
+- **The platform's table names are KEPT** (`AspNetUsers`, not `users`). The schema
+  qualifier does the separating; the names are what makes the database recognisable
+  as Identity. Do not "tidy" them.
+- **`IdentityDbContext` is the ONE context that does not call
+  `ModelConventions.ApplyDatabaseDefaults`**, and it says why at length: three of
+  the seven tables have composite keys made of foreign keys, so the Guid-PK default
+  would put `gen_random_uuid()` on a foreign key column, where the only row it can
+  produce is one that fails the constraint.
+- **`PostgresFixture.ModuleSchemas` gained `identity`**, so Respawn truncates the
+  seven tables between tests. A module schema missing from that array is a table
+  that leaks state across tests.
+- **`src/Dockerfile` COPIES EACH `.csproj` BY NAME.** A new project must be added
+  there or `docker compose up --build api` fails *after* a successful restore, on a
+  `ProjectReference` to a directory that was never copied — which reads like a
+  compiler error, not a missing COPY. This cost a turn; the Dockerfile now warns
+  above the list.
+
+Also live, unscheduled: **Phase 6 step 6.4** (the README), the **Phase 6 visual
+pass** on the other seven screens, and the **`docs/token-log.md` backfill**
+(Phases 8-14 have no rows and Phase 14's is provisional; the ledger's own rule
+says do it in a *fresh* session).
 (This line has five times named a step that had already landed — 13.4 at `24fbb49`,
 then 13.5, then 13.6, then the match-check rename, then group 6 and group 4 with it
 — so check the branch before trusting it. **Phase 6.5 is now DONE in full.**)
@@ -850,7 +887,8 @@ data layer changed with it:
   no longer exists — do not look for it, and do not reintroduce anything like it.
 - **Five schemas, five migration histories:** `applications`, `skills`, `documents`,
   `ai`, `ats`. Analytics has a context and neither, because it owns no tables; it reads
-  three views that live in `applications`. `Program.cs` migrates five contexts, not six.
+  three views that live in `applications`. `Program.cs` migrates SIX contexts of seven
+  since Phase 11.1a — five until then; Analytics is the one that is never migrated.
 - ~~**Entities kept `namespace Jobkeep.Models`.**~~ **Done at 13.6**, in one pass as
   planned. Entities are `Jobkeep.Modules.<X>.Domain`, the shared enums are
   `Jobkeep.Contracts.Shared`, and `Jobkeep.Shared` / `Jobkeep.GraphQL` are gone. The
@@ -1039,7 +1077,7 @@ suite 228 → 239 green. `docs/diagrams/schema-erd.svg` was redrawn on 2026-09-0
 in the session after the one that moved the schema, so that trigger is discharged.
 Final state **as at Phase 7**, if you need it without re-deriving: 13 tables, 13 FKs
 (7 CASCADE / 6 RESTRICT), 5 unique indexes, 12 plain. **Phase 13.3b changed this and
-the numbers above are history, not the current schema** — it is now 13 tables in five
+the numbers above are history, not the current schema** — it was then 13 tables in five
 schemas, **7** FKs (5 CASCADE / 2 RESTRICT), 5 unique and **10** plain, with the six
 dropped keys enforced in application code since 13.3c. One method note worth keeping — the
 redraw derived the schema from `pg_dump --schema-only` against the migrated

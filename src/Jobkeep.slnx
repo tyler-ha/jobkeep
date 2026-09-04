@@ -9,6 +9,7 @@
     <Project Path="Jobkeep.Modules.Match/Jobkeep.Modules.Match.csproj" />
     <Project Path="Jobkeep.Modules.Documents/Jobkeep.Modules.Documents.csproj" />
     <Project Path="Jobkeep.Modules.Skills/Jobkeep.Modules.Skills.csproj" />
+    <Project Path="Jobkeep.Modules.Identity/Jobkeep.Modules.Identity.csproj" />
     <Project Path="Jobkeep.Api/Jobkeep.Api.csproj" />
   </Folder>
   <Folder Name="/tests/">

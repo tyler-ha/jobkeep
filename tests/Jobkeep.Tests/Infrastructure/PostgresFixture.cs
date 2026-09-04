@@ -36,7 +36,10 @@ public sealed class PostgresFixture : IAsyncLifetime
     /// </para>
     /// </summary>
     public static readonly string[] ModuleSchemas =
-        ["applications", "skills", "documents", "ai", "ats"];
+        // PHASE 11.1a added `identity`. It is in this list for the same reason the
+        // other five are: Respawn truncates what it names, so leaving it out would
+        // let a user registered by one test survive into the next one's arrange.
+        ["applications", "skills", "documents", "ai", "ats", "identity"];
 
     private Respawner? _respawner;
     private NpgsqlConnection? _connection;

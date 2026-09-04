@@ -35,6 +35,10 @@ public class ModuleBoundaryTests
         // Phase 13.2 promoted Skills a step early: ISkillCatalog needed an owner
         // once four modules were find-or-creating against the shared table.
         "Jobkeep.Modules.Skills",
+        // Phase 11.1a. Added to this list on the day the project was created, which
+        // is the only time it is free: a module that is not in this array is a
+        // module the boundary rule does not cover, and nothing else would say so.
+        "Jobkeep.Modules.Identity",
     ];
 
     // DELETED IN 13.2e: ModulesStillOnAppDbContext, and the conditional in

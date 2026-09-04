@@ -14,10 +14,17 @@ WORKDIR /src
 # 2-minute one.
 #
 # Phase 13.1 turned one csproj into nine; 13.2 added Skills and 13.3b deleted
-# Jobkeep.Infrastructure.Data, leaving nine. They are copied with their directory
-# structure intact (COPY <dir>/<file> <dir>/) because a ProjectReference is a
-# relative path: flattening them here would restore fine and then fail to build.
+# Jobkeep.Infrastructure.Data, leaving nine; Phase 11.1a added Identity, making
+# TEN. They are copied with their directory structure intact
+# (COPY <dir>/<file> <dir>/) because a ProjectReference is a relative path:
+# flattening them here would restore fine and then fail to build.
 # Directory.Build.props supplies the TFM to all of them, so it has to come too.
+#
+# THIS LIST IS THE ONE PLACE A NEW PROJECT HAS TO BE REMEMBERED, and it fails
+# late: restore succeeds against the projects it was given, and the build then
+# dies on a ProjectReference to a directory that was never copied. Adding a
+# module means adding a line here, and the failure reads like a compiler problem
+# rather than a missing COPY.
 COPY Directory.Build.props .
 COPY Jobkeep.SharedKernel/Jobkeep.SharedKernel.csproj                   Jobkeep.SharedKernel/
 COPY Jobkeep.Contracts/Jobkeep.Contracts.csproj                         Jobkeep.Contracts/
@@ -28,6 +35,7 @@ COPY Jobkeep.Modules.Ai/Jobkeep.Modules.Ai.csproj                       Jobkeep.
 COPY Jobkeep.Modules.Match/Jobkeep.Modules.Match.csproj                 Jobkeep.Modules.Match/
 COPY Jobkeep.Modules.Documents/Jobkeep.Modules.Documents.csproj         Jobkeep.Modules.Documents/
 COPY Jobkeep.Modules.Skills/Jobkeep.Modules.Skills.csproj               Jobkeep.Modules.Skills/
+COPY Jobkeep.Modules.Identity/Jobkeep.Modules.Identity.csproj           Jobkeep.Modules.Identity/
 COPY Jobkeep.Api/Jobkeep.Api.csproj                                     Jobkeep.Api/
 RUN dotnet restore Jobkeep.Api/Jobkeep.Api.csproj
 
@@ -36,7 +44,7 @@ COPY . .
 # Jobkeep.Api.csproj, not Jobkeep.slnx: since Phase 2.6 the solution includes the
 # test project, which lives in ../tests -- outside this build context, so a
 # solution-level restore would fail on a path that does not exist here. Publishing
-# the Api project pulls the other eight in through its ProjectReferences.
+# the Api project pulls the other nine in through its ProjectReferences.
 RUN dotnet publish Jobkeep.Api/Jobkeep.Api.csproj -c Release -o /app --no-restore
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
