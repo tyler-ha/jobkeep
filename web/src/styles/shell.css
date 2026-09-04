@@ -2,23 +2,32 @@
  * one screen uses. Anything that belongs to a single screen lives in
  * screens.css instead; this file stays the shared layer. */
 
-/* Capped and centred as ONE slab — nav and content travel together.
+/* The rail is anchored to the viewport edge; the content column is centred in
+ * whatever is left.
  *
- * `main` carries max-width: var(--shell-max) with no auto margin, so before this
- * the whole app pinned to the left edge: on a 2560px display that left a measured
- * 904px void down the right of every screen, which is what the first real look at
- * the app (2026-09-03) found. Centring `main` alone would fix the void and open a
- * second gap between the nav and the content, so the cap belongs here.
+ * This is the third arrangement and the reasoning for each is worth keeping.
+ * Originally `main` was capped with no auto margin, so the whole app pinned left
+ * and a 2560px display showed a measured 904px void down the right (found
+ * 2026-09-03). That was fixed by capping and centring the shell as one slab —
+ * which cured the void but detached the nav from the edge, leaving ~452px of
+ * dead ground to its LEFT at 2560. A navigation rail that floats inboard of the
+ * window edge reads as a misaligned page rather than as app chrome, so on
+ * 2026-09-04 the user asked for it back on the edge.
  *
- * Deliberately NOT widening --shell-max instead: the eight artboards were composed
+ * The cap therefore moves back to `main`, but WITH margin-inline: auto, which is
+ * the combination neither earlier version had: the rail sits at x=0 and the
+ * content centres in the remaining column, so no single edge collects all the
+ * slack. The cost is that content no longer touches the nav on very wide
+ * screens. That gap is symmetric and reads as margin, which is the trade the
+ * lopsided 904px void could not offer.
+ *
+ * Still deliberately NOT widening --shell-max: the eight artboards were composed
  * at 1440, and letting the column grow re-flows every one of them. That is a
  * redesign; this is a fix. */
 .shell {
   display: grid;
   grid-template-columns: var(--nav-w) minmax(0, 1fr);
   min-height: 100vh;
-  max-width: calc(var(--shell-max) + var(--nav-w));
-  margin-inline: auto;
 }
 
 /* ---- Navigation --------------------------------------------------------- */
@@ -123,9 +132,16 @@
 
 /* ---- Main --------------------------------------------------------------- */
 
+/* width:100% is load-bearing, not belt-and-braces: auto inline margins make a
+ * grid item shrink-to-fit, so without it the column sizes to its CONTENT and
+ * every screen gets a different width (Applications measured 1062px against
+ * Today's 1440). Explicit width fills the track, max-width caps it, and the auto
+ * margins then centre what is left over. */
 .main {
   padding: var(--s-6) var(--s-7);
+  width: 100%;
   max-width: var(--shell-max);
+  margin-inline: auto;
 }
 
 .screen-head {
