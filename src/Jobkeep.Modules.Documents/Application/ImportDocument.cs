@@ -51,18 +51,22 @@ public class ImportDocumentHandler : IRequestHandler<ImportDocument, SliceResult
     private readonly DocumentsDbContext _db;
     private readonly IDocumentTextExtractor _extractor;
     private readonly DocumentOptions _options;
+    private readonly ImportParseQueue _queue;
 
     // IDocumentStructurer and ModelOptions were dependencies here until group 6.
     // The upload no longer calls the model at all, so it no longer needs to know
-    // one exists — RestructureImport is where both moved to.
+    // one exists — RestructureImport is where both moved to, and this handler
+    // now names only the queue that asks for the work to be done.
     public ImportDocumentHandler(
         DocumentsDbContext db,
         IDocumentTextExtractor extractor,
-        DocumentOptions options)
+        DocumentOptions options,
+        ImportParseQueue queue)
     {
         _db = db;
         _extractor = extractor;
         _options = options;
+        _queue = queue;
     }
 
     public async ValueTask<SliceResult<ImportResponse>> Handle(
@@ -163,23 +167,19 @@ public class ImportDocumentHandler : IRequestHandler<ImportDocument, SliceResult
         // async" — it is "return at the save that already existed", and the
         // reasoning for that early save transfers unchanged.
         //
-        // Who runs the model now: the client, through POST /imports/{id}/reparse
-        // (RestructureImport.cs), which already re-ran it over stored text with
-        // no re-upload. That endpoint was written for a different reason and
-        // turns out to be this feature's entire second half.
+        // ENQUEUED AFTER SaveChangesAsync, NEVER BEFORE. Same rule as publishing
+        // a domain event (SharedKernel/DomainEvents.cs, 13.3c) and same reason:
+        // on failure this leaves an invisible orphan rather than acting on a row
+        // that does not exist. Here the orphan is self-healing — a row stuck in
+        // Parsing is exactly what ImportParseWorker's startup sweep looks for.
         //
-        // The alternative — an IHostedService with a Channel<Guid>, about forty
-        // lines and no new dependency — is REFUSED, and the reason is the deploy
-        // target. Lambda freezes the execution environment once the response is
-        // returned, so work queued to a background thread is not guaranteed to
-        // run, and when it does it may be on a later invocation or never. That
-        // buys a local demo with a production defect. (Ollama is not on Lambda
-        // either, so the AI story there is already unsolved — which is the
-        // argument for not adding a SECOND unsolved thing, not against.)
-        //
-        // The cost is written down in ImportStatus.Parsing: nothing on the
-        // server owns this row, so an abandoned parse stays Parsing until
-        // someone re-drives it from the queue.
+        // Not a mediator notification, deliberately. AddMediator is registered
+        // ServiceLifetime.Scoped and IPublisher.Publish awaits its handlers
+        // inline, so a notification would run the model INSIDE this request and
+        // reinstate the block this whole group exists to remove. The channel is
+        // the point: it is the boundary the request thread does not cross.
+        if (willParse) _queue.Enqueue(import.Id);
+
         return SliceResult<ImportResponse>.Ok(ToResponse(import, EmptyDraft(kind, resolvedLabel, sourceUrl)));
     }
 

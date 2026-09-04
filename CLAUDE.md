@@ -919,30 +919,45 @@ and 6 are done — the import → upload rename (**UI wording only; the wire kee
 parsed file. The phase doc has the whole plan; do not re-derive it, and do not
 re-argue the URL scraper — it is refused with reasons in `docs/backlog.md`.
 
-**GROUP 6 LANDED 2026-09-04** (suite 285 → 288, no migration). `POST /imports` no
+**GROUP 6 LANDED 2026-09-04** (suite 285 → 290, no migration). `POST /imports` no
 longer calls the model: it extracts, saves, and returns with the row in a new
-`ImportStatus.Parsing`, and **the CLIENT drives the model afterwards** through the
-`POST /imports/{id}/reparse` endpoint that already existed. Four things worth not
-re-deriving:
+`ImportStatus.Parsing`, and **`ImportParseWorker` structures it in the background**.
+Six things worth not re-deriving:
 
-- **A background service was REFUSED, and the reason is Phase 10.** Lambda freezes
-  the execution environment once the response returns, so an `IHostedService` +
-  `Channel<Guid>` would be a mechanism that silently stops working on the deploy
-  target. Argued in `ImportDocument.cs` where the model call used to be.
-- **`Parsing` is a claim, not a lock.** Nothing on the server owns the row. Close
-  the tab mid-parse and it stays `Parsing` for ever — there is no lease, timeout or
-  sweeper, deliberately, because the recovery is the queue's new **"Still reading"**
-  tab: opening such a row re-drives the parse. Don't delete that tab, and don't
-  build a reaper; that is Phase 15's, next to the outbox.
-- **`/reparse` now has two callers and branches on which.** Finishing an upload
-  closes a model failure out into `AwaitingReview` with a warning; a re-parse a
-  human pressed still returns `Invalid` and leaves the existing draft untouched.
-  The plan assumed this endpoint already accepted a `Parsing` row — **it did not**,
-  and that was the one gap that would have shipped broken.
-- **No poller, and `POST /imports` still returns 201.** The model runs inside the
-  client's own `/reparse` request, so its response *is* the completion event. The
-  scanned-PDF path (no text layer) never enters `Parsing` at all, which is also why
-  the status code stayed 201 rather than becoming 202.
+- **`document_imports.Status == Parsing` IS THE QUEUE.** No new table, no
+  migration — the durable work list is a column that already existed.
+  `ImportParseQueue`'s `Channel<Guid>` sits on top only so the worker need not poll
+  for a row the request thread already knew about; losing a channel message costs
+  nothing, because the worker **sweeps every `Parsing` row on startup**. That sweep
+  is the crash recovery, and it is the reason the queue is a column.
+- **This REVERSED a client-driven design shipped the same day.** The first version
+  had the review screen drive `POST /imports/{id}/reparse`. It was replaced at the
+  user's instruction because it still left a browser tab owning the work: close the
+  tab and the row stranded. **The refusal it rested on — Lambda freezes background
+  threads after a response — was sound**, and `phase-10-aws-deploy.md:84` makes it
+  stronger than it first looked (the Lambda avoids a VPC *so that* the AI call
+  works there). It is moot only because Phase 10 is parked and **the AWS plan may
+  be dropped**. Re-make that argument if a serverless target returns.
+- **Enqueue AFTER `SaveChangesAsync`, and not as a mediator notification.**
+  `AddMediator` is `ServiceLifetime.Scoped` and `IPublisher.Publish` awaits inline,
+  so a notification would run the model *inside* the upload request and reinstate
+  the block. The channel is the boundary the request thread does not cross.
+- **`Documents:ParseInBackground` is a TEST SEAM, not a knob** — same as
+  `Skills:SeedOnStartup`. A worker racing Respawn would structure documents out
+  from under unrelated arranges. Only `ImportParseWorkerTests` turns it back on.
+- **`/reparse` has two callers and branches on which.** Finishing an upload closes
+  a model failure out into `AwaitingReview` with a warning; a re-parse a human
+  pressed returns `Invalid` and leaves the existing draft untouched. The plan
+  assumed the endpoint already accepted a `Parsing` row — **it did not**, and that
+  was the one gap that would have shipped broken.
+- **`POST /imports` still returns 201, and the scanned-PDF path never enters
+  `Parsing`.** A document with no text layer is finished when saved, so marking it
+  `Parsing` would strand it in a state with no exit — which is also why the status
+  code stayed 201 rather than becoming a 202 that varied by document.
+
+The remaining ceiling is **concurrency, not durability**: two instances would both
+parse the same row, because there is no lease. One runs today. A lease column and a
+reaper stay **Phase 15's**, next to the outbox.
 
 **That refusal is about the SERVER fetching a URL, and it is not the last word on
 intake.** On 2026-09-01 the user named the real gap — *"we are missing the aspect that

@@ -72,11 +72,14 @@ export default function Upload() {
 
 /* ---- The queue ----------------------------------------------------------- */
 
-/* "Still reading" is not decoration. Nothing on the server owns a Parsing row
- * (see ImportStatus.Parsing on the backend), so a parse abandoned by closing the
- * tab stays Parsing for ever — and THIS TAB IS THE WHOLE RECOVERY PATH for it.
- * Opening such a row re-drives the parse, which is why no lease, timeout or
- * sweeper was built. Remove this tab and abandoned imports become invisible. */
+/* "Still reading" is where a document lives between upload and draft. The server
+ * owns that work now — ImportParseWorker picks these rows up, including ones left
+ * behind by a crash or a restart — so this tab is a WINDOW ON THE QUEUE rather
+ * than the recovery mechanism it was in the first version of group 6.
+ *
+ * It still earns its place: a parse is the one thing in this app that takes real
+ * time, and a status a user cannot see is a status that reads as "nothing
+ * happened". */
 const VIEWS: { status: ImportStatus; label: string }[] = [
   { status: 'AwaitingReview', label: 'Waiting on you' },
   { status: 'Parsing', label: 'Still reading' },
@@ -513,47 +516,53 @@ function Review({ id }: { id: string }) {
   const [saved, setSaved] = useState(false);
   const [confirming, setConfirming] = useState(false);
 
-  /* Which import this screen has already driven a parse for. StrictMode invokes
-   * effects twice in development, and a parse is the most expensive thing in the
-   * app — without this it would fire two model runs at the same row. Keyed by id
-   * rather than a boolean so moving between imports still parses each one. */
-  const parsed = useRef<string | null>(null);
-
+  /* Load, then WATCH while the server parses. Phase 6.5 group 6.
+   *
+   * This screen used to DRIVE the parse — it fired POST /imports/{id}/reparse
+   * when it saw a Parsing row, and the model ran inside that request. That was
+   * replaced: it meant a browser tab owned the work, so closing the tab stranded
+   * the row for ever. ImportParseWorker owns it now, and the client's only job
+   * is to notice when the row stops saying Parsing.
+   *
+   * So the poll is not a fallback for something better — it is the honest read
+   * of a state the server changes on its own. It costs one indexed lookup by
+   * primary key every 1.5 seconds, for the seconds a parse takes.
+   *
+   * No liveness ref is needed for it: the interval is cleared on unmount and
+   * `live` gates every setState, so navigating away stops the polling and the
+   * worker carries on regardless. That is the whole point — nothing about
+   * finishing the parse depends on this component still being mounted. */
   useEffect(() => {
     let live = true;
-    getImport(id)
-      .then((r) => {
-        if (!live) return;
-        setImported(r);
-        setDraft(r.draft);
+    let timer: number | undefined;
 
-        /* THE PARSE IS DRIVEN FROM HERE. Phase 6.5 group 6: POST /imports now
-         * returns as soon as the text is extracted and saved, and the model
-         * runs in this second request instead of blocking the upload for up to
-         * 180 seconds.
-         *
-         * It lives on the review screen rather than in the upload form on
-         * purpose, and that placement is what buys the recovery: opening a
-         * Parsing row from the queue re-drives it, which is why no server-side
-         * lease, timeout or sweeper was built.
-         *
-         * Navigating away does NOT cancel it — `live` only stops the setState.
-         * The request runs to completion and the server writes the row, so
-         * coming back shows the finished draft. Closing the TAB does cancel it,
-         * and that is the accepted ceiling written down in ImportStatus. */
-        if (r.status !== 'Parsing' || parsed.current === id) return;
-        parsed.current = id;
-        return reparseImport(id)
-          .then((done) => {
-            if (!live) return;
-            setImported(done);
-            setDraft(done.draft);
-          })
-          .catch((e) => live && setError(asApiError(e)));
-      })
+    const apply = (r: ImportResponse) => {
+      if (!live) return;
+      setImported(r);
+      setDraft(r.draft);
+      if (r.status === 'Parsing') timer = window.setTimeout(poll, 1500);
+    };
+
+    const poll = () => {
+      getImport(id)
+        .then(apply)
+        /* A failed poll is not a failed import. The row is still being parsed by
+         * the server, and a transient blip here should not paint an error over a
+         * screen that is about to succeed — so it retries rather than reporting.
+         * The initial load below does report, because that one failing means
+         * there is nothing to show at all. */
+        .catch(() => {
+          if (live) timer = window.setTimeout(poll, 1500);
+        });
+    };
+
+    getImport(id)
+      .then(apply)
       .catch((e) => live && setError(asApiError(e)));
+
     return () => {
       live = false;
+      window.clearTimeout(timer);
     };
   }, [id]);
 

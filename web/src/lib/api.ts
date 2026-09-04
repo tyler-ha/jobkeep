@@ -381,16 +381,19 @@ export type DocumentKind = 'Resume' | 'JobPosting';
  *  move is to fix something and press the button again.
  *
  *  `Parsing` arrived with Phase 6.5 group 6, when the upload stopped blocking on
- *  the model. `POST /imports` now returns as soon as the text is extracted and
- *  saved, and the CLIENT drives the model afterwards through
- *  `POST /imports/{id}/reparse`. So this status is the one the review screen
- *  acts on rather than merely displays: seeing it means "fire the reparse".
+ *  the model. `POST /imports` returns as soon as the text is extracted and saved,
+ *  and a background worker on the server structures it afterwards. So this status
+ *  is the one the review screen WATCHES: seeing it means "poll until it changes",
+ *  and the transition away from it is the completion event.
  *
- *  Nothing on the server owns a Parsing row — the reason is Lambda, and it is
- *  argued in `ImportStatus.Parsing` on the backend. If the tab closes mid-parse
- *  the row stays Parsing, which is why the queue has a tab for it: opening one
- *  re-drives it. It is NOT editable and NOT confirmable; the draft does not
- *  exist yet. */
+ *  An intermediate version had the client drive the model itself through
+ *  `/reparse`. It was replaced because a browser tab then owned the work and
+ *  closing it stranded the row. The server owns it now, including rows left
+ *  behind by a crash — so a Parsing row always eventually resolves.
+ *
+ *  It is NOT editable and NOT confirmable; the draft does not exist yet, and both
+ *  endpoints refuse it with a "still being read" message rather than the
+ *  "already"/"no longer" wording every terminal state uses. */
 export type ImportStatus =
   | 'AwaitingReview'
   | 'Parsing'

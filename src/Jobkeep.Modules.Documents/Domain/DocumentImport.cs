@@ -29,19 +29,25 @@ public enum ImportStatus
     // not structured it yet. The upload returns here instead of blocking for up
     // to ModelOptions.TimeoutSeconds (180) on Ollama.
     //
-    // PARSING IS A CLAIM, NOT A LOCK, and that is the accepted ceiling. Nothing
-    // on the server owns this row: the model is driven by the client, through
-    // POST /imports/{id}/reparse, for the reason RestructureImport.cs and the
-    // phase doc both give at length — the deploy target is Lambda, which freezes
-    // the execution environment once the response is returned, so a background
-    // worker would be a mechanism that silently stops working in production.
+    // THIS STATUS IS THE QUEUE. ImportParseWorker sweeps for exactly these rows
+    // on startup and parses them, so the work list is committed database state
+    // rather than anything held in memory — that is what makes a crash, a
+    // restart or a deploy mid-upload recoverable, and it is why the queue needed
+    // no new table. ImportParseQueue's Channel<Guid> sits on top purely to save
+    // the worker from polling for a row the request thread already knew about.
     //
-    // So if the tab closes mid-parse, the row stays Parsing for ever. There is
-    // no lease, no timeout and no sweeper, the same position 13.3c took on
-    // domain events and for the same reason: the cheap recovery already exists.
-    // A Parsing row has its own tab in the queue, and opening it re-drives the
-    // parse. Anything more — a lease column, a reaper — is Phase 15's, next to
-    // the outbox.
+    // A first version had the CLIENT drive the model instead, from the review
+    // screen. It was replaced because it did not deliver the thing the group is
+    // for: closing the tab stranded the row here for ever, so the parse was
+    // still owned by a browser. The refusal of a worker had argued from AWS
+    // Lambda freezing background threads after a response — correct at the time,
+    // and moot now that Phase 10 is parked and the deploy target is under
+    // review. The reversal is recorded in the phase doc.
+    //
+    // The remaining ceiling is CONCURRENCY, not durability: with two instances
+    // both would parse the same row, because there is no lease. One instance
+    // runs today. A lease column and a reaper are Phase 15's, next to the
+    // outbox.
     //
     // It also makes a state that used to be indistinguishable self-describing:
     // a parse cancelled mid-flight used to leave a row reading AwaitingReview

@@ -25,7 +25,7 @@ COPY Jobkeep.Persistence/Jobkeep.Persistence.csproj                     Jobkeep.
 COPY Jobkeep.Modules.Applications/Jobkeep.Modules.Applications.csproj   Jobkeep.Modules.Applications/
 COPY Jobkeep.Modules.Analytics/Jobkeep.Modules.Analytics.csproj         Jobkeep.Modules.Analytics/
 COPY Jobkeep.Modules.Ai/Jobkeep.Modules.Ai.csproj                       Jobkeep.Modules.Ai/
-COPY Jobkeep.Modules.Ats/Jobkeep.Modules.Ats.csproj                     Jobkeep.Modules.Ats/
+COPY Jobkeep.Modules.Match/Jobkeep.Modules.Match.csproj                 Jobkeep.Modules.Match/
 COPY Jobkeep.Modules.Documents/Jobkeep.Modules.Documents.csproj         Jobkeep.Modules.Documents/
 COPY Jobkeep.Modules.Skills/Jobkeep.Modules.Skills.csproj               Jobkeep.Modules.Skills/
 COPY Jobkeep.Api/Jobkeep.Api.csproj                                     Jobkeep.Api/

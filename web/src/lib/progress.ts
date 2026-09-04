@@ -29,17 +29,25 @@
  * enum value is a code change and nothing else. That was already known at 13.2c,
  * when `CommitFailed` was added for exactly this reason.
  *
- * So the redesign happened. `POST /imports` returns as soon as the text is
- * saved, the row sits in `Parsing`, and the review screen drives the model
- * through `POST /imports/{id}/reparse` — the endpoint this comment already
- * pointed at as the place it would start.
+ * So the redesign happened, and it went one step further than "202 + poll".
+ * `POST /imports` returns as soon as the text is saved and the row sits in
+ * `Parsing`, but the model is run by a BACKGROUND WORKER on the server
+ * (`ImportParseWorker`), not by the client. An intermediate version did have the
+ * review screen drive it through `POST /imports/{id}/reparse`; that was replaced
+ * because it left a browser tab owning the work, so closing the tab stranded the
+ * row.
  *
  * The bar SURVIVES, because the wait did not disappear, it moved: it is now on
  * the review screen, beside the extracted text, rather than under the upload
- * button. What changed is that the client can finally observe the wait END —
- * the reparse response is the transition, rather than an inference — so the
- * estimate is bounded by a real event instead of running until something
- * happens. The curve below is unchanged and its two properties still hold.
+ * button. What changed is that the client can finally observe the wait END — the
+ * poll sees `Status` stop saying `Parsing`, which is a real transition rather
+ * than an inference — so the estimate is bounded by an event instead of running
+ * until something happens. The curve below is unchanged and its two properties
+ * still hold.
+ *
+ * It is still an ESTIMATE and must stay labelled as one. Knowing the parse has
+ * finished is not the same as knowing how far through it is, and the server
+ * reports the first, not the second.
  */
 
 /** How long a parse usually takes. Measured during Phase 4: ~8.4s on a cold
