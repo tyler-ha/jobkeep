@@ -1,4 +1,4 @@
-using Jobkeep.Contracts.Shared;
+﻿using Jobkeep.Contracts.Shared;
 namespace Jobkeep.Modules.Applications.Domain;
 
 // Phase 2.5. The status lifecycle, as a pure function of (from, to).
@@ -69,6 +69,44 @@ public static class ApplicationStatusTransitions
                 ApplicationStatus.Rejected,
             },
         };
+
+    /// <summary>
+    /// The closed stages: an application you are no longer waiting on.
+    /// </summary>
+    /// <remarks>
+    /// PHASE 9. This set is not new — it has been load-bearing in this file since
+    /// Phase 2.5, spelled out four times by hand in the table above and argued for
+    /// in point (2) of the header. What is new is that it has a NAME, because
+    /// Phase 9 needed a caller to be able to ask for it.
+    ///
+    /// <para>
+    /// It lives here rather than on the query, and that is the whole decision.
+    /// "Which stages count as closed" is a statement about the domain — the
+    /// transition table already enforces a rule that depends on it, namely that an
+    /// Offer can only be reached from an ACTIVE application. Letting the front end
+    /// define its own "Closed" tab would put a second copy of that answer in
+    /// TypeScript, free to drift from the one Postgres and the PATCH rule use.
+    /// </para>
+    ///
+    /// <para>
+    /// The table above was deliberately NOT rewritten to derive from this set. It
+    /// is a business decision confirmed with the user, listed stage by stage so it
+    /// reads as a table rather than as a computation, and a refactor that made it
+    /// clever would be trading the thing that makes it reviewable for four fewer
+    /// lines. Instead <c>ApplicationStatusTransitionTests</c> pins the two together:
+    /// the closed stages are exactly the ones that cannot reach an Offer. If either
+    /// definition moves without the other, that test fails.
+    /// </para>
+    /// </remarks>
+    public static readonly IReadOnlySet<ApplicationStatus> Closed =
+        new HashSet<ApplicationStatus>
+        {
+            ApplicationStatus.Rejected,
+            ApplicationStatus.Withdrawn,
+        };
+
+    /// <summary>Is this a stage you are no longer waiting on?</summary>
+    public static bool IsClosed(ApplicationStatus status) => Closed.Contains(status);
 
     /// <summary>
     /// Is moving an application from <paramref name="from"/> to <paramref name="to"/>

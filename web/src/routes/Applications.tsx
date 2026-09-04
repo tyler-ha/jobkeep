@@ -45,6 +45,11 @@ const PAGE_SIZE = 25;
 
 type Sort = { field: ApplicationSort; dir: 'Asc' | 'Desc' };
 
+/* Phase 9. The tab row filters by one status, by "closed", or by nothing. It is a
+ * union rather than a status plus a flag so that the pair the API refuses cannot
+ * be constructed. */
+type StatusFilter = ApplicationStatus | 'Closed' | null;
+
 type State =
   | { tag: 'loading' }
   | { tag: 'error'; error: ApiError }
@@ -85,7 +90,15 @@ export default function Applications() {
    * of the five real statuses is ignored rather than passed on to the API,
    * which would answer 400 for a typo in a URL. */
   const linked = params.get('status');
-  const [status, setStatus] = useState<ApplicationStatus | null>(
+  /* PHASE 9 — one state, not two, and that is deliberate.
+   *
+   * The API REFUSES `status` and `isClosed` in the same request: they are two
+   * ways of saying which stages you want, and merging them answers a question
+   * nobody asked. Modelling this screen's filter as a single value that is
+   * either a status, the string 'Closed', or null means the refused combination
+   * is not expressible here — the UI cannot send the request the API would
+   * reject. Two booleans would have invited exactly that bug. */
+  const [status, setStatus] = useState<StatusFilter>(
     APPLICATION_STATUSES.includes(linked as ApplicationStatus)
       ? (linked as ApplicationStatus)
       : null,
@@ -140,7 +153,12 @@ export default function Applications() {
       direction: sort.dir,
     });
     if (debounced) q.set(field, debounced);
-    if (status) q.set('status', status);
+    /* 'Closed' is not a status, so it goes out as the API's own shorthand rather
+     * than as `?status=Rejected&status=Withdrawn`. Which stages count as closed is
+     * decided in ApplicationStatusTransitions.Closed, server-side, and spelling
+     * them out here would put a second copy of that answer in TypeScript. */
+    if (status === 'Closed') q.set('isClosed', 'true');
+    else if (status) q.set('status', status);
     if (archived) q.set('includeArchived', 'true');
 
     listApplications(`?${q}`)
@@ -281,6 +299,24 @@ export default function Applications() {
               {s}
             </FilterTab>
           ))}
+
+          {/* PHASE 9 — the tab a single-value filter could not serve. The union of
+              two requests cannot be paged honestly: page 2 of Rejected and page 2
+              of Withdrawn are not page 2 of anything the user asked for.
+
+              NO COUNT, deliberately, and it is the same argument as the query
+              above. The funnel returns per-stage counts, so summing Rejected and
+              Withdrawn here would be easy — and it would put a second definition
+              of "closed" in this file, free to drift from the server's. A tab
+              reading "3" above four rows is precisely the failure that costs
+              trust. If this count is wanted, /stats/funnel should publish it. */}
+          <FilterTab
+            active={status === 'Closed'}
+            count={null}
+            onClick={() => change(() => setStatus(status === 'Closed' ? null : 'Closed'))}
+          >
+            Closed
+          </FilterTab>
         </div>
 
         {/* Phase 8. A tab, not a checkbox, because it belongs to the same row of

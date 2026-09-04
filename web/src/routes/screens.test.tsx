@@ -120,6 +120,26 @@ describe('every screen renders', () => {
     expect(await screen.findByText('Nothing recorded yet')).toBeTruthy();
   });
 
+  it('Applications sends isClosed for the Closed tab, not a pair of statuses', async () => {
+    /* PHASE 9. The assertion is about the REQUEST, which is unusual for these
+     * tests and is the point: which stages count as closed is decided in
+     * ApplicationStatusTransitions.Closed, server-side. If this screen ever starts
+     * spelling out `status=Rejected&status=Withdrawn` instead, there are two
+     * definitions of "closed" in the codebase and they are free to drift. */
+    const fetchSpy = vi.fn(stubFetch());
+    vi.stubGlobal('fetch', fetchSpy);
+
+    at('/applications');
+    await screen.findByRole('button', { name: /Closed/ });
+    await userEvent.click(screen.getByRole('button', { name: /Closed/ }));
+
+    const urls = fetchSpy.mock.calls.map(([u]) => String(u));
+    expect(urls.some((u) => u.includes('isClosed=true'))).toBe(true);
+    /* And never both — the API refuses that pair with a 400, so a UI that could
+     * construct it would be a screen that can produce a request it cannot serve. */
+    expect(urls.some((u) => u.includes('isClosed') && u.includes('status='))).toBe(false);
+  });
+
   it('Applications honours a status deep link from Today', async () => {
     at('/applications?status=Interviewing');
     const tab = await screen.findByRole('button', { name: /Interviewing/ });

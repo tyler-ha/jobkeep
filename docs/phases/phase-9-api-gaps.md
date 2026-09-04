@@ -1,6 +1,11 @@
 # Phase 9 — the three reads the front end asked for and could not get
 
-**Status: Planned.** Not started.
+**Status: IN PROGRESS.** **Gap 2 is DONE (2026-09-04)** — suite 314 → 323, web
+52 → 53, no migration. Gaps 1 and 3 are not started, and **gap 1 needs a design
+decision before any code** (see premise 1 in the box below). Gap 2 was taken first
+because it is the only one of the three with no open question in it.
+
+What gap 2 shipped is at the bottom, in ["Gap 2, as built"](#gap-2-as-built).
 
 > **Three premises in this plan expired after it was written (checked 2026-09-04).
 > Read this box before anything below it.**
@@ -125,3 +130,96 @@ thing it is there to detect.
 dropped on 2026-09-04** (`architecture.md` decision 22) and a free host is still to
 be chosen. Nothing is scheduled after this phase; see the roadmap table in
 [`docs/README.md`](../README.md).
+
+---
+
+## Gap 2, as built
+
+`ApplicationQuery.Status` is `ApplicationStatus[]?` and there is a new
+`bool? IsClosed`. **The route table did not change**, so the Phase 6 API snapshot
+is untouched — this is a query-parameter change, not a surface change.
+
+### Neither surface broke, and the reason is worth knowing
+
+The plan said "GraphQL takes a list of enum values; REST takes a repeated query
+parameter" and did not say what happens to callers written against the old shape.
+Both keep working, for two different reasons, and **both are now pinned by tests
+because neither was covered before**:
+
+- **REST** binds a repeated query parameter to an array, so `?status=Applied`
+  arrives as a one-element array. This was covered *by accident* —
+  `ListApplicationsTests.Filter_ByStatus` kept passing.
+- **GraphQL** coerces a single value to a list of one (the spec's input-coercion
+  rule for list types), so `applications(query: { status: APPLIED })` still works
+  unedited against `[ApplicationStatus!]`. **This had no test at all** — the only
+  GraphQL status test in the suite is on `updateApplication`'s input. It was
+  verified against the running HotChocolate schema, not just asserted.
+
+### The surfaces genuinely differ in one place
+
+An **empty** list. GraphQL can send `status: []`; REST cannot produce one, because
+`?status=` binds an empty string to an enum, fails model binding and answers 400 —
+identically to `?status=Banana`, which is correct. The handler treats an empty
+array as "no filter" rather than "match nothing".
+
+That is **not** a parity break: the two surfaces agree on every input both can
+express. REST simply has no spelling for this one. The first version of the test
+assumed they matched and failed, which is how this got written down.
+
+### `IsClosed` is a domain fact, not query sugar
+
+The plan called it "sugar over" the status set. It is more than that, and where it
+lives is the decision:
+
+**`ApplicationStatusTransitions.Closed` now names the set**, in `Domain/`. That set
+is not new — it has been load-bearing since Phase 2.5, spelled out four times by
+hand in the transition table and argued for in that file's header, because it is
+what makes *"an Offer can only be reached from an active application"* true. What
+is new is that it has a name.
+
+If the front end had sent `?status=Rejected&status=Withdrawn` for its Closed tab
+instead, there would be a **second copy of that answer in TypeScript**, free to
+drift from the one the PATCH rule enforces. So the set is named once and both the
+query and the screen read it.
+
+**The transition table was deliberately not rewritten to derive from the set.** It
+is a business decision confirmed with the user, listed stage by stage so it reads
+as a table rather than a computation. Instead a test pins the two together: *the
+closed stages are exactly the stages that cannot reach an Offer.* Phase 2.5 stated
+that invariant in prose and nothing had ever checked it.
+
+### `status` + `isClosed` together is refused
+
+400, on both surfaces, rather than merged or silently resolved. Two ways of saying
+which stages you want, in one request, is a question with no answer the caller can
+predict — and letting one win silently means a caller who sent both never learns
+which. The front end's filter state is a **single union** (`ApplicationStatus |
+'Closed' | null`) precisely so the UI cannot construct the request the API rejects.
+
+### The Closed tab has no count, on purpose
+
+Every other status tab shows one, from `/stats/funnel`. Summing Rejected and
+Withdrawn client-side would have been three lines — and it would have reintroduced
+the second definition of "closed" that the rest of this work exists to avoid. A tab
+reading "3" above four rows is exactly the small lie that costs trust in a screen.
+
+**If that count is wanted, `/stats/funnel` should publish it.** Not doing that here
+because it is a change to a Phase 2.4 read model for one label, and nothing else
+has asked.
+
+### Verified
+
+Suite **323/323** and web **53/53**, plus a live check against the running stack
+for the things a test can pass and MVC can still surprise you on: single status,
+repeated `?status=A&status=B`, `isClosed=true`/`false`, the 400 on both, and both
+GraphQL forms.
+
+### Still open in this phase
+
+- **Gap 1** — project the match result into `ApplicationListItem`. **Blocked on a
+  decision**: decision 17 is reversed, so this needs an `IMatchContract` method, and
+  whether a per-application match summary belongs on a contract is the question
+  `CLAUDE.md`'s test asks (a fact about the thing, or a question the caller has
+  about its own feature?). Settle that first.
+- **Gap 3** — a board-shaped read for Pipeline.
+

@@ -38,7 +38,39 @@ public enum SortDirection { Asc, Desc }
 // place instead of once per binder.
 public record ApplicationQuery
 {
-    public ApplicationStatus? Status { get; init; }
+    // PHASE 9, gap 2 — a SET, where this was one value.
+    //
+    // The single value is why the Applications screen has no "Closed" tab: the
+    // union of two requests cannot be paged honestly, because page 2 of "Rejected"
+    // and page 2 of "Withdrawn" are not page 2 of anything a user asked for.
+    //
+    // NEITHER SURFACE BREAKS, and both for a reason worth knowing rather than
+    // testing by luck:
+    //
+    //   * REST binds a repeated query parameter to an array, so `?status=Applied`
+    //     still arrives — as a one-element array. No existing URL changes meaning.
+    //   * GraphQL COERCES a single value to a list of one (spec: input coercion for
+    //     list types). So `applications(query: { status: APPLIED })` keeps working
+    //     against `[ApplicationStatus!]`, unedited.
+    //
+    // Both are pinned by tests, because "the spec says so" is exactly the kind of
+    // claim that is true until a serializer setting disagrees.
+    public ApplicationStatus[]? Status { get; init; }
+
+    // Sugar over the above, and the reason it is not just left to the caller is
+    // that "closed" is a DOMAIN fact rather than a client preference.
+    //
+    // ApplicationStatusTransitions has treated Rejected and Withdrawn as closed
+    // since Phase 2.5 and enforces a rule that depends on it — an Offer can only be
+    // reached from an active application. If the front end spelled out
+    // `?status=Rejected&status=Withdrawn` instead, that would be a SECOND copy of
+    // the answer, in TypeScript, free to drift from the one the PATCH rule uses.
+    // So the set is named once, in Domain/, and this reads it.
+    //
+    // Combining it with an explicit Status is REFUSED rather than merged or
+    // silently ignored — see the handler. Two ways of saying which stages you want,
+    // in one request, is a question with no answer the caller can predict.
+    public bool? IsClosed { get; init; }
     public string? Company { get; init; }
     public string? Title { get; init; }
     public string? Skill { get; init; }
@@ -143,6 +175,15 @@ public class ListApplicationsHandler : IRequestHandler<ListApplications, SliceRe
             return SliceResult<ApplicationPage>.Invalid("page must be 1 or greater.");
         if (pageSize < 1 || pageSize > MaxPageSize)
             return SliceResult<ApplicationPage>.Invalid($"pageSize must be between 1 and {MaxPageSize}.");
+
+        // PHASE 9. Refused rather than resolved, because both resolutions are worse:
+        // intersecting them answers a question nobody asked, and letting one win
+        // silently means a caller who sent both never learns which. The message
+        // names the fix rather than the fault.
+        if (query.Status is { Length: > 0 } && query.IsClosed is not null)
+            return SliceResult<ApplicationPage>.Invalid(
+                "Pass either status or isClosed, not both — isClosed is shorthand for "
+                + "the closed stages, so naming statuses as well says the same thing twice.");
         if (query.AppliedFrom is not null && query.AppliedTo is not null &&
             query.AppliedFrom > query.AppliedTo)
             return SliceResult<ApplicationPage>.Invalid("appliedFrom must not be after appliedTo.");
@@ -164,8 +205,32 @@ public class ListApplicationsHandler : IRequestHandler<ListApplications, SliceRe
         if (query.IncludeArchived == true)
             applications = applications.IgnoreQueryFilters();
 
-        if (query.Status is not null)
-            applications = applications.Where(a => a.Status == query.Status);
+        // Contains over an array translates to SQL `IN`, so this stays one round
+        // trip whether the caller named one stage or five.
+        //
+        // An EMPTY array is treated as "no filter" rather than "match nothing", and
+        // the two surfaces differ on whether that is even reachable — measured, not
+        // assumed, because the first version of this comment guessed wrong:
+        //
+        //   * GraphQL CAN send it. `status: []` is a well-formed list of zero enum
+        //     values and binds to an empty array, so this branch is live.
+        //   * REST CANNOT. `?status=` binds an empty string to an ApplicationStatus,
+        //     fails model binding, and answers 400 — the same as `?status=Banana`,
+        //     which is the right answer and is already what the surface does.
+        //
+        // So the guard exists for GraphQL, and "no filter" is the reading that keeps
+        // `{ status: [] }` meaning the same as omitting it.
+        if (query.Status is { Length: > 0 } statuses)
+            applications = applications.Where(a => statuses.Contains(a.Status));
+        else if (query.IsClosed is { } closed)
+        {
+            // The set comes from Domain/, so REST, GraphQL and the PATCH rule cannot
+            // disagree about which stages are closed.
+            var closedStages = ApplicationStatusTransitions.Closed.ToArray();
+            applications = closed
+                ? applications.Where(a => closedStages.Contains(a.Status))
+                : applications.Where(a => !closedStages.Contains(a.Status));
+        }
 
         // ILIKE, not ==: "canva" should find "Canva". EF.Functions.ILike maps to
         // Postgres's ILIKE operator, so the match happens in SQL rather than by
