@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!-- The Ats module. A plain class library on purpose: the handlers never
-       knew about HTTP — only the route-mapping half of AtsModule.cs did, and
+       knew about HTTP — only the route-mapping half of MatchModule.cs did, and
        Phase 13.1 lifted that into Jobkeep.Api/Endpoints/. Keeping ASP.NET out of
        here is what makes the layering claim checkable rather than decorative.
 
@@ -13,7 +13,7 @@
        list and used to hold this module's entities, its EF mapping and the one
        shared DbContext. All three now live here. -->
   <PropertyGroup>
-    <RootNamespace>Jobkeep.Modules.Ats</RootNamespace>
+    <RootNamespace>Jobkeep.Modules.Match</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>

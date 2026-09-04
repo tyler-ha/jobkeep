@@ -170,11 +170,11 @@ internal static class ApplicationDetailProjection
 
     // One flat Select instead of the old include graph. The difference is not
     // cosmetic: the retired repository's WithGraph() eager-loaded company +
-    // skills + requirements + AI analysis + ATS result behind AsSplitQuery(),
+    // skills + requirements + AI analysis + match result behind AsSplitQuery(),
     // which is five round-trips returning columns nobody asked for
     // (architecture.md A1). This loads exactly the columns below.
     //
-    // Deliberately absent: AiAnalysis and AtsResult (Phase 5).
+    // Deliberately absent: AiAnalysis and MatchResult (Phase 5).
     //
     // The reason for AiAnalysis changed in Phase 4 and the exclusion did not. It
     // used to be "not written yet"; it is now a module boundary. `ai_analyses`
@@ -187,7 +187,7 @@ internal static class ApplicationDetailProjection
     // posting_skills rows that happen to carry Source = AiExtracted. Those belong
     // to Applications, so there is no boundary to cross.
     //
-    // AtsResult is still absent for the original reason: Phase 5 has not run.
+    // MatchResult is still absent for the original reason: Phase 5 has not run.
     public static readonly Expression<Func<JobApplication, ApplicationDetailRow>> Expression =
         a => new ApplicationDetailRow(
             a.Id,

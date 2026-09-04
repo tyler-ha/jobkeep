@@ -64,7 +64,7 @@
     <ProjectReference Include="../../src/Jobkeep.Modules.Applications/Jobkeep.Modules.Applications.csproj" />
     <ProjectReference Include="../../src/Jobkeep.Modules.Analytics/Jobkeep.Modules.Analytics.csproj" />
     <ProjectReference Include="../../src/Jobkeep.Modules.Ai/Jobkeep.Modules.Ai.csproj" />
-    <ProjectReference Include="../../src/Jobkeep.Modules.Ats/Jobkeep.Modules.Ats.csproj" />
+    <ProjectReference Include="../../src/Jobkeep.Modules.Match/Jobkeep.Modules.Match.csproj" />
     <ProjectReference Include="../../src/Jobkeep.Modules.Documents/Jobkeep.Modules.Documents.csproj" />
     <ProjectReference Include="../../src/Jobkeep.Modules.Skills/Jobkeep.Modules.Skills.csproj" />
   </ItemGroup>

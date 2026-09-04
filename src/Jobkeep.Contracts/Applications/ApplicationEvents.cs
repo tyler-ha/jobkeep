@@ -13,7 +13,7 @@ namespace Jobkeep.Contracts.Applications;
 // An event is read by its subscribers and written by its publisher, so it is
 // exactly the shared vocabulary this project already puts here: the same reason
 // ApplicationRef and ResumeRef are here rather than beside the tables they
-// describe. When Ats becomes a service, this record is the message body on the
+// describe. When Match becomes a service, this record is the message body on the
 // wire, and Contracts is the project the wire schema is generated from.
 //
 // ---------------------------------------------------------------------------
@@ -52,8 +52,8 @@ namespace Jobkeep.Contracts.Applications;
 // mediator does not move it: martinothamar/Mediator dispatches in-process, which
 // is the same trust boundary the hand-rolled publisher had.
 
-// An application row is gone. Ats subscribes: `ats_results.ApplicationId` was a
-// CASCADE until 13.3b, and an ATS check means nothing without the application it
+// An application row is gone. Match subscribes: `match_results.ApplicationId` was a
+// CASCADE until 13.3b, and a match check means nothing without the application it
 // judged.
 public record ApplicationDeleted(Guid ApplicationId) : INotification;
 

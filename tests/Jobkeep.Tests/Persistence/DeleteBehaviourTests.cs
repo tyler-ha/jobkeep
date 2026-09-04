@@ -3,8 +3,8 @@ using Jobkeep.Contracts.Applications;
 using Jobkeep.Modules.Ai;
 using Jobkeep.Modules.Ai.Domain;
 using Jobkeep.Modules.Applications;
-using Jobkeep.Modules.Ats;
-using Jobkeep.Modules.Ats.Domain;
+using Jobkeep.Modules.Match;
+using Jobkeep.Modules.Match.Domain;
 using Jobkeep.Tests.Infrastructure;
 
 namespace Jobkeep.Tests.Persistence;
@@ -56,22 +56,22 @@ public sealed class DeleteBehaviourTests(PostgresFixture fixture) : IntegrationT
     }
 
     [Fact]
-    public async Task DeletingAnApplication_TakesItsAtsResultWithIt()
+    public async Task DeletingAnApplication_TakesItsMatchResultWithIt()
     {
-        // WAS a cascade on ats_results.ApplicationId, on the grounds that an ATS check is
+        // WAS a cascade on match_results.ApplicationId, on the grounds that a match check is
         // owned by its application and means nothing without it. That is still true, and
-        // since 13.3b Postgres can no longer enforce it: `ats_results` is in the Ats
+        // since 13.3b Postgres can no longer enforce it: `match_results` is in the Match
         // module's schema and the foreign key crossed a boundary.
         //
         // 13.3c restored the OUTCOME without the key. DeleteApplication publishes
-        // ApplicationDeleted after it commits; Ats subscribes with OnApplicationDeleted
+        // ApplicationDeleted after it commits; Match subscribes with OnApplicationDeleted
         // and deletes the row. So this assertion is 0 again, and the interesting part is
         // what the test now proves: not that a constraint exists, but that a module
         // reacted. Between 13.3b and 13.3c it asserted the orphan on purpose.
         var id = await Client.CreateApplicationAsync("Atlassian", "Backend Engineer", Ct);
         await WithDbAsync(async db =>
         {
-            db.AtsResults.Add(new AtsResult
+            db.MatchResults.Add(new MatchResult
             {
                 ApplicationId = id,
                 MatchedKeywords = ["C#", "Postgres"],
@@ -81,12 +81,12 @@ public sealed class DeleteBehaviourTests(PostgresFixture fixture) : IntegrationT
             await db.SaveChangesAsync(Ct);
         });
 
-        Assert.Equal(1, await WithDbAsync(db => db.AtsResults.CountAsync(Ct)));
+        Assert.Equal(1, await WithDbAsync(db => db.MatchResults.CountAsync(Ct)));
 
         (await Client.DeleteAsync($"/applications/{id}", Ct)).EnsureSuccessStatusCode();
 
         Assert.Equal(0, await WithDbAsync(db => db.JobApplications.CountAsync(Ct)));
-        Assert.Equal(0, await WithDbAsync(db => db.AtsResults.CountAsync(Ct)));
+        Assert.Equal(0, await WithDbAsync(db => db.MatchResults.CountAsync(Ct)));
     }
 
     [Fact]

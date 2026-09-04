@@ -19,7 +19,7 @@ public class ResumeExperienceConfiguration : IEntityTypeConfiguration<ResumeExpe
         // "Mar 2021" is stored as "Mar 2021".
         e.Property(x => x.StartText).HasMaxLength(50);
         e.Property(x => x.EndText).HasMaxLength(50);
-        // List<string> -> Postgres text[], the same mapping AtsResult uses.
+        // List<string> -> Postgres text[], the same mapping MatchResult uses.
         e.Property(x => x.Highlights).HasColumnType("text[]");
 
         e.HasOne(x => x.Resume)

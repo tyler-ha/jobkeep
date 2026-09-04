@@ -17,9 +17,9 @@ namespace Jobkeep.Modules.Documents;
 // you cannot judge that without the document. Same exception, same reason, and
 // GetImport.cs states it first.
 //
-// One thing this is NOT: it is not the ATS check's input. That reads
-// resume_skills as rows and joins them against posting skills (Modules/Ats/
-// CheckAts.cs) — it never reads this DTO. Nothing here is on a hot path.
+// One thing this is NOT: it is not the match check's input. That reads
+// resume_skills as rows and joins them against posting skills (Modules/Match/
+// RunMatchCheck.cs) — it never reads this DTO. Nothing here is on a hot path.
 
 public record ResumeSkillItem(string SkillName, string? Category, SkillSource Source);
 

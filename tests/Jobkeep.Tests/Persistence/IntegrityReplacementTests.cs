@@ -1,11 +1,11 @@
 using System.Net;
 using Jobkeep.Contracts.Applications;
-using Jobkeep.Contracts.Ats;
+using Jobkeep.Contracts.Match;
 using Jobkeep.Contracts.Shared;
 using Jobkeep.Contracts.Skills;
 using Jobkeep.Modules.Ai.Domain;
-using Jobkeep.Modules.Ats;
-using Jobkeep.Modules.Ats.Domain;
+using Jobkeep.Modules.Match;
+using Jobkeep.Modules.Match.Domain;
 using Jobkeep.Modules.Documents;
 using Jobkeep.Modules.Documents.Domain;
 using Jobkeep.Modules.Skills.Domain;
@@ -19,7 +19,7 @@ namespace Jobkeep.Tests.Persistence;
 /// routes that trigger it.
 ///
 /// <para>
-/// DeleteBehaviourTests asserts the OUTCOMES that survived: an ATS result dies with its
+/// DeleteBehaviourTests asserts the OUTCOMES that survived: a match result dies with its
 /// application, an analysis dies with its ad. This file is about the machinery, because
 /// the two are no longer the same claim. A foreign key is one thing that either exists
 /// or does not; a replacement is a route, a check or a subscriber, and each of those can
@@ -30,10 +30,10 @@ namespace Jobkeep.Tests.Persistence;
 /// <para>
 /// The five, and which mechanism each got:
 /// <list type="bullet">
-/// <item>ats_results.ApplicationId (CASCADE) — ApplicationDeleted notification.</item>
+/// <item>match_results.ApplicationId (CASCADE) — ApplicationDeleted notification.</item>
 /// <item>ai_analyses.PostingId (CASCADE) — PostingDeleted notification.</item>
 /// <item>job_applications.ResumeId (RESTRICT) — IApplicationContract count, at delete.</item>
-/// <item>ats_results.ResumeId (RESTRICT) — IAtsContract count, at delete.</item>
+/// <item>match_results.ResumeId (RESTRICT) — IMatchContract count, at delete.</item>
 /// <item>resume_skills.SkillId (RESTRICT) — ISkillCatalog.FindOrCreateAsync ordering,
 ///       which 13.2 already shipped and ResumeSkillTests already covers.</item>
 /// </list>
@@ -147,17 +147,17 @@ public sealed class IntegrityReplacementTests(PostgresFixture fixture) : Integra
     }
 
     [Fact]
-    public async Task DeletingAResume_IsRefused_WhileAStoredAtsCheckJudgedIt()
+    public async Task DeletingAResume_IsRefused_WhileAStoredMatchCheckJudgedIt()
     {
-        // ats_results.ResumeId, the other dropped RESTRICT, and the one that is easy to
-        // forget because the ATS result belongs to an application that need not name
-        // this résumé at all — CheckAts takes an optional resumeId, so the check can
+        // match_results.ResumeId, the other dropped RESTRICT, and the one that is easy to
+        // forget because the match result belongs to an application that need not name
+        // this résumé at all — RunMatchCheck takes an optional resumeId, so the check can
         // have judged a different CV than the one the application was sent with.
         var resumeId = await SeedResumeAsync("ats-tuned");
         var applicationId = await Client.CreateApplicationAsync("Canva", "Engineer", Ct);
         await WithDbAsync(async db =>
         {
-            db.AtsResults.Add(new AtsResult
+            db.MatchResults.Add(new MatchResult
             {
                 ApplicationId = applicationId,
                 ResumeId = resumeId,
@@ -169,7 +169,7 @@ public sealed class IntegrityReplacementTests(PostgresFixture fixture) : Integra
         var response = await Client.DeleteAsync($"/resumes/{resumeId}", Ct);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Contains("1 stored ATS check", await response.Content.ReadAsStringAsync(Ct));
+        Assert.Contains("1 stored match check", await response.Content.ReadAsStringAsync(Ct));
         Assert.Equal(1, await WithDbAsync(db => db.Resumes.CountAsync(Ct)));
     }
 

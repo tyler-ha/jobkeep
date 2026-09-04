@@ -74,7 +74,7 @@ public sealed class SmokeTests(PostgresFixture fixture) : IntegrationTestBase(fi
         Assert.Contains("documents.resume_educations", tables);
 
         Assert.Contains("ai.ai_analyses", tables);
-        Assert.Contains("ats.ats_results", tables);
+        Assert.Contains("ats.match_results", tables);
 
         // Five histories, one per table-owning context. Analytics has none because it
         // owns nothing to create, and a sixth appearing here would mean it had started

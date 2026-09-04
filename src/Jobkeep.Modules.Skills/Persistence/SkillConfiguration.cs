@@ -30,7 +30,7 @@ public class SkillConfiguration : IEntityTypeConfiguration<Skill>
 
         // Phase 7 — see companies above. This is the table where the defect
         // was costing something measurable: a duplicate row split one
-        // skill's count in /stats/skill-demand, and the Phase 5 ATS check
+        // skill's count in /stats/skill-demand, and the Phase 5 match check
         // matches skill ROWS, so a difference of case read as a gap.
         e.Property(s => s.NameNormalized)
             .HasMaxLength(100)

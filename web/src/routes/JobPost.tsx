@@ -12,14 +12,14 @@ import {
   asApiError,
   getAnalysis,
   getApplication,
-  getAtsResult,
+  getMatchResult,
   removePostingSkill,
   removeRequirement,
   updateApplication,
   type AnalysisSummaryResponse,
   type ApplicationDetail,
   type ApplicationStatus,
-  type AtsCheckResponse,
+  type MatchCheckResponse,
   type PostingSkillResponse,
   type RequirementResponse,
 } from '../lib/api';
@@ -29,7 +29,7 @@ import { formatDateOnly, formatInstant, formatSalary, humanise } from '../lib/fo
  * correct what was extracted, and check it against a résumé.
  *
  * Three requests, not one, and the split is a module boundary rather than an
- * oversight. `ai_analyses` belongs to the Ai module and `ats_results` to Ats, so
+ * oversight. `ai_analyses` belongs to the Ai module and `match_results` to Match, so
  * neither is projected into ApplicationDetail — ApplicationDetail.cs argues this
  * at length. Both extra reads answer 404 for "not run yet", which is a normal
  * state on this screen and is rendered as an invitation, never as an error.
@@ -41,7 +41,7 @@ export default function JobPost() {
   const [app, setApp] = useState<ApplicationDetail | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
   const [analysis, setAnalysis] = useState<AnalysisSummaryResponse | null>(null);
-  const [check, setCheck] = useState<AtsCheckResponse | null>(null);
+  const [check, setCheck] = useState<MatchCheckResponse | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   /* Two things now refuse: the status lifecycle, and the analyser with no ad to
    * read. Both are 400s and both are rules rather than faults, so the banner
@@ -66,7 +66,7 @@ export default function JobPost() {
      * Anything else is swallowed too: a broken side panel should not take the
      * job post down with it. */
     getAnalysis(id).then((a) => live && setAnalysis(a)).catch(() => {});
-    getAtsResult(id).then((c) => live && setCheck(c)).catch(() => {});
+    getMatchResult(id).then((c) => live && setCheck(c)).catch(() => {});
 
     return () => {
       live = false;
@@ -180,7 +180,7 @@ export default function JobPost() {
         </div>
 
         <div className="post-actions">
-          <Link className="btn btn-primary" to={`/applications/${id}/ats-check`}>
+          <Link className="btn btn-primary" to={`/applications/${id}/match-check`}>
             Check against my CV
           </Link>
           <label className="field field-inline">
@@ -344,7 +344,7 @@ export default function JobPost() {
                     Still open: {check.missingMustHaveSkills.join(', ')}.
                   </p>
                 )}
-                <Link className="btn" to={`/applications/${id}/ats-check`}>
+                <Link className="btn" to={`/applications/${id}/match-check`}>
                   Open the check
                 </Link>
               </>
@@ -354,7 +354,7 @@ export default function JobPost() {
                   This job has not been checked against a résumé yet. The check is a set
                   difference over your skills, so it costs nothing to run.
                 </p>
-                <Link className="btn" to={`/applications/${id}/ats-check`}>
+                <Link className="btn" to={`/applications/${id}/match-check`}>
                   Run the first check
                 </Link>
               </>

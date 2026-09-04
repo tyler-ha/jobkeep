@@ -26,7 +26,7 @@ namespace Jobkeep.Modules.Documents.Domain;
 // resume and the skills on the postings you apply to are now rows in the *same*
 // shared `skills` table, so "what do the jobs I want ask for that my resume never
 // mentions" is one join rather than a text search. That is also exactly what
-// Phase 5's ATS check needs, and it is why the skills table was made shared in
+// Phase 5's match check needs, and it is why the skills table was made shared in
 // the first place.
 public class Resume : IAuditable
 {
@@ -51,7 +51,7 @@ public class Resume : IAuditable
     //
     // This is the phase's central design decision and it is worth stating plainly:
     // the *text* is stored, the uploaded *file* is not (see DocumentImport). Text
-    // is what every later feature reads — the ATS check compares text, a re-parse
+    // is what every later feature reads — the match check compares text, a re-parse
     // after a prompt change re-reads text — and keeping it means improving the
     // structuring step never requires the user to re-upload anything.
     public string SourceText { get; set; } = string.Empty;
@@ -148,7 +148,7 @@ public class ResumeExperience
     public string? EndText { get; set; }
 
     // The bullet points, as List<string> -> Postgres text[] (Npgsql maps this
-    // natively; AtsResult already does the same). A child table would buy
+    // natively; MatchResult already does the same). A child table would buy
     // ordering and querying that nothing needs — bullets are read as a block.
     public List<string> Highlights { get; set; } = new();
 

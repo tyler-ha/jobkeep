@@ -3,12 +3,12 @@ using Jobkeep.SharedKernel;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
 
-namespace Jobkeep.Modules.Ats;
+namespace Jobkeep.Modules.Match;
 
-// Slice: read back the stored ATS result for an application, without recomputing
+// Slice: read back the stored match result for an application, without recomputing
 // anything.
 //
-// This is the reason `ats_results` is a table rather than a computed response.
+// This is the reason `match_results` is a table rather than a computed response.
 // The check is not expensive in the way the Phase 4 analyzer is — three of its
 // four stages need no model — but it is not free either, and more importantly it
 // is not *stable*: the answer depends on the model's mood and on posting_skills
@@ -17,7 +17,7 @@ namespace Jobkeep.Modules.Ats;
 // different one.
 //
 // Same split GetAnalysis.cs makes, for the same reason, and it returns the same
-// DTO CheckAts returns so the two routes cannot drift apart.
+// DTO RunMatchCheck returns so the two routes cannot drift apart.
 //
 // ---------------------------------------------------------------------------
 // 13.2e: one column of this response is not in a table this module owns
@@ -30,28 +30,28 @@ namespace Jobkeep.Modules.Ats;
 // It is now the row-plus-hydration shape ApplicationDetail arrived at in 13.2d:
 // project what this module owns, then finish the response from a contract. The
 // public DTO is unchanged, so no caller and no test on either surface moves.
-public record GetAtsResult(Guid ApplicationId) : IRequest<SliceResult<AtsCheckResponse>>;
+public record GetMatchResult(Guid ApplicationId) : IRequest<SliceResult<MatchCheckResponse>>;
 
-public class GetAtsResultHandler : IRequestHandler<GetAtsResult, SliceResult<AtsCheckResponse>>
+public class GetMatchResultHandler : IRequestHandler<GetMatchResult, SliceResult<MatchCheckResponse>>
 {
-    private readonly AtsDbContext _db;
+    private readonly MatchDbContext _db;
     private readonly IResumeContract _resumes;
 
-    public GetAtsResultHandler(AtsDbContext db, IResumeContract resumes)
+    public GetMatchResultHandler(MatchDbContext db, IResumeContract resumes)
     {
         _db = db;
         _resumes = resumes;
     }
 
-    public async ValueTask<SliceResult<AtsCheckResponse>> Handle(
-        GetAtsResult message, CancellationToken ct)
+    public async ValueTask<SliceResult<MatchCheckResponse>> Handle(
+        GetMatchResult message, CancellationToken ct)
     {
         var applicationId = message.ApplicationId;
         // Flat projection, no Include, and the label left null for now.
-        var found = await _db.AtsResults
+        var found = await _db.MatchResults
             .AsNoTracking()
             .Where(r => r.ApplicationId == applicationId)
-            .Select(r => new AtsCheckResponse(
+            .Select(r => new MatchCheckResponse(
                 r.ApplicationId,
                 r.ResumeId,
                 null,
@@ -69,8 +69,8 @@ public class GetAtsResultHandler : IRequestHandler<GetAtsResult, SliceResult<Ats
         // for a caller who is about to POST the check either way — the same call
         // GetAnalysis.cs makes.
         if (found is null)
-            return SliceResult<AtsCheckResponse>.NotFound(
-                $"No ATS check stored for application {applicationId}. Run the check first.");
+            return SliceResult<MatchCheckResponse>.NotFound(
+                $"No match check stored for application {applicationId}. Run the check first.");
 
         // The one extra round trip, skipped when there is nothing to look up.
         // GetAsync, not GetContentAsync: this needs a chip's worth of text and
@@ -78,14 +78,14 @@ public class GetAtsResultHandler : IRequestHandler<GetAtsResult, SliceResult<Ats
         // short column off it.
         //
         // A résumé id with no row leaves the label null rather than failing the
-        // read. Impossible today — ats_results.ResumeId is a foreign key — and
+        // read. Impossible today — match_results.ResumeId is a foreign key — and
         // the honest answer at 13.3 when it is not, because a stored judgement is
         // still worth showing after the document it judged was deleted.
         if (found.ResumeId is null)
-            return SliceResult<AtsCheckResponse>.Ok(found);
+            return SliceResult<MatchCheckResponse>.Ok(found);
 
         var resume = await _resumes.GetAsync(found.ResumeId.Value, ct);
 
-        return SliceResult<AtsCheckResponse>.Ok(found with { ResumeLabel = resume?.Label });
+        return SliceResult<MatchCheckResponse>.Ok(found with { ResumeLabel = resume?.Label });
     }
 }

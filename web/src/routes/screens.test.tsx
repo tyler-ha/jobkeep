@@ -81,9 +81,9 @@ describe('every screen renders', () => {
     expect(await screen.findByText(/\$150–175k/)).toBeTruthy();
   });
 
-  it('ATS check derives its five stages from the stored result', async () => {
-    at(`/applications/${APP_ID}/ats-check`);
-    expect(await screen.findByRole('heading', { name: 'ATS check' })).toBeTruthy();
+  it('match check derives its five stages from the stored result', async () => {
+    at(`/applications/${APP_ID}/match-check`);
+    expect(await screen.findByRole('heading', { name: 'Match check' })).toBeTruthy();
     for (const stage of [
       'Contact details',
       'Must-have skills',

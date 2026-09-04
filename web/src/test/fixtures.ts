@@ -2,7 +2,7 @@ import type {
   ApplicationDetail,
   ApplicationFunnel,
   ApplicationPage,
-  AtsCheckResponse,
+  MatchCheckResponse,
   CompanyRollupItem,
   ImportResponse,
   ImportSummary,
@@ -175,7 +175,7 @@ export const resumeDetail: ResumeDetail = {
   ],
 };
 
-export const atsCheck: AtsCheckResponse = {
+export const matchCheck: MatchCheckResponse = {
   applicationId: APP_ID,
   resumeId: RESUME_ID,
   resumeLabel: 'demo-cv',
@@ -273,7 +273,7 @@ export function stubFetch() {
     if (path === `/resumes/${RESUME_ID}`) return ok(resumeDetail);
     if (path === '/imports') return ok(imports);
     if (path === `/imports/${IMPORT_ID}`) return ok(importDetail);
-    if (path === `/applications/${APP_ID}/ats-check`) return ok(atsCheck);
+    if (path === `/applications/${APP_ID}/match-check`) return ok(matchCheck);
     /* 404 is a real answer here, not a failure: GetAnalysis returns it for "not
      * analysed yet" and the Job post screen renders that as an invitation. */
     if (path === `/applications/${APP_ID}/analysis`) return new Response(null, { status: 404 });

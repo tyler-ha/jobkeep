@@ -1,6 +1,6 @@
 using Jobkeep.Contracts.Shared;
 using Jobkeep.Modules.Applications.Domain;
-using Jobkeep.Modules.Ats.Domain;
+using Jobkeep.Modules.Match.Domain;
 using Jobkeep.Tests.Infrastructure;
 
 namespace Jobkeep.Tests.Persistence;
@@ -92,14 +92,14 @@ public sealed class MappingTests(PostgresFixture fixture) : IntegrationTestBase(
     }
 
     [Fact]
-    public async Task AtsKeywordListsRoundTripThroughPostgresTextArrays()
+    public async Task MatchKeywordListsRoundTripThroughPostgresTextArrays()
     {
         // Three text[] columns, which is a Postgres-specific mapping with no equivalent
         // in the InMemory or SQLite providers. Phase 5 depends on this working.
         var id = await Client.CreateApplicationAsync("Seek", "Engineer", Ct);
         await WithDbAsync(async db =>
         {
-            db.AtsResults.Add(new AtsResult
+            db.MatchResults.Add(new MatchResult
             {
                 ApplicationId = id,
                 MatchedKeywords = ["C#", "PostgreSQL", "AWS"],
@@ -111,11 +111,11 @@ public sealed class MappingTests(PostgresFixture fixture) : IntegrationTestBase(
 
         var columnType = await ScalarAsync(
             "select udt_name from information_schema.columns " +
-            "where table_schema = 'ats' and table_name = 'ats_results' "
+            "where table_schema = 'ats' and table_name = 'match_results' "
             + "and column_name = 'MatchedKeywords'");
         Assert.Equal("_text", columnType);
 
-        var result = await WithDbAsync(db => db.AtsResults.SingleAsync(Ct));
+        var result = await WithDbAsync(db => db.MatchResults.SingleAsync(Ct));
         Assert.Equal(["C#", "PostgreSQL", "AWS"], result.MatchedKeywords);
         Assert.Equal(["Kubernetes"], result.MissingMustHaveKeywords);
         Assert.Empty(result.FormattingRiskNotes);
@@ -143,19 +143,19 @@ public sealed class MappingTests(PostgresFixture fixture) : IntegrationTestBase(
     [Fact]
     public async Task OneToOneRelationshipsAreEnforcedByUniqueIndexes()
     {
-        // ai_analyses and ats_results are 1:1 with their parent. That is a unique index,
+        // ai_analyses and match_results are 1:1 with their parent. That is a unique index,
         // not a convention, and InMemory would not enforce it.
         var id = await Client.CreateApplicationAsync("Telstra", "Engineer", Ct);
 
         await WithDbAsync(async db =>
         {
-            db.AtsResults.Add(new AtsResult { ApplicationId = id });
+            db.MatchResults.Add(new MatchResult { ApplicationId = id });
             await db.SaveChangesAsync(Ct);
         });
 
         var failure = await Assert.ThrowsAsync<DbUpdateException>(() => WithDbAsync(async db =>
         {
-            db.AtsResults.Add(new AtsResult { ApplicationId = id });
+            db.MatchResults.Add(new MatchResult { ApplicationId = id });
             await db.SaveChangesAsync(Ct);
         }));
 

@@ -9,7 +9,7 @@ namespace Jobkeep.Modules.Applications;
 // Slice: delete an application.
 //
 // What survives the delete is a schema decision, not an accident:
-//   - the ats_results row goes, but since 13.3b Postgres is no longer what makes
+//   - the match_results row goes, but since 13.3b Postgres is no longer what makes
 //     it go — see the publish below. Your resume-vs-this-posting result has no
 //     meaning once the application is gone, and that rule outlived the foreign
 //     key that used to enforce it.
@@ -47,13 +47,13 @@ public class DeleteApplicationHandler : IRequestHandler<DeleteApplication, Slice
         _db.JobApplications.Remove(application);
         await _db.SaveChangesAsync(ct);
 
-        // PHASE 13.3c — the replacement for ats_results' dropped CASCADE.
+        // PHASE 13.3c — the replacement for match_results' dropped CASCADE.
         //
         // AFTER the save, and the order is the decision. Publishing first would
-        // mean deleting the ATS result of an application that then failed to
+        // mean deleting the match result of an application that then failed to
         // delete: a surviving row loses a stored judgement, and re-earning it
         // costs a model call the user waits three minutes for. Publishing after
-        // means a failure between the two leaves an orphan `ats_results` row that
+        // means a failure between the two leaves an orphan `match_results` row that
         // nothing can read — nothing queries that table except by application id,
         // and that application is gone.
         //

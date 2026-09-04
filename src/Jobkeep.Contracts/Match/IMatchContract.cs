@@ -1,28 +1,28 @@
 using Jobkeep.Contracts.Skills;
-namespace Jobkeep.Contracts.Ats;
+namespace Jobkeep.Contracts.Match;
 
-// PHASE 13.3c: Ats stops being a pure consumer.
+// PHASE 13.3c: Match stops being a pure consumer.
 //
-// AtsModule.cs said, correctly, that this module was the only one with no
-// contract of its own: nothing read `ats_results` except its own two routes, and
+// MatchModule.cs said, correctly, that this module was the only one with no
+// contract of its own: nothing read `match_results` except its own two routes, and
 // "a contract with no caller would be wire schema nobody can safely remove."
-// That held until 13.3b dropped `ats_results.ResumeId` -> `resumes`, a RESTRICT
-// that stopped you deleting a résumé some stored ATS check had judged. Replacing
+// That held until 13.3b dropped `match_results.ResumeId` -> `resumes`, a RESTRICT
+// that stopped you deleting a résumé some stored match check had judged. Replacing
 // it means Documents has to ask this module a question before it deletes, and
 // that question is the first thing anyone has ever needed to know about
-// `ats_results` from outside.
+// `match_results` from outside.
 //
 // One method, and the test from ISkillCatalog applies unchanged: does it name a
-// fact about an ATS RESULT, or a question the caller has about its own feature?
+// fact about a MATCH RESULT, or a question the caller has about its own feature?
 // "How many stored results judged this résumé" is a fact about this table --
 // Documents cannot compute it, cannot see the table, and does not learn anything
-// about ATS checking by asking.
-public interface IAtsContract
+// about match checking by asking.
+public interface IMatchContract
 {
-    // How many stored ATS results were judged against this résumé.
+    // How many stored match results were judged against this résumé.
     //
     // A COUNT rather than a bool, and rather than the rows. The count is what a
-    // caller can put in a sentence -- "2 ATS checks were run against this résumé"
+    // caller can put in a sentence -- "2 match checks were run against this résumé"
     // reads better than "this résumé is in use" and costs the same query. The
     // rows would be an over-fetch of another module's data for a yes/no.
     //

@@ -30,7 +30,7 @@ import { formatDateOnly } from '../lib/format';
  * recorded as deviations in docs/phases/phase-6-frontend.md:
  *
  *  - The "CV match" column (0/9, 5/7, "not checked"). ApplicationListItem has
- *    no ATS data and the GraphQL surface exposes flat root fields, so the only
+ *    no match data and the GraphQL surface exposes flat root fields, so the only
  *    ways to fill it are a per-row request — an N+1 on a list — or a backend
  *    change. It is dropped here and logged as Phase 7 work. The skills the ad
  *    names take the column instead, which the list endpoint does return.

@@ -33,7 +33,7 @@ namespace Jobkeep.SharedKernel;
 //   * Child rows (`ResumeExperience`, `ResumeEducation`) are owned by a resume
 //     and replaced wholesale when it is re-imported. Their lifecycle *is* the
 //     parent's, so the parent's timestamps already answer the question.
-//   * `AiAnalysis` and `AtsResult` already carry a domain timestamp that means
+//   * `AiAnalysis` and `MatchResult` already carry a domain timestamp that means
 //     something more specific than "changed" — `AnalyzedAtUtc`, `CheckedAtUtc`.
 //     Both are 1:1 records that re-running overwrites, so "when was this last
 //     written" is exactly what those columns already say. A second, vaguer pair

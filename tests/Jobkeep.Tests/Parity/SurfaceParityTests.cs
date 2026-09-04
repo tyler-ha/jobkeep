@@ -3,7 +3,7 @@ using System.Net.Http.Json;
 using Jobkeep.Modules.Ai.Domain;
 using Jobkeep.Modules.Applications;
 using Jobkeep.Modules.Applications.Domain;
-using Jobkeep.Modules.Ats.Domain;
+using Jobkeep.Modules.Match.Domain;
 using Jobkeep.Modules.Skills.Domain;
 using Jobkeep.SharedKernel;
 using Jobkeep.Tests.Domain;
@@ -361,7 +361,7 @@ public sealed class SurfaceParityTests(PostgresFixture fixture) : IntegrationTes
         foreach (var entity in new[]
                  {
                      "JobApplication", "JobPosting", "Company", "Skill",
-                     "PostingSkill", "JobRequirement", "AtsResult", "AiAnalysis",
+                     "PostingSkill", "JobRequirement", "MatchResult", "AiAnalysis",
                  })
         {
             Assert.DoesNotContain($"type {entity} ", sdl);

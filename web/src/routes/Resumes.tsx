@@ -18,7 +18,7 @@ import { formatInstant, humanise } from '../lib/format';
 
 /* The shelf: every version of your CV, and what each one actually says.
  *
- * The skill list here is not decoration — it is the input to the ATS check. The
+ * The skill list here is not decoration — it is the input to the match check. The
  * check matches skill ROWS, not the words in the document, which is the
  * recorded limitation from Phase 5: a CV whose prose says "PostgreSQL" but
  * whose skill list says "SQL" gets reported as missing PostgreSQL. So this
@@ -70,7 +70,7 @@ export default function Resumes() {
         <div className="state">
           <h2>No résumé uploaded yet</h2>
           <p>
-            The ATS check compares a job ad against a résumé's skills, so it needs one first.{' '}
+            The match check compares a job ad against a résumé's skills, so it needs one first.{' '}
             <Link to="/upload">Upload a CV</Link> — a PDF, a Word file or plain text — and
             confirm what the parser read.
           </p>
@@ -158,13 +158,13 @@ function Detail({ id, onSkillsChanged }: { id: string; onSkillsChanged: () => vo
             · updated {formatInstant(resume.updatedAtUtc)}
           </p>
         </div>
-        <Link className="btn btn-primary" to="/ats-check">
+        <Link className="btn btn-primary" to="/match-check">
           Check a job against this
         </Link>
       </header>
 
       {/* The parser's contact-detail read, which is the single highest-value
-          thing on an ATS check: Phase 5's real-CV run found the biggest risk was
+          thing on a match check: Phase 5's real-CV run found the biggest risk was
           the parser losing the candidate's name. If it is missing here, it was
           missing to the check too. */}
       <section className="panel">
@@ -272,7 +272,7 @@ function Fact({ label, value }: { label: string; value: string | null }) {
 
 /* ---- Skills -------------------------------------------------------------- */
 
-/* The same two writes the ATS board makes, on the screen that owns the résumé.
+/* The same two writes the match board makes, on the screen that owns the résumé.
  * `POST /resumes/{id}/skills` and its inverse are the whole correction path for
  * the skill-row limitation, so they belong somewhere you can reach without
  * first picking a job to check against. */
@@ -362,7 +362,7 @@ function Skills({
       {error && <Failure error={error} what="change this résumé's skills" />}
 
       <p className="panel-foot">
-        These rows are what the ATS check compares against — not the prose below. Matching is
+        These rows are what the match check compares against — not the prose below. Matching is
         exact, so if an ad says <code>.NET</code> and this list says <code>C#</code>, the
         check reports a gap. Adding the ad's word here is the fix, and it takes one click
         from the check itself.

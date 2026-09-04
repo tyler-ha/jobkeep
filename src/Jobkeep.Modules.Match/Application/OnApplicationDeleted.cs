@@ -3,14 +3,14 @@ using Jobkeep.SharedKernel;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
 
-namespace Jobkeep.Modules.Ats;
+namespace Jobkeep.Modules.Match;
 
-// PHASE 13.3c — what replaces `ats_results.ApplicationId ON DELETE CASCADE`.
+// PHASE 13.3c — what replaces `match_results.ApplicationId ON DELETE CASCADE`.
 //
-// The rule is unchanged from the day Phase 5 wrote it down: an ATS result is a
+// The rule is unchanged from the day Phase 5 wrote it down: a match result is a
 // judgement about one application against one résumé, and it means nothing once
 // the application is gone. What changed at 13.3b is only WHO enforces it.
-// Postgres cannot: `ats_results` is in the `ats` schema and `job_applications` is
+// Postgres cannot: `match_results` is in the `ats` schema and `job_applications` is
 // in `applications`, and a foreign key between two schemas is exactly the join
 // that stops existing when the boundary becomes a network.
 //
@@ -25,7 +25,7 @@ namespace Jobkeep.Modules.Ats;
 // ---------------------------------------------------------------------------
 // DeleteApplication.cs deliberately loads the row before removing it, so EF
 // applies configured cascades rather than leaving them to the database. Nothing
-// cascades from `ats_results` — it is a leaf, and since 13.3b it is the only
+// cascades from `match_results` — it is a leaf, and since 13.3b it is the only
 // table in its schema — so there is nothing for EF to apply and one statement
 // with no round trip is the honest shape.
 //
@@ -35,12 +35,12 @@ namespace Jobkeep.Modules.Ats;
 // the caller cannot act on.
 public class OnApplicationDeleted : INotificationHandler<ApplicationDeleted>
 {
-    private readonly AtsDbContext _db;
+    private readonly MatchDbContext _db;
 
-    public OnApplicationDeleted(AtsDbContext db) => _db = db;
+    public OnApplicationDeleted(MatchDbContext db) => _db = db;
 
     public async ValueTask Handle(ApplicationDeleted notification, CancellationToken ct)
-        => await _db.AtsResults
+        => await _db.MatchResults
             .Where(r => r.ApplicationId == notification.ApplicationId)
             .ExecuteDeleteAsync(ct);
 }

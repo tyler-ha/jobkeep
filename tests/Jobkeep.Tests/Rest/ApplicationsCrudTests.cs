@@ -58,7 +58,7 @@ public sealed class ApplicationsCrudTests(PostgresFixture fixture) : Integration
         var root = body.RootElement;
 
         Assert.False(root.TryGetProperty("postingId", out _));
-        Assert.False(root.TryGetProperty("atsResult", out _));
+        Assert.False(root.TryGetProperty("matchResult", out _));
 
         var posting = root.GetProperty("posting");
         Assert.False(posting.TryGetProperty("companyId", out _));

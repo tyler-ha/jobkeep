@@ -1,4 +1,4 @@
-using Jobkeep.Contracts.Ats;
+using Jobkeep.Contracts.Match;
 using Jobkeep.Contracts.Documents;
 using Jobkeep.Contracts.Shared;
 namespace Jobkeep.Contracts.Applications;
@@ -31,7 +31,7 @@ public interface IApplicationContract
     //
     // 13.2e widened this from GetPostingIdAsync, which returned the posting id
     // alone, and the widening rather than a second method is the point. Ai wants
-    // the posting; Ats wants the posting AND the résumé the user actually sent.
+    // the posting; Match wants the posting AND the résumé the user actually sent.
     // Same row, same primary-key lookup, so splitting them would be one method
     // per caller's question -- the shape IJobApplicationRepository died of
     // (decision 5), and the shape IResumeContract.GetAsync already refused for
@@ -89,7 +89,7 @@ public interface IApplicationContract
     // about applying for jobs by asking; it is asking whether its own row is
     // still spoken for, and only this module can answer.
     //
-    // A count, not a bool, for the reason IAtsContract.CountResultsForResumeAsync
+    // A count, not a bool, for the reason IMatchContract.CountResultsForResumeAsync
     // gives: it is the number the refusal message wants to say out loud, and it
     // costs the same query.
     Task<int> CountApplicationsForResumeAsync(Guid resumeId, CancellationToken ct = default);

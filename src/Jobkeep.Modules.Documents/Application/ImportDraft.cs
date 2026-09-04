@@ -270,7 +270,7 @@ internal sealed class RequirementExtraction
     // Left as it is on purpose. This is precisely the case the confirm-and-fix
     // step exists for: a wrong label is visible on the review screen and takes one
     // click to correct, and IsMustHave — the field that actually matters for the
-    // Phase 5 ATS check — was correct on all six.
+    // Phase 5 match check — was correct on all six.
     [Description("Qualification for something the candidate must have, "
                + "Responsibility for something they would do, "
                + "Benefit for something the employer offers.")]

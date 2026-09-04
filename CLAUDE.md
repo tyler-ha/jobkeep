@@ -201,7 +201,7 @@ src/Jobkeep.Api/GraphQL/                           Query.cs, Mutation.cs
 src/Jobkeep.Api/Program.cs                         wiring only
 ```
 
-Modules: `Applications` (core), `Analytics` (read-only), `Ai`, `Documents`, `Ats`,
+Modules: `Applications` (core), `Analytics` (read-only), `Ai`, `Documents`, `Match`,
 `Skills`, `Identity` (later, Phase 11).
 
 **A new slice is one file plus two lines**: register the handler in `<X>Module.cs`,
@@ -459,7 +459,8 @@ dotnet ef migrations add <Name> \
 
 # The five, with their schemas: ApplicationsDbContext (applications),
 # SkillsDbContext (skills), DocumentsDbContext (documents), AiDbContext (ai),
-# AtsDbContext (ats). AnalyticsDbContext owns no tables and has no migrations.
+# MatchDbContext (ats — the SCHEMA kept its old name on purpose; see
+# MatchResultConfiguration.cs). AnalyticsDbContext owns no tables and no migrations.
 
 # The cheap check that a refactor did not move the schema. Run it per context.
 dotnet ef migrations has-pending-model-changes \
@@ -688,10 +689,28 @@ things from it change how new code is written:
   skill itself, not the sentence it appears in"* — not with more aliases. A
   catalogue cannot alias its way out of an open set of sentence fragments.
 
-**Also decided, not built: the ATS check is misnamed and becomes "Match check".**
-Three of its four stages compare a CV to an ad, which is not what the industry
-calls an ATS check. It is a `docs/backlog.md` row and **must not start before
-13.5**, which rewrites the same endpoints.
+**THE MATCH-CHECK RENAME LANDED 2026-09-04** (suite 285, one migration,
+`RenameAtsResultsToMatchResults`). The feature called "ATS check" was mostly a
+CV-vs-one-ad comparison, which the industry calls a *match rate*. It is now
+`Jobkeep.Modules.Match` / `Jobkeep.Contracts.Match`, table `match_results`, routes
+`POST`/`GET /applications/{id}/match-check`, GraphQL `runMatchCheck` / `matchResult`,
+and `web/src/routes/MatchCheck.tsx`. Three things worth not re-deriving:
+
+- **The Postgres SCHEMA is still `ats`, deliberately.** It holds its own
+  `__EFMigrationsHistory` (`Program.cs` puts each module's history in its own schema),
+  and EF resolves that history table *before* it applies anything — so a migration that
+  renamed the schema would leave EF looking in `match` for a history table still in
+  `ats`, conclude nothing had been applied, and re-run `InitialCreate` against tables
+  that already exist. Argued at length above the `ToTable` call. `match` was checked
+  and is a legal unquoted Postgres identifier; that is not what stopped it.
+- **The rename is NOT the split.** The four stages are unchanged, so the
+  parseability half is still one stage of the comparison feature. "ATS check" is now a
+  free name waiting for it, and it stays a `docs/backlog.md` row.
+- **Genuine-ATS prose survived on purpose.** Lines like *"the biggest ATS risk in that
+  document was never keyword coverage"* and *"An ATS reads the same text this did"* are
+  about a real applicant tracking system and were hand-classified out of the rename;
+  `AtsEndpoints.cs` likewise stays as a historical filename in a comment. Don't sweep
+  them.
 
 **PHASE 13 IS DONE (2026-09-03). 13.6 landed with it** — namespaces, this file's
 "Where new code goes", `architecture.md` sections 1-3 and decisions 5, 6, 7, 12, 13,
@@ -754,7 +773,7 @@ written:
   CONTRACT CHECK.** That is the rule, and the asymmetry is the point: a cascade is a
   consequence, announced after the publisher commits; a restrict is a question, asked
   before. `Applications` publishes `ApplicationDeleted` and `PostingDeleted` and
-  names no subscriber; `Ats` and `Ai` subscribe. Do not add a contract method that
+  names no subscriber; `Match` and `Ai` subscribe. Do not add a contract method that
   deletes another module's rows — that inverts the direction on purpose chosen here,
   and `SharedKernel/DomainEvents.cs` argues why at length.
 - **Publish AFTER `SaveChangesAsync`, never before.** On failure that leaves an
@@ -767,7 +786,7 @@ written:
   gap is a TOCTOU race** — a foreign key refuses inside the transaction, two counts
   and a delete do not. Accepted with reasons in `DeleteResume.cs`; the read paths
   already tolerate the residue (`ApplicationDetail` leaves `ResumeLabel` null,
-  `GetAtsResult` the same). Do not "fix" that tolerance — it is the safety net.
+  `GetMatchResult` the same). Do not "fix" that tolerance — it is the safety net.
 - **Two routes now exist that never did: `DELETE /postings/{id}` and
   `DELETE /resumes/{id}`.** Both were built because a replacement with no publisher
   or no caller is a replacement nobody can verify. The posting refusal is still
@@ -782,7 +801,7 @@ intra-schema. Both diagrams were redrawn from that dump and `schema-erd.svg` gai
 a dotted edge style meaning *"a relationship Postgres no longer knows about"*.
 
 Two questions from the 13.3b handoff are **closed, not built**: a skill id with no
-catalog row and an `ats_results.ResumeId` pointing at a deleted résumé are both now
+catalog row and a `match_results.ResumeId` pointing at a deleted résumé are both now
 unreachable through the app (nothing deletes a skill; a résumé delete is refused
 while either table points at one), so they got no warning field. Don't re-open them.
 
@@ -867,10 +886,10 @@ Six things from 13.2 still change how new code is written:
   `IApplicationContract.CommitPostingAsync` returns the ids alongside the error
   (`PostingCommitResult.Incomplete`) because the one thing a caller needs after a
   half-finished write is what an exception cannot carry: what got created. **13.2e
-  showed the other half of the rule** — Ats writes only its own table and every
+  showed the other half of the rule** — Match writes only its own table and every
   contract call it makes is a read that happens *before* the first row reaches the
   change tracker, so no partial write is possible. Ordering is what buys that, and
-  `CheckAts.cs` says so above the store block.
+  `RunMatchCheck.cs` says so above the store block.
 - **Two rules in this file were knowingly broken, both argued in code.** The ATS
   skill gap is an in-memory `Except` over two contract calls rather than a SQL set
   difference ("aggregate in SQL, not in memory") — justified because both sets are
@@ -962,7 +981,7 @@ implies, is `docs/phases/phase-12-feature-expansion.md`; it is deliberately not 
 feature list, because `docs/backlog.md` already is one. It also records the **three
 backend gaps the front end found**, which are now Phase 9.
 
-Phase 5 is done (2026-08-28): `Modules/Ats/`, two slices, both surfaces. Four
+Phase 5 is done (2026-08-28): `Modules.Match/` (named `Modules/Ats/` until the 2026-09-04 rename), two slices, both surfaces. Four
 things from it are worth carrying forward, and the first two change how new work
 should be written:
 
@@ -1000,7 +1019,7 @@ should be written:
   rather than a re-import. It is not the synonym fix, and it is the first write to
   `resume_skills` outside the Phase 4.5 import cycle; it is also what backs the
   CV-centre drag in the Phase 6 design.
-- **`ats_results` is 1:1 with the application and its `ResumeId` says which
+- **`match_results` is 1:1 with the application and its `ResumeId` says which
   resume the surviving row judged.** Re-checking overwrites; latest wins.
 
 Phase 4 is done (2026-08-27), and its story has a tail worth knowing: its tests

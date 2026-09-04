@@ -71,6 +71,6 @@ public class SwaggerDocumentTests(PostgresFixture fixture) : IntegrationTestBase
         // whole document goes with it.
         Assert.True(paths.TryGetProperty("/applications", out _));
         Assert.True(paths.TryGetProperty("/resumes/{id}/skills", out _));
-        Assert.True(paths.TryGetProperty("/applications/{id}/ats-check", out _));
+        Assert.True(paths.TryGetProperty("/applications/{id}/match-check", out _));
     }
 }

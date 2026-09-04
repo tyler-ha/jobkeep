@@ -30,7 +30,7 @@ public class ModuleBoundaryTests
         "Jobkeep.Modules.Applications",
         "Jobkeep.Modules.Analytics",
         "Jobkeep.Modules.Ai",
-        "Jobkeep.Modules.Ats",
+        "Jobkeep.Modules.Match",
         "Jobkeep.Modules.Documents",
         // Phase 13.2 promoted Skills a step early: ISkillCatalog needed an owner
         // once four modules were find-or-creating against the shared table.
@@ -41,7 +41,7 @@ public class ModuleBoundaryTests
     // No_module_takes_the_shared_context that read it.
     //
     // It listed the modules that had not yet moved onto their own I<X>DbContext,
-    // and its own comment said to delete it when it emptied. Ats was the last
+    // and its own comment said to delete it when it emptied. Match was the last
     // entry. It is worth being clear about what kind of thing it was: not a
     // policy with an exception, but a WORK ITEM written in the place the work
     // would be checked — which is why it came with a canary

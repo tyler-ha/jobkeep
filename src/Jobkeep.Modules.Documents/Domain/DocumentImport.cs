@@ -166,7 +166,7 @@ public class DocumentImport : IAuditable
     //
     // That case is the one worth naming. A scanned PDF is an image; no managed
     // library extracts text from it and OCR is a different project. The failure
-    // mode to avoid is storing an empty resume and letting the Phase 5 ATS check
+    // mode to avoid is storing an empty resume and letting the Phase 5 match check
     // cheerfully report that you match none of the keywords. So it is detected
     // and said out loud instead.
     public string? Warning { get; set; }

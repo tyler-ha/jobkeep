@@ -1,7 +1,7 @@
 namespace Jobkeep.SharedKernel;
 
 // PHASE 13.1: ModelOptions lives in Jobkeep.SharedKernel and the registration
-// stays in Jobkeep.Api. Three modules (Ai, Ats, Documents) inject these settings;
+// stays in Jobkeep.Api. Three modules (Ai, Match, Documents) inject these settings;
 // only the composition root may name the provider that satisfies them. That is
 // the same separation the comment below argues for, now enforced by the compiler
 // rather than by convention — a module physically cannot reach OllamaSharp.

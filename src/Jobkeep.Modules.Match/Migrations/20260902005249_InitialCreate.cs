@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace Jobkeep.Modules.Ats.Migrations
+namespace Jobkeep.Modules.Match.Migrations
 {
     /// <summary>
     /// Phase 13.3b. One table in the `ats` schema, and the module that lost the most to
@@ -13,8 +13,8 @@ namespace Jobkeep.Modules.Ats.Migrations
     /// <para>
     /// Both of this table's foreign keys crossed a boundary — to job_applications and to
     /// resumes — so both are gone. The unique index on ApplicationId keeps the 1:1 that
-    /// CheckAts relies on when it overwrites rather than inserts; the RESTRICT on
-    /// ResumeId has no replacement, which makes GetAtsResult's documented null-label
+    /// RunMatchCheck relies on when it overwrites rather than inserts; the RESTRICT on
+    /// ResumeId has no replacement, which makes GetMatchResult's documented null-label
     /// case reachable for the first time.
     /// </para>
     ///

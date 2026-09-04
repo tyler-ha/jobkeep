@@ -117,7 +117,7 @@ public class ExtractionTests
     {
         // A PDF with no text layer opens perfectly and yields nothing. The whole
         // risk is that this reads as success: an empty resume stored, and a
-        // Phase 5 ATS check reporting that you match no keywords at all.
+        // Phase 5 match check reporting that you match no keywords at all.
         var result = Extractor.Extract(Fixture("scanned.pdf"), "scanned.pdf");
 
         Assert.Equal(ResultStatus.Ok, result.Status);

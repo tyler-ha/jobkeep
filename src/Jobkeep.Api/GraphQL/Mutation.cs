@@ -1,13 +1,13 @@
 using Jobkeep.Modules.Ai;
 using Jobkeep.Modules.Applications;
-using Jobkeep.Modules.Ats;
+using Jobkeep.Modules.Match;
 using Jobkeep.Modules.Documents;
 using Jobkeep.Modules.Skills.Domain;
 using Mediator;
 
 // PHASE 13.4 — namespace aliases, and they are not cosmetic. Every resolver
-// below is named for the field it publishes (`GetApplication`, `CheckAts`), and
-// 13.4 gave the request record the same name — so a bare `new CheckAts(...)`
+// below is named for the field it publishes (`GetApplication`, `RunMatchCheck`), and
+// 13.4 gave the request record the same name — so a bare `new RunMatchCheck(...)`
 // inside this class binds to the METHOD and does not compile. Aliasing the five
 // module namespaces keeps the call sites one line each; the alternative is
 // fully-qualified type names on every field, or renaming resolvers and changing
@@ -16,7 +16,7 @@ using Apps = Jobkeep.Modules.Applications;
 using Stats = Jobkeep.Modules.Analytics;
 using Ai = Jobkeep.Modules.Ai;
 using Docs = Jobkeep.Modules.Documents;
-using Ats = Jobkeep.Modules.Ats;
+using Match = Jobkeep.Modules.Match;
 
 namespace Jobkeep.Api.GraphQL;
 
@@ -139,7 +139,7 @@ public class Mutation
         => (await sender.Send(new Docs.DiscardImport(id), ct)).ValueOrThrow();
 
     // PHASE 13.3c — delete a resume version. Errors carrying INVALID_INPUT when
-    // an application or a stored ATS check still points at it, which is the same
+    // an application or a stored match check still points at it, which is the same
     // refusal REST answers 400 to; the rule is in DeleteResumeHandler, so the two
     // surfaces have nowhere to disagree about it.
     public async Task<bool> DeleteResume(
@@ -149,7 +149,7 @@ public class Mutation
     // The resume-side mirror of addSkillToPosting, and the first write to
     // `resume_skills` that is not part of the import cycle. Both halves of the
     // shared-skills join are now editable by hand on both surfaces, which is what
-    // lets a user correct an ATS near-miss (the resume that says PostgreSQL in
+    // lets a user correct an match near-miss (the resume that says PostgreSQL in
     // prose and SQL in its skill list) without re-importing the document.
     public async Task<ResumeSkillResponse> AddSkillToResume(
         Guid resumeId, AddSkillToResumeRequest input,
@@ -164,15 +164,15 @@ public class Mutation
         [Service] ISender sender, CancellationToken ct)
         => (await sender.Send(new Docs.RemoveSkillFromResume(resumeId, skillName), ct)).ValueOrThrow();
 
-    // Phase 5 — the ATS check. A mutation because it writes an ats_results row,
+    // Phase 5 — the match check. A mutation because it writes an match_results row,
     // even though most of what it does is read.
     //
     // `resumeId` is nullable on both surfaces and means the same thing on both:
     // omit it to check against the resume the application was sent with. That is
     // the handler's rule, not this adapter's — the surfaces cannot disagree about
     // it because neither of them decides it.
-    public async Task<AtsCheckResponse> CheckAts(
+    public async Task<MatchCheckResponse> RunMatchCheck(
         Guid applicationId, Guid? resumeId,
         [Service] ISender sender, CancellationToken ct)
-        => (await sender.Send(new Ats.CheckAts(applicationId, resumeId), ct)).ValueOrThrow();
+        => (await sender.Send(new Match.RunMatchCheck(applicationId, resumeId), ct)).ValueOrThrow();
 }
