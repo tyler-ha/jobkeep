@@ -3,14 +3,15 @@
 A personal job-application tracker with AI-powered job description
 analysis and CV-to-ad match checking. Built as a portfolio project:
 C# / ASP.NET Core backend (REST + GraphQL), PostgreSQL via EF Core,
-deployed serverless on AWS, AI features via Ollama (local) or a hosted
-API (deployed).
+containerised and runnable with one `docker compose up`, AI features via
+Ollama (local) or a hosted API. **Not deployed yet** — the AWS plan was
+dropped on 2026-09-04 and a free host is still to be chosen.
 
 ## Why this project
 
 Built while job hunting in the Melbourne market — solves a real problem
 (tracking applications, understanding fit against job descriptions)
-while building demonstrable C# + AWS + AI integration experience.
+while building demonstrable C# + cloud + AI integration experience.
 
 ## Status
 
@@ -31,13 +32,17 @@ while building demonstrable C# + AWS + AI integration experience.
 | 7 | Data integrity, audit baseline & the case-insensitive dedup key | **Done** — one migration; F7/F8/F11/F12/F13/F14 closed, 239 tests |
 | 8 | Soft delete / archive | Planned — rides Phase 7's index migration |
 | 9 | The three reads the front end could not get | Planned — found by building the screens |
-| 10 | Deploy to AWS Lambda (Function URL) + Neon Postgres | Parked (plan done, $0/month) |
-| 11 | Authentication & owner scoping | Planned — tied to the deploy |
+| 10 | Deploy to AWS Lambda (Function URL) + Neon Postgres | **Dropped** (2026-09-04) — a different free host, later |
 | 12 | Feature expansion | Placeholder — pulls from `docs/backlog.md` |
+| 13 | Module-owned Clean Architecture | **Done** (2026-09-03) — ten projects, six modules, five schemas |
+| 14 | Skill vocabulary (aliases) | **Done** (2026-09-03) — 228 skills, 322 aliases, resolved inside `SkillCatalog` |
+| **11, last** | Authentication & owner scoping | Planned, deliberately last — ships before whatever deploy replaces Phase 10 |
 
 Phases 1–6 keep the numbers they shipped under; 7 onward were renumbered on
 2026-09-01 into build order, ranked by which work gets *more expensive the longer
 it waits*. Phase 10 was formerly "Phase 3" and Phase 12 formerly "Phase 7".
+Phase 11 runs *after* 12 and kept its number anyway — see `architecture.md`
+decision 22 for the cost that buys and the churn it avoids.
 
 Full detail for each phase, including cost notes and interview talking
 points, is in [`docs/`](docs/README.md) — start with the index there.

@@ -9,8 +9,9 @@ web
 ## Stack
 
 The backend is an existing codebase and answers for itself: ASP.NET Core on
-`net10.0`, PostgreSQL via EF Core, REST + GraphQL (HotChocolate) on one Lambda-
-targeted deployable. See `docs/architecture.md`.
+`net10.0`, PostgreSQL via EF Core, REST + GraphQL (HotChocolate) in one
+container. **Not deployed** — the AWS target was dropped 2026-09-04 and a free
+host is still to be chosen (decision 22). See `docs/architecture.md`.
 
 The **front end is greenfield**, and the stack was confirmed with the user:
 
@@ -19,7 +20,8 @@ The **front end is greenfield**, and the stack was confirmed with the user:
 - **Vite** + **react-router** — confirmed 2026-08-29. Vite because
   `src/appsettings.Development.json` already allows `http://localhost:5173` in
   `Cors:AllowedOrigins`, and because it builds to static files, which keeps the
-  parked deploy plan (S3 static hosting, $0; now Phase 10) viable unchanged. Accepted
+  front end deployable as static files for ~$0 on any host — which is what let the
+  AWS drop cost the front end nothing. Accepted
   trade-off: no SSR, and routing is an explicit dependency rather than free.
 - **dnd-kit** for drag and drop, **lucide-react** for icons, and **no component
   kit** — CSS is hand-rolled.
@@ -93,9 +95,10 @@ let any copy imply otherwise.
   free. The app auto-migrates on startup in Development only.
 - Backend on `http://localhost:5080`; Swagger at `/swagger` and the GraphQL Nitro
   IDE at `/graphql`, both Development-only. Front end will serve on `:5173`.
-- **Deployment is parked, not blocked** (Phase 10, formerly Phase 3). The plan is complete, costs
-  $0/month, and nothing about it expires. The front end therefore ships running
-  locally; a public URL is gated behind un-parking the deploy.
+- **Deployment is DROPPED, not deferred** (2026-09-04). AWS is not the target and
+  a free replacement is still to be chosen, so the front end ships running locally
+  and a public URL is gated behind that choice. **Auth (Phase 11) moved to last in
+  the same decision** and ships before whatever deploy replaces it.
 - Work proceeds in **phases that each end in something runnable**, because the
   author has a history of abandoning projects when scope goes fuzzy. Phase 6 is
   the front end, staged 6.1–6.4 for exactly that reason.
@@ -113,9 +116,10 @@ reads, and the ATS check. 228 tests green.
 
 - **Cost stays near-zero. Nothing in the deployed architecture may bill per
   hour.** This is a hard rule, produced by the deploy phase's decision to drop RDS for
-  Neon's free tier. Never propose always-on infrastructure without flagging cost
-  explicitly. The AWS account has **no free tier left**, so "t3.micro is free"
-  advice does not apply.
+  Neon's free tier — **it was never an AWS rule, and it outlived the AWS target.**
+  It is the test any replacement host must pass. Never propose always-on
+  infrastructure without flagging cost explicitly. The AWS account has **no free
+  tier left**, so "t3.micro is free" advice does not apply if AWS is reconsidered.
 - **Update is `PATCH`, not `PUT`.** `PUT /applications/{id}` is a 405.
 - **Enums serialize by name** — `"Interviewing"` over REST, `INTERVIEWING` over
   GraphQL. The real status set is Applied, Interviewing, Offer, Rejected,
