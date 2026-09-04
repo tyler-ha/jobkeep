@@ -584,8 +584,15 @@
 /* ---- Responsive --------------------------------------------------------- */
 
 @media (max-width: 900px) {
+  /* Stacked, so the nav is now a ROW rather than a column. It has to be told to
+   * hug its content: .shell carries min-height:100vh, and a grid's default
+   * stretch hands the leftover height to the rows -- which on a short screen
+   * inflated the collapsed nav from its 84px of content to 185px of dark teal.
+   * Measured on Applications with one result; Upload hid it by being tall
+   * enough to leave nothing over. auto/1fr gives the slack to .main instead. */
   .shell {
     grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
   }
   .nav {
     position: static;

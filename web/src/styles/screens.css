@@ -75,6 +75,20 @@
   gap: var(--s-1);
 }
 
+/* Both screens that use .tabs put it somewhere different, so the spacing cannot
+ * live on .tabs itself. On Applications it sits inside .toolbar, a flex row that
+ * already gaps it; a margin there would double up. On Upload it is a bare child
+ * of .main, which is display:block with no gap, so it had none at all and sat
+ * flush against the form above and the list below. Hence the child combinator —
+ * it names the context that lacks rhythm rather than the component.
+ *
+ * Asymmetric on purpose: --s-5 above matches the screen-head-to-panel step, and
+ * --s-4 below is tighter so the filter reads as belonging to the list it
+ * filters rather than floating between the two blocks. */
+.main > .tabs {
+  margin: var(--s-5) 0 var(--s-4);
+}
+
 .tab {
   display: inline-flex;
   align-items: center;
