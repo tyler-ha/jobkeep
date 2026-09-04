@@ -25,17 +25,18 @@ import { formatDateOnly } from '../lib/format';
 /* The list you live in during a search.
  *
  * The tiebreak in PRODUCT.md says the tool wins, so this is a dense table
- * rather than a feed of cards: five columns you can scan down, sorting on the
+ * rather than a feed of cards: columns you can scan down, sorting on the
  * headers instead of a toolbar control, and no row taller than it needs to be.
  *
- * Two things the approved artboard shows that the frozen API cannot serve, both
- * recorded as deviations in docs/phases/phase-6-frontend.md:
+ * The "CV match" column was dropped when this screen shipped, because filling it
+ * meant a request per row. PHASE 9, GAP 1 BROUGHT IT BACK: ApplicationListItem
+ * now carries a `match` summary, batched server-side over the page's ids through
+ * IMatchContract, so the column costs one query for the whole page rather than
+ * one per row. The skills column stayed — it was never a substitute, and both fit.
  *
- *  - The "CV match" column (0/9, 5/7, "not checked"). ApplicationListItem has
- *    no match data and the GraphQL surface exposes flat root fields, so the only
- *    ways to fill it are a per-row request — an N+1 on a list — or a backend
- *    change. It is dropped here and logged as Phase 7 work. The skills the ad
- *    names take the column instead, which the list endpoint does return.
+ * One thing the approved artboard shows that the API still cannot serve, recorded
+ * as a deviation in docs/phases/phase-6-frontend.md:
+ *
  *  - A single "Search company or role" box. The API's company and title filters
  *    are ANDed, so one box across both is not one request. The box carries a
  *    field selector instead, which is one request and says what it is doing.
@@ -61,6 +62,11 @@ const COLUMNS: { label: string; field?: ApplicationSort; className?: string }[] 
   { label: 'Company', field: 'Company' },
   { label: 'Role', field: 'Title' },
   { label: 'Skills the ad names', className: 'col-skills' },
+  /* Phase 9, gap 1. No sort field: ApplicationSort has no match option, and
+     adding one would mean ordering the list by another module's table — which is
+     a join this module deliberately does not have. Sorting by a column the server
+     fills from a contract call is a different feature, not a free one. */
+  { label: 'CV match', className: 'col-match' },
   { label: 'Status', field: 'Status' },
   { label: 'Applied', field: 'DateApplied', className: 'col-date' },
   /* Phase 8. No sort field: there is nothing to order by, it is a button. The
@@ -552,6 +558,18 @@ function Row({
             {a.skills.slice(0, 4).join(' · ')}
             {a.skills.length > 4 && <span className="quiet"> +{a.skills.length - 4}</span>}
           </span>
+        )}
+      </td>
+      <td className="col-match">
+        {/* Phase 9, gap 1. `match` is null for every application nobody has run
+            the check on, which is most of them — so the absence is rendered as a
+            sentence rather than left to fall through as an empty cell. "not
+            checked" says the check has not happened; an empty cell would read as
+            "checked, and it found nothing". */}
+        {a.match ? (
+          `${a.match.matched}/${a.match.total}`
+        ) : (
+          <span className="quiet">not checked</span>
         )}
       </td>
       <td>

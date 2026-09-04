@@ -168,6 +168,18 @@ export interface ApplicationListItem {
    *  inferred from the request because a component re-rendering off cached data
    *  no longer knows which request produced it. */
   isArchived: boolean;
+  /** Phase 9, gap 1. NULL MEANS NEVER CHECKED — which is most rows, so render the
+   *  absence rather than letting it fall through as `undefined`. Mirrors
+   *  MatchSummary in src/Jobkeep.Contracts/Match/IMatchContract.cs. */
+  match: MatchSummary | null;
+}
+
+/** The two numbers a list row shows as "5/7". Deliberately not the keyword lists
+ *  and deliberately not the checked-at date: the detail screen has both, and a
+ *  column six characters wide should not cost five text[] columns per row. */
+export interface MatchSummary {
+  matched: number;
+  total: number;
 }
 
 /** The list is paged. A concrete page type rather than a generic, because

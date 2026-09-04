@@ -1,13 +1,13 @@
 # Phase 9 — the three reads the front end asked for and could not get
 
-**Status: IN PROGRESS.** **Gaps 2 and 3 are DONE (2026-09-04)** — gap 2 took the
-suite 314 → 323 and web 52 → 53, gap 3 took it 323 → 328 and web 53 → 54. Neither
-needed a migration. **Only gap 1 is left, and it needs a design decision before any
-code** (see premise 1 in the box below). They were taken in that order because gap
-1 is the only one of the three with an open question in it.
+**Status: DONE (2026-09-04).** All three gaps shipped the same day: gap 2 took the
+suite 314 → 323 and web 52 → 53, gap 3 took it 323 → 328 and web 53 → 54, gap 1
+took it 328 → 332 and web 54 → 55. **No migration in any of them.** They were taken
+in that order because gap 1 was the only one of the three with an open question in
+it, and that question is answered in ["Gap 1, as built"](#gap-1-as-built).
 
-What each shipped is at the bottom: ["Gap 2, as built"](#gap-2-as-built) and
-["Gap 3, as built"](#gap-3-as-built).
+What each shipped is at the bottom: ["Gap 2, as built"](#gap-2-as-built),
+["Gap 3, as built"](#gap-3-as-built) and ["Gap 1, as built"](#gap-1-as-built).
 
 > **Three premises in this plan expired after it was written (checked 2026-09-04).
 > Read this box before anything below it.**
@@ -20,7 +20,8 @@ What each shipped is at the bottom: ["Gap 2, as built"](#gap-2-as-built) and
 >    `CLAUDE.md`: does it name a **fact about the thing**, or a **question the
 >    caller has about its own feature**? A per-application match summary for a list
 >    row is arguably the second kind, which is the design question item 1 actually
->    opens. **Settle that before writing code.**
+>    opens. **Settle that before writing code.** — **SETTLED, and the *arguably*
+>    went the other way: it names a fact about the row.** See "Gap 1, as built".
 > 2. **`Ats` is `Match` and `ats_results` is `match_results`** (renamed 2026-09-04).
 >    The module is `Jobkeep.Modules.Match`, the contract `Jobkeep.Contracts.Match`,
 >    the routes `/applications/{id}/match-check`. The Postgres *schema* is still
@@ -286,4 +287,88 @@ well as the suite: `GET /applications/board`, the GraphQL field, `swagger.json`
 still answering 200 (the whole document 500s if one route is unrepresentable), and
 `/applications/{id}` still resolving — `board` cannot shadow it, because the route
 constraint says `{id:guid}`.
+
+---
+
+## Gap 1, as built
+
+`ApplicationListItem` gained one nullable field, `MatchSummary? Match`, and the
+Applications screen got back the "CV match" column it shipped without in 6.3.
+**Null means never checked**, which is most rows.
+
+### The decision the plan got wrong, and how it was settled
+
+The plan said projecting `match_results` into a list row was "legal under decision
+17 and needs no contract", so "a change to one projection expression, not an
+architectural one". **Phase 13 reversed decision 17**: every crossing needs a
+contract now, reads included. So the real question was not *may Applications read
+this table* — it may not — but *does this belong on `IMatchContract` at all*, and
+`CLAUDE.md`'s test is the one to apply: **does it name a fact about the thing, or a
+question the caller has about its own feature?**
+
+It names a fact, and the three checks `CountResultsForResumeAsync` passed it passes
+too. `match_results` is 1:1 with an application and already stores these three
+lists; Applications cannot see the table, cannot derive the answer from anything it
+owns, and learns nothing about match checking by asking. The counter-example is the
+one already settled in 13.2e: the ATS skill gap did **not** become a fifth method on
+`IPostingContract`, because a set difference between an ad's skills and a CV's is
+Match's own feature assembled out of two facts. **This is the fact, not the feature.**
+
+So: `IMatchContract.GetSummariesAsync(ids)` — batched, keyed by application id,
+absent means never checked. The same shape `ISkillCatalog.GetAsync` has, and for the
+same reason: the caller is a list, and one call per row is the N+1 the front end
+dropped the column rather than ship.
+
+### Two integers, and what was deliberately left out
+
+`MatchSummary(int Matched, int Total)`. `Total` is matched + both missing buckets —
+every skill the ad named — which is what makes the pair readable as a fraction
+without a legend. Summed on the server rather than sent as three numbers, because
+the screen renders one fraction and three numbers on the wire is three things a
+client can add up differently.
+
+Left out on purpose: the keyword lists, `CheckedAtUtc`, the warning, and the
+must-have/nice-to-have split. **A stale check and a fresh one look identical in this
+column** — that is the column's ceiling, not an oversight, and the detail screen is
+one click away. The warning is the one worth stating: it means the model was
+unreachable, and the model contributes nothing to these two numbers (three of the
+check's four stages need no model), so a warned check's fraction is as correct as an
+unwarned one's.
+
+The counts are computed **in SQL**. `.Count` on a `List<string>` mapped to a Postgres
+`text[]` translates to `cardinality()`, so the five array columns of every stored
+check stay in the database.
+
+### This does not reopen A1
+
+A1 was precisely about a match result being dragged into a list row, so the
+exhaustive field assertion in `ListApplicationsTests` needed a second look rather
+than a one-word edit. Two reasons it holds: the row carries **two integers**, not the
+stored check, and it does not arrive by an include at all — an include graph is not
+available to a module that cannot see the table. That assertion still fails the
+moment anyone reintroduces an eager load.
+
+### The front end, and the half that was not built
+
+`web/src/lib/api.ts` mirrors the record, `Applications.tsx` renders `5/7` or a quiet
+`not checked`, and `screens.css` gives the column tabular figures so the fractions
+line up down a column that is scanned rather than read. **The column is not
+sortable**, and that is deliberate: `ApplicationSort` has no match option, and adding
+one would mean ordering the list by another module's table — a join this module does
+not have. Sorting on a column the server fills from a contract call is a different
+feature, not a free one.
+
+**Today's "these three have never been checked against a CV" was not built.** The
+plan named it as the second caller, and the second caller is what justified doing the
+work — but Today has no dropped affordance waiting for it the way Applications did,
+and the copy it would replace is not currently telling a lie. It is a screen change
+with a design question in front of it, and it belongs in `docs/backlog.md` rather
+than being invented here.
+
+### Verified
+
+Suite **332/332**, web **55/55**, oxlint clean apart from the same pre-existing
+warning. Checked live against the running stack: `GET /applications` returns a real
+stored fraction (`3/16` on the Acme Systems row in local dev) and `swagger.json`
+still answers 200.
 

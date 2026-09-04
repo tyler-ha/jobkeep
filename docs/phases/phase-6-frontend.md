@@ -226,16 +226,21 @@ quietly dropped. The artboards were **not** re-cut; they remain the approved
 record, and the code is deliberately ahead of them — as it already was on the
 3px left border.
 
-**1. The "CV match" column on Applications is gone.** The artboard shows
-`0/9`, `5/7`, `not checked` per row. `ApplicationListItem` carries no ATS data,
-and the GraphQL surface cannot help either — `Query.cs` exposes flat root fields,
-so there is no nested `atsResult` to select. That leaves a per-row
-`GET /applications/{id}/ats-check` — an N+1 on a list, which is not a thing to
-defend out loud — or a backend change. The column is dropped, and **the skills
-the ad names take its place**, which the list endpoint does return. The backend
-change is logged in Phase 7: projecting `ats_results` into the list is a *read*
-across a module boundary and therefore legal under decision 17, so it is a small
-slice change rather than an architectural one.
+**1. ~~The "CV match" column on Applications is gone.~~ FIXED — Phase 9, gap 1
+(2026-09-04).** The artboard shows `0/9`, `5/7`, `not checked` per row.
+`ApplicationListItem` carried no match data, and the GraphQL surface could not help
+either — `Query.cs` exposes flat root fields, so there was no nested `matchResult`
+to select. That left a per-row `GET /applications/{id}/match-check` — an N+1 on a
+list, which is not a thing to defend out loud — or a backend change. The column was
+dropped and **the skills the ad names took the space**.
+
+The backend change shipped as Phase 9 gap 1, and **not** the way this paragraph
+predicted: it said the projection was legal under decision 17 and therefore a small
+slice change. Phase 13 reversed decision 17, so it needed a method on
+`IMatchContract` — one batched call per page, `MatchSummary(Matched, Total)`, null
+for never checked. The column is back and the skills column stayed; they were never
+substitutes for each other. See "Gap 1, as built" in
+[`phase-9-api-gaps.md`](phase-9-api-gaps.md).
 
 **2. The `Closed` filter tab is gone.** `ApplicationQuery.Status` takes one
 `ApplicationStatus`, so "Closed" would be two requests whose union cannot be

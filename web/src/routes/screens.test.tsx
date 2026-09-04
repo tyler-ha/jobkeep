@@ -52,6 +52,19 @@ describe('every screen renders', () => {
     expect(await screen.findByRole('group', { name: 'Filter by status' })).toBeTruthy();
   });
 
+  /* Phase 9, gap 1 — the CV match column, back after being dropped in 6.3.
+   *
+   * Both halves in one test on purpose: the fixture's two rows are one checked
+   * and one not, and it is the UNCHECKED one that fails silently. A cell written
+   * as {a.match.matched}/{a.match.total} throws, but a cell written as
+   * {a.match?.matched}/{a.match?.total} renders "/" — a plausible-looking empty
+   * fraction that no assertion about the checked row would ever catch. */
+  it('Applications shows the CV match fraction, and says so when there is no check', async () => {
+    at('/applications');
+    expect(await screen.findByText('5/7')).toBeTruthy();
+    expect(await screen.findByText('not checked')).toBeTruthy();
+  });
+
   /* Phase 8 — the archive, its undo, and the empty state that had only one
    * meaning. Grouped here rather than in a file of their own because they are
    * the same screen as the two tests above and share its stub. */

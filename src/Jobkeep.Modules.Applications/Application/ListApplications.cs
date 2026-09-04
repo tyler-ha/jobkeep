@@ -1,3 +1,4 @@
+using Jobkeep.Contracts.Match;
 using Jobkeep.Contracts.Shared;
 using Jobkeep.Contracts.Skills;
 using Jobkeep.Modules.Applications.Domain;
@@ -110,7 +111,16 @@ public record ApplicationListItem(
     // mixed page has to be rendered, and a client that cannot tell which rows are
     // archived would have to infer it from the request it made, which is the kind
     // of state a UI gets wrong on the second render.
-    bool IsArchived);
+    bool IsArchived,
+    // PHASE 9, gap 1. NULL MEANS NEVER CHECKED, which is the common case and the
+    // one the screen has to render — so it is a nullable object rather than two
+    // nullable integers that could disagree about whether a check exists.
+    //
+    // It comes from IMatchContract, not from a join: `match_results` is Match's
+    // table and this module cannot see it. That is one extra query per page,
+    // batched over the page's ids, which is the cost the Applications screen
+    // dropped its "CV match" column rather than pay as an N+1 per row.
+    MatchSummary? Match);
 
 // A concrete page type rather than a generic PagedResult<T>. HotChocolate names
 // GraphQL types after the CLR type, and a generic would land in the schema as
@@ -139,11 +149,14 @@ public class ListApplicationsHandler : IRequestHandler<ListApplications, SliceRe
 
     private readonly ApplicationsDbContext _db;
     private readonly ISkillCatalog _skills;
+    private readonly IMatchContract _matches;
 
-    public ListApplicationsHandler(ApplicationsDbContext db, ISkillCatalog skills)
+    public ListApplicationsHandler(
+        ApplicationsDbContext db, ISkillCatalog skills, IMatchContract matches)
     {
         _db = db;
         _skills = skills;
+        _matches = matches;
     }
 
     // The page shape SQL can produce. Its skills are ids, because `skills` is
@@ -314,6 +327,12 @@ public class ListApplicationsHandler : IRequestHandler<ListApplications, SliceRe
         var names = await _skills.GetAsync(
             page.SelectMany(r => r.SkillIds).ToList(), ct);
 
+        // PHASE 9, gap 1 — the same shape, one call for the whole page. An id with
+        // no entry has never been checked, which is why this is a lookup rather
+        // than a list to be zipped: the answer for most rows is "there isn't one".
+        var matches = await _matches.GetSummariesAsync(
+            page.Select(r => r.Id).ToList(), ct);
+
         var items = page
             .Select(r => new ApplicationListItem(
                 r.Id,
@@ -332,7 +351,8 @@ public class ListApplicationsHandler : IRequestHandler<ListApplications, SliceRe
                     .Select(id => names[id].Name)
                     .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
                     .ToList(),
-                r.IsArchived))
+                r.IsArchived,
+                matches.GetValueOrDefault(r.Id)))
             .ToList();
 
         return SliceResult<ApplicationPage>.Ok(new ApplicationPage(

@@ -44,6 +44,10 @@ export const listPage: ApplicationPage = {
       /* Phase 8. The default list can only ever hold live rows, so false is the
        * honest fixture — a test that wants an archived row sets it explicitly. */
       isArchived: false,
+      /* Phase 9, gap 1. One row checked and one not, across the two items, because
+       * the pair is what the CV-match column has to render and "not checked" is the
+       * one that fails silently if the cell reads the field without guarding it. */
+      match: { matched: 5, total: 7 },
     },
     {
       id: 'a1f74664-0000-4000-8000-000000000003',
@@ -54,6 +58,7 @@ export const listPage: ApplicationPage = {
       dateApplied: '2026-08-20',
       skills: ['Go', 'Kubernetes'],
       isArchived: false,
+      match: null,
     },
   ],
   totalCount: 2,
