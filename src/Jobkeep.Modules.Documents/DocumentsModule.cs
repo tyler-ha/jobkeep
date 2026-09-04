@@ -6,10 +6,20 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Jobkeep.Modules.Documents;
 
-// Configuration for document import. A plain class registered as a singleton
-// rather than IOptions<T>, matching AiOptions: nothing here reloads, and
-// IOptions buys change-notification this project has no use for while costing an
-// unwrap in every handler.
+// Configuration for document import, bound from the "Documents" section of
+// appsettings. A plain class registered as a singleton rather than IOptions<T>,
+// matching AiOptions: nothing here reloads, and IOptions buys change-notification
+// this project has no use for while costing an unwrap in every handler.
+//
+// The defaults below and the values in appsettings.json are EQUAL, and are meant
+// to stay equal — the JSON exists so the limits are reviewable without reading
+// C#, not so they can drift. Note the direction that creates: appsettings now
+// WINS, so a typo there silently changes a limit that used to be unchangeable.
+// The reasoning for each number stays here, beside the property; the JSON carries
+// the value and one line on what it protects.
+//
+// ParseInBackground is the exception and is deliberately NOT in appsettings —
+// see its own comment below.
 public class DocumentOptions
 {
     // The hard size cap, checked before anything parses. 5 MB is generous for a

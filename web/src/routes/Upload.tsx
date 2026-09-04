@@ -333,12 +333,13 @@ function Uploader({
     }
   }
 
-  /* The paste threshold, and it is a MIRROR of DocumentOptions.MinTextChars —
-   * the server refuses below it with a sentence naming the number. Duplicated
-   * on purpose rather than fetched: the client copy only decides when the
-   * button lights up, and a disabled button that agrees with the server is
-   * worth more than a round trip to learn a constant. If the server's value
-   * moves, this becomes merely optimistic, not wrong. */
+  /* The paste threshold, and it is a MIRROR of the server's Documents:MinTextChars
+   * (src/Jobkeep.Api/appsettings.json, bound to DocumentOptions) — the server
+   * refuses below it with a sentence naming the number. Duplicated on purpose
+   * rather than fetched: the client copy only decides when the button lights up,
+   * and a disabled button that agrees with the server is worth more than a round
+   * trip to learn a constant. If the server's value moves, this becomes merely
+   * optimistic, not wrong. */
   const ready = source === 'file' ? !!file : text.trim().length >= 40;
 
   /* Three cues, not one. --pop is 1.45 on the ground, under WCAG's 3.0 non-text

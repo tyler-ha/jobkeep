@@ -288,6 +288,19 @@ internal sealed class RequirementExtraction
 // gate. The rest of the widths live as literals beside CommitImport's Clip
 // calls, because each is used exactly once and a table of constants far from
 // the code that uses them is harder to check against the migration, not easier.
+//
+// AND THESE ARE NOT IN appsettings.json, DELIBERATELY — unlike DocumentOptions,
+// which is next door and is entirely config. The distinction is what the number
+// describes. DocumentOptions holds POLICY: how big an upload we are willing to
+// accept, how short a paste we will refuse. Those are judgement calls, and a
+// deployment is allowed a different one. Everything here is a COLUMN WIDTH, and
+// each must equal the width in the migration.
+//
+// A settings value that disagrees with varchar(20000) does not widen the column.
+// It only moves the failure — from a clip this code controls to an INSERT that
+// 500s — and it moves it from the developer who changed it to the user who
+// happened to paste a long advertisement. A number that cannot be changed
+// without a migration is a constant, whatever file it is stored in.
 internal static class DraftLimits
 {
     public const int MaxLabelLength = 100;
