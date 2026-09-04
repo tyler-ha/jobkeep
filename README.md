@@ -30,8 +30,8 @@ while building demonstrable C# + cloud + AI integration experience.
 | 5 | ATS compatibility check | Done — deterministic skill gap + one model call; no score, on purpose |
 | 6 | Front end (React + Vite, eight screens) | In progress — screens built and tested; visual pass + README remain |
 | 7 | Data integrity, audit baseline & the case-insensitive dedup key | **Done** — one migration; F7/F8/F11/F12/F13/F14 closed, 239 tests |
-| 8 | Soft delete / archive | Planned — rides Phase 7's index migration |
-| 9 | The three reads the front end could not get | Planned — found by building the screens |
+| 8 | Soft delete / archive | **Done** — archive + undo, two migrations, three views re-cut |
+| 9 | The three reads the front end could not get | **In progress** — the status set landed; two gaps left |
 | 10 | Deploy to AWS Lambda (Function URL) + Neon Postgres | **Dropped** (2026-09-04) — a different free host, later |
 | 12 | Feature expansion | Placeholder — pulls from `docs/backlog.md` |
 | 13 | Module-owned Clean Architecture | **Done** (2026-09-03) — ten projects, six modules, five schemas |

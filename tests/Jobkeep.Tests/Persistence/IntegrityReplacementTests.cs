@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using Jobkeep.Contracts.Applications;
 using Jobkeep.Contracts.Match;
 using Jobkeep.Contracts.Shared;
@@ -68,8 +68,12 @@ public sealed class IntegrityReplacementTests(PostgresFixture fixture) : Integra
     }
 
     [Fact]
-    public async Task DeletingAnUnusedPosting_TakesItsSkillsAndRequirements_AndLeavesTheCompany()
+    public async Task ArchivingAnUnusedPosting_KEEPSItsSkillsAndRequirements_AndLeavesTheCompany()
     {
+        // PHASE 8 flipped the two middle assertions. DeleteBehaviourTests carries the
+        // full argument; the short version is that no DELETE reaches Postgres, so the
+        // CASCADEs on posting_skills and job_requirements never fire, and the ad keeps
+        // everything it needs to come back whole.
         var applicationId = await Client.CreateApplicationAsync("Xero", "Senior Engineer", Ct);
         (await Client.AddSkillAsync(applicationId, "C#", Ct)).EnsureSuccessStatusCode();
         (await Client.AddRequirementAsync(applicationId, "5+ years .NET", Ct)).EnsureSuccessStatusCode();
@@ -80,8 +84,8 @@ public sealed class IntegrityReplacementTests(PostgresFixture fixture) : Integra
 
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
         Assert.Equal(0, await WithDbAsync(db => db.JobPostings.CountAsync(Ct)));
-        Assert.Equal(0, await WithDbAsync(db => db.PostingSkills.CountAsync(Ct)));
-        Assert.Equal(0, await WithDbAsync(db => db.JobRequirements.CountAsync(Ct)));
+        Assert.Equal(1, await WithDbAsync(db => db.PostingSkills.CountAsync(Ct)));
+        Assert.Equal(1, await WithDbAsync(db => db.JobRequirements.CountAsync(Ct)));
 
         // The company survives its last posting, and the shared skill survives its last
         // link. Both are RESTRICT-by-design rather than oversights: a company you once
@@ -104,12 +108,15 @@ public sealed class IntegrityReplacementTests(PostgresFixture fixture) : Integra
     }
 
     [Fact]
-    public async Task DeletingAPosting_OverGraphQL_RemovesTheAnalysisToo()
+    public async Task ArchivingAPosting_OverGraphQL_KeepsTheAnalysisToo()
     {
-        // The same replacement through the other surface. It matters because the
-        // notification is published by the HANDLER, not by the route, so a mutation that
-        // reached the handler by a different path — or bypassed it, as GraphQL's writes
-        // did before Phase 2.3 — would silently skip the subscriber.
+        // The same behaviour through the other surface, and it is worth keeping for the
+        // reason it was written: whatever the delete does, both surfaces must do it. It
+        // used to prove that a mutation reaching the handler published the notification;
+        // it now proves that neither surface publishes one, which is the same guarantee
+        // pointed the other way. A GraphQL client that destroyed an analysis a REST
+        // client only hid would be surface-specific behaviour — finding A4's whole
+        // subject.
         var applicationId = await Client.CreateApplicationAsync("REA Group", "Engineer", Ct);
         var postingId = await PostingIdAsync(applicationId);
         await SeedAnalysisAsync(postingId);
@@ -121,7 +128,14 @@ public sealed class IntegrityReplacementTests(PostgresFixture fixture) : Integra
 
         Assert.False(result.HasErrors, result.FirstErrorMessage);
         Assert.Equal(0, await WithDbAsync(db => db.JobPostings.CountAsync(Ct)));
-        Assert.Equal(0, await WithDbAsync(db => db.AiAnalyses.CountAsync(Ct)));
+        Assert.Equal(1, await WithDbAsync(db => db.AiAnalyses.CountAsync(Ct)));
+
+        // Restored over GraphQL too, so the undo has the same parity the archive does.
+        var restored = await GraphQL.QueryAsync(
+            "mutation ($id: UUID!) { restorePosting(id: $id) }",
+            new { id = postingId });
+        Assert.False(restored.HasErrors, restored.FirstErrorMessage);
+        Assert.Equal(1, await WithDbAsync(db => db.JobPostings.CountAsync(Ct)));
     }
 
     // -----------------------------------------------------------------------
@@ -174,8 +188,13 @@ public sealed class IntegrityReplacementTests(PostgresFixture fixture) : Integra
     }
 
     [Fact]
-    public async Task DeletingAnUnusedResume_TakesItsSkillsExperiencesAndEducations()
+    public async Task ArchivingAnUnusedResume_KEEPSItsSkillsExperiencesAndEducations()
     {
+        // PHASE 8, same flip as the posting: the three CASCADEs a résumé has are all
+        // Documents' own, and none of them fire, because the DELETE that would have
+        // triggered them is now an UPDATE. The parsed skills, jobs and qualifications
+        // are the expensive part of a résumé — they cost a model call to produce — so a
+        // restore that lost them would be a re-import wearing an undo's clothes.
         var resumeId = await SeedResumeAsync("draft");
         await WithDbAsync(async db =>
         {
@@ -202,14 +221,19 @@ public sealed class IntegrityReplacementTests(PostgresFixture fixture) : Integra
 
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
         Assert.Equal(0, await WithDbAsync(db => db.Resumes.CountAsync(Ct)));
-        Assert.Equal(0, await WithDbAsync(db => db.ResumeSkills.CountAsync(Ct)));
-        Assert.Equal(0, await WithDbAsync(db => db.ResumeExperiences.CountAsync(Ct)));
-        Assert.Equal(0, await WithDbAsync(db => db.ResumeEducations.CountAsync(Ct)));
+        Assert.Equal(1, await WithDbAsync(db => db.ResumeSkills.CountAsync(Ct)));
+        Assert.Equal(1, await WithDbAsync(db => db.ResumeExperiences.CountAsync(Ct)));
+        Assert.Equal(1, await WithDbAsync(db => db.ResumeEducations.CountAsync(Ct)));
 
         // The shared skill row is untouched. Since 13.3b it is another module's table in
         // another schema, so this delete could not have reached it even by accident —
         // which is the property the split was for.
         Assert.Equal(1, await WithDbAsync(db => db.Skills.CountAsync(Ct)));
+
+        // And the document comes back whole.
+        (await Client.PostAsync($"/resumes/{resumeId}/restore", null, Ct))
+            .EnsureSuccessStatusCode();
+        Assert.Equal(1, await WithDbAsync(db => db.Resumes.CountAsync(Ct)));
     }
 
     [Fact]

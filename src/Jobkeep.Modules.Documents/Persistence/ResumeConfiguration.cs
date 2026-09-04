@@ -40,6 +40,30 @@ public class ResumeConfiguration : IEntityTypeConfiguration<Resume>
         e.Property(r => r.LabelNormalized)
             .HasMaxLength(100)
             .HasComputedColumnSql("lower(\"Label\")", stored: true);
-        e.HasIndex(r => r.LabelNormalized).IsUnique();
+        // PHASE 8 MADE IT FILTERED, and this is the one index change soft delete
+        // actually forces rather than merely suggests.
+        //
+        // Without the filter, archiving "backend" would keep its row in the
+        // unique index forever, and the next import under that label would be
+        // refused by a constraint naming a résumé the user can no longer see.
+        // The label would be burned by an action the UI calls "archive". With
+        // it, archiving frees the name and re-import behaves as it always has.
+        //
+        // The cost is real and is paid in RestoreResume: a restore can now fail,
+        // because something may have taken the label in between. That is a 400
+        // with a sentence, and it is the honest trade — a name the user can
+        // reuse, against a restore that is conditional rather than guaranteed.
+        //
+        // `NOT "IsDeleted"` rather than `"IsDeleted" = false`: same predicate,
+        // and Postgres records the index predicate verbatim, so this is the form
+        // `pg_dump` will show and the form a future migration has to match
+        // character-for-character to be seen as unchanged.
+        e.HasIndex(r => r.LabelNormalized).IsUnique().HasFilter("NOT \"IsDeleted\"");
+
+        // PHASE 8 — soft delete. Nothing else in this module is archivable, so
+        // there is no filtered/unfiltered relationship pairing to get wrong here:
+        // resume_skills, resume_experiences and resume_educations are children
+        // that survive an archive by construction.
+        e.HasQueryFilter(r => !r.IsDeleted);
     }
 }

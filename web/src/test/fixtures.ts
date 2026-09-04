@@ -40,6 +40,9 @@ export const listPage: ApplicationPage = {
        * it and the cutoff comparison is actually exercised. */
       dateApplied: '2020-01-15',
       skills: ['C#', '.NET', 'PostgreSQL', 'AWS', 'Docker'],
+      /* Phase 8. The default list can only ever hold live rows, so false is the
+       * honest fixture — a test that wants an archived row sets it explicitly. */
+      isArchived: false,
     },
     {
       id: 'a1f74664-0000-4000-8000-000000000003',
@@ -49,6 +52,7 @@ export const listPage: ApplicationPage = {
       status: 'Interviewing',
       dateApplied: '2026-08-20',
       skills: ['Go', 'Kubernetes'],
+      isArchived: false,
     },
   ],
   totalCount: 2,
@@ -133,6 +137,7 @@ export const resumes: ResumeSummary[] = [
     skillCount: 3,
     createdAtUtc: '2026-08-20T01:00:00Z',
     updatedAtUtc: '2026-08-28T01:00:00Z',
+    isArchived: false,
   },
 ];
 
@@ -292,6 +297,16 @@ export function stubFetch() {
         JSON.stringify({ detail: 'This posting has no description to analyze. Add one first.' }),
         { status: 400, headers: { 'Content-Type': 'application/json' } },
       );
+    /* Phase 8. DELETE archives and POST /restore undoes it; both answer 204 with
+       no body, which is what the real routes do (ToHttpResult(_ => NoContent)).
+       Neither is given a fixture that changes `listPage`, deliberately — these
+       tests are about what the screen DOES when the call succeeds, and a stub
+       that also simulated the server's filtering would be testing the stub. */
+    if (path === `/applications/${APP_ID}` && method === 'DELETE')
+      return new Response(null, { status: 204 });
+    if (path === `/applications/${APP_ID}/restore` && method === 'POST')
+      return new Response(null, { status: 204 });
+
     if (path === `/applications/${APP_ID}`) return ok(detail);
 
     throw new Error(`No fixture for ${method} ${path}`);

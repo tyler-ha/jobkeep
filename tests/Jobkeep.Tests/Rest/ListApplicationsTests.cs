@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Jobkeep.Contracts.Skills;
@@ -324,7 +324,10 @@ public sealed class ListApplicationsTests(PostgresFixture fixture) : Integration
         var item = Assert.Single((await ListAsync(string.Empty)).Items);
 
         Assert.Equal(
-            new[] { "company", "dateApplied", "id", "location", "skills", "status", "title" },
+            // "isArchived" joined the list in Phase 8. It is a flag, not a payload — the
+            // reason a list item carries it is in ApplicationListItem — so it does not
+            // reopen A1, and this assertion staying exhaustive is what proves that.
+            new[] { "company", "dateApplied", "id", "isArchived", "location", "skills", "status", "title" },
             item.EnumerateObject().Select(p => p.Name).OrderBy(n => n, StringComparer.Ordinal));
 
         // Named explicitly because these two are the ones that matter: the ad text is

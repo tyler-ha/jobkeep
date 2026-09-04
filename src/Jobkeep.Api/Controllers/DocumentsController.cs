@@ -1,4 +1,4 @@
-﻿using Jobkeep.Modules.Documents;
+using Jobkeep.Modules.Documents;
 using Jobkeep.Modules.Documents.Domain;
 using Jobkeep.SharedKernel;
 using Mediator;
@@ -222,9 +222,12 @@ public class DocumentsController : ControllerBase
     [HttpGet("~/resumes")]
     [EndpointSummary("List resume versions, newest-updated first.")]
     public async Task<IResult> ListResumes(
+        // PHASE 8. A bare bool with a default, not a query object — ListResumes.cs
+        // says why, and says when to change it.
+        [FromQuery] bool includeArchived,
         [FromServices] ISender sender,
         CancellationToken ct)
-        => (await sender.Send(new ListResumes(), ct)).ToHttpResult();
+        => (await sender.Send(new ListResumes(includeArchived), ct)).ToHttpResult();
 
     // GET /resumes/{id} — one resume in full, text included.
     [HttpGet("~/resumes/{id:guid}")]
@@ -249,4 +252,16 @@ public class DocumentsController : ControllerBase
         [FromServices] ISender sender,
         CancellationToken ct)
         => (await sender.Send(new DeleteResume(id), ct)).ToHttpResult(_ => Results.NoContent());
+
+    // POST /resumes/{id}/restore — PHASE 8. The one restore that can be refused:
+    // 400 when a live résumé has taken the label in the meantime, which is the
+    // price of the filtered unique index that let the label be reused at all.
+    // RestoreResume.cs carries the argument.
+    [HttpPost("~/resumes/{id:guid}/restore")]
+    [EndpointSummary("Bring an archived resume version back, if its label is free.")]
+    public async Task<IResult> RestoreResume(
+        Guid id,
+        [FromServices] ISender sender,
+        CancellationToken ct)
+        => (await sender.Send(new RestoreResume(id), ct)).ToHttpResult(_ => Results.NoContent());
 }

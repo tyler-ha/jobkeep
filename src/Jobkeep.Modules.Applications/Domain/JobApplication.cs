@@ -10,7 +10,7 @@ namespace Jobkeep.Modules.Applications.Domain;
 // it now lives in Jobkeep.Modules.Match. Two classes in one file was fine while
 // one project held every entity; it is not fine when the file has to be in two
 // assemblies at once.
-public class JobApplication : IAuditable
+public class JobApplication : IAuditable, ISoftDeletable
 {
     public Guid Id { get; set; } = Guid.NewGuid();
 
@@ -59,4 +59,10 @@ public class JobApplication : IAuditable
 
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
+
+    // Phase 8 — archived, not destroyed. A rejection you want off the board is
+    // still the record that answers "how many did I send in March", which is the
+    // whole reason this is the entity the phase was written for.
+    public bool IsDeleted { get; set; }
+    public DateTime? DeletedAtUtc { get; set; }
 }

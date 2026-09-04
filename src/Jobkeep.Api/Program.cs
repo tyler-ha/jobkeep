@@ -19,6 +19,7 @@ using Jobkeep.SharedKernel;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -85,7 +86,33 @@ void AddModuleContext<TContext>(string schema) where TContext : DbContext =>
             // module that is lifted out takes its schema whole, history included,
             // and needs no rename on the way.
             .MigrationsHistoryTable("__EFMigrationsHistory", schema))
-        .AddInterceptors(sp.GetRequiredService<AuditSaveChangesInterceptor>()));
+        .AddInterceptors(sp.GetRequiredService<AuditSaveChangesInterceptor>())
+
+        // PHASE 8 — one model-validation warning, suppressed with its reason.
+        //
+        // EF warns that JobPosting has a query filter while PostingSkill and
+        // JobRequirement, on the required end of a relationship with it, do not.
+        // Its concern is real in general: query those child tables directly and
+        // you get rows whose required parent the filter would have hidden.
+        //
+        // It cannot happen here. Every slice that touches either table resolves
+        // its posting id out of `job_applications` first, and THAT read carries
+        // the filter — so an archived application 404s before any child row is
+        // reached, and a posting cannot be archived while a live application
+        // names it. The path the warning describes does not exist.
+        //
+        // The remedy EF suggests — matching filters on both children — was
+        // measured against that and refused: it would add an EXISTS back to
+        // job_postings on every read of either table, including inside the skill
+        // filter and the per-row skill projection in ListApplications, which is
+        // this app's busiest query. Paying a join on the hot path to close a
+        // hole nothing can reach is the wrong trade.
+        //
+        // ponytail: the safety rests on "every child slice routes through an
+        // application". A future route addressed by posting id — an ad editor,
+        // say — would break it silently. Add the two filters then, or check the
+        // posting explicitly in that slice.
+        .ConfigureWarnings(w => w.Ignore(CoreEventId.PossibleIncorrectRequiredNavigationWithQueryFilterInteractionWarning)));
 
 AddModuleContext<ApplicationsDbContext>("applications");
 AddModuleContext<SkillsDbContext>("skills");

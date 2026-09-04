@@ -35,6 +35,13 @@ namespace Jobkeep.Persistence;
 // `SaveChanges()` — in a seeder, a migration helper, or a test — would silently
 // bypass an async-only interceptor and reintroduce F8 in a new place. Covering
 // both is two lines and removes the trap.
+//
+// PHASE 8 ADDED A SECOND JOB, and the name still fits: soft delete is stamping a
+// lifecycle column (`DeletedAtUtc`) on the way to the database, which is what
+// this class already existed to do. It is not a separate interceptor because the
+// two have a required ORDER — an archive must be converted to a modification
+// before the audit loop sees it — and expressing that as registration order in
+// Program.cs would be a rule enforced by a line nobody would think to protect.
 public sealed class AuditSaveChangesInterceptor : SaveChangesInterceptor
 {
     // Injectable so a test can control "now" rather than sleeping to make two
@@ -63,6 +70,46 @@ public sealed class AuditSaveChangesInterceptor : SaveChangesInterceptor
         if (context is null) return;
 
         var now = _now();
+
+        // PHASE 8 — soft delete, and it runs FIRST on purpose.
+        //
+        // Turning a Deleted entry into a Modified one before the audit loop below
+        // means an archive is stamped with `UpdatedAtUtc` like any other change,
+        // by the code that already does that, rather than by a second rule that
+        // could drift from it. Reversing the two would leave every archived row
+        // claiming it was last modified whenever it was last *edited*.
+        //
+        // WHY HERE AND NOT IN THE THREE SLICES
+        // ------------------------------------
+        // A slice could set the two columns itself and never call Remove(). That
+        // is the version where the fourth soft-deletable entity, added in a year,
+        // hard-deletes because someone wrote the obvious thing. Converting the
+        // state centrally means `Remove()` keeps meaning "end this row's life"
+        // and the *storage* decision about what that costs lives in one place —
+        // the same argument F8 made for not maintaining UpdatedAtUtc by hand.
+        //
+        // WHAT THIS QUIETLY DOES TO CASCADES, WHICH IS THE POINT
+        // ------------------------------------------------------
+        // The DELETE never reaches Postgres, so the ON DELETE CASCADEs beneath an
+        // archived parent never fire: posting_skills, job_requirements,
+        // resume_skills, resume_experiences and resume_educations all survive.
+        // That is what makes a restore a restore rather than a re-import. EF only
+        // cascades to entities it has LOADED, and none of the three delete slices
+        // load their children, so nothing is left mislabelled in the tracker
+        // either.
+        //
+        // The residue, stated rather than discovered later: an archived row still
+        // occupies its unique index. `resumes.LabelNormalized` is therefore a
+        // FILTERED unique index (see ResumeConfiguration), and RestoreResume has
+        // to check for a live row that took the label in the meantime.
+        foreach (var entry in context.ChangeTracker.Entries<ISoftDeletable>())
+        {
+            if (entry.State is not EntityState.Deleted) continue;
+
+            entry.State = EntityState.Modified;
+            entry.Entity.IsDeleted = true;
+            entry.Entity.DeletedAtUtc = now;
+        }
 
         foreach (var entry in context.ChangeTracker.Entries<IAuditable>())
         {
