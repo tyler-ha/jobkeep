@@ -29,6 +29,15 @@ export class ApiError extends Error {
     return this.status === 400;
   }
 
+  /* PHASE 11.1c. A 401 is not a fault either — it is the session having ended,
+   * or having never started. It is handled centrally rather than per screen (see
+   * onUnauthenticated below), so this getter exists for the one place that has
+   * to tell it apart from a real failure: the sign-in form, where a 401 means
+   * "wrong password" and not "your session expired". */
+  get isUnauthenticated() {
+    return this.status === 401;
+  }
+
   /* A 404 is not always a failure either. `GET /applications/{id}/match-check`
    * answers 404 for "never checked" as well as for "no such application" —
    * GetMatchResult.cs says so in a comment and declines to spend a second query
@@ -38,11 +47,36 @@ export class ApiError extends Error {
   }
 }
 
+/* PHASE 11.1c — what to do when the API says the caller is not signed in.
+ *
+ * ONE handler, here, rather than a 401 branch in each of eight screens. Every
+ * call already funnels through request(), so this is the only place that can see
+ * every 401 the app will ever receive — and a session expires between requests,
+ * not between screens, so a per-screen branch would be eight copies of a rule
+ * that has one cause. App.tsx sets it to "forget who is signed in", which puts
+ * the sign-in form back on screen with the address the user was on preserved.
+ *
+ * It is a module-level slot rather than a React context because the thing that
+ * fires it is not in React: it is a fetch. */
+let unauthenticated: () => void = () => {};
+
+export const onUnauthenticated = (handler: () => void) => {
+  unauthenticated = handler;
+};
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response;
   try {
     res = await fetch(`${BASE}${path}`, {
       ...init,
+      /* PHASE 11.1c. Identity's default is a cookie, and a browser does not
+       * attach one to a CROSS-ORIGIN fetch unless asked — and this app is
+       * deliberately cross-origin in development (see the header comment). So
+       * without this line sign-in succeeds, the cookie is stored, and every
+       * request after it is anonymous, with nothing wrong on either side to
+       * find. The API's half is .AllowCredentials() on the CORS policy; both
+       * halves are required and neither works alone. */
+      credentials: 'include',
       headers: {
         Accept: 'application/json',
         /* FormData sets its own Content-Type, and it has to: the header carries
@@ -68,16 +102,36 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
      * status text when the body is empty or not JSON. */
     let detail: string | undefined;
     try {
-      const body = await res.json();
-      detail = body?.detail ?? body?.title ?? undefined;
+      const body = (await res.json()) as {
+        detail?: string;
+        title?: string;
+        errors?: Record<string, string[]>;
+      };
+      /* ValidationProblemDetails puts the sentence a person needs in `errors`
+       * and a useless "One or more validation errors occurred." in `title`.
+       * Identity's register endpoint is the first thing in this app to answer
+       * that shape, and "Username 'x' is already taken." is exactly what the
+       * form has to show. */
+      const firstError = body?.errors ? Object.values(body.errors).flat()[0] : undefined;
+      detail = body?.detail ?? firstError ?? body?.title ?? undefined;
     } catch {
       /* no body, or not JSON — the status alone is what we have */
     }
+
+    if (res.status === 401) unauthenticated();
+
     throw new ApiError(res.status, detail ?? res.statusText ?? 'Request failed', detail);
   }
 
   if (res.status === 204) return undefined as T;
-  return (await res.json()) as T;
+
+  /* Read as text first, because a 200 WITH NO BODY is a real answer here:
+   * /identity/login and /identity/register both return one. res.json() on an
+   * empty body throws a SyntaxError outside the try above, which would surface
+   * as "could not reach the API" — the least accurate message available for a
+   * request that succeeded. */
+  const text = await res.text();
+  return (text ? JSON.parse(text) : undefined) as T;
 }
 
 export const api = {
@@ -101,6 +155,49 @@ export const api = {
  *  error state only ever has one shape to render. */
 export const asApiError = (e: unknown) =>
   e instanceof ApiError ? e : new ApiError(0, String(e));
+
+/* ---- Identity ----------------------------------------------------------- */
+
+/* Phase 11.1b's endpoints, which are ASP.NET Core Identity's own
+ * (MapIdentityApi) rather than a slice of this app — so these four wrappers name
+ * routes nobody here wrote, and the shapes are the framework's. */
+
+/** What `GET /identity/manage/info` answers. Two fields of the several it could
+ *  carry, because two is what the app reads: the address to show, and whether it
+ *  is confirmed — which is currently always false, since 11.1b registers a no-op
+ *  email sender and confirmation is not required to sign in. */
+export interface Account {
+  email: string;
+  isEmailConfirmed: boolean;
+}
+
+/** The signed-in account, or a 401. This is the whole route guard: there is no
+ *  client-side token to inspect, so the only honest way to know whether the
+ *  cookie is still good is to ask the server. */
+export const whoAmI = () => api.get<Account>('/identity/manage/info');
+
+/** `?useCookies=true` is what makes this a cookie sign-in rather than a bearer
+ *  token — same endpoint, two modes. The token half is left reachable by the API
+ *  for a non-browser client; a browser wants the cookie, because it is the thing
+ *  the browser will attach on its own afterwards.
+ *
+ *  Answers with the account rather than nothing, because the login response has
+ *  no body and every caller's next question is "who am I now". */
+export const signIn = async (email: string, password: string): Promise<Account> => {
+  await api.post<void>('/identity/login?useCookies=true', { email, password });
+  return whoAmI();
+};
+
+/* ponytail: registration is OPEN — anyone who can reach the API can create an
+ * account. That is correct for a tool on localhost with no deploy, and it is the
+ * first thing to close when a host is chosen. An invite code or simply unmapping
+ * the route are both small; leaving it open on a public URL is not. */
+export const register = (email: string, password: string) =>
+  api.post<void>('/identity/register', { email, password });
+
+/** The one identity route this app wrote itself. MapIdentityApi has no logout,
+ *  because signing out a bearer token is the client's job — a cookie's is not. */
+export const signOut = () => api.post<void>('/identity/logout');
 
 /* ---- Enums -------------------------------------------------------------- */
 

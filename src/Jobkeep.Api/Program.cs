@@ -237,6 +237,17 @@ builder.Services.AddMatchModule();
 // so a RoleManager nobody injects would be registration for its own sake. The
 // store resolves to a user-only store as a result, which is what the tables
 // being empty already says.
+//
+// THE COOKIE'S SameSite IS LEFT AT THE DEFAULT, Lax, AND THAT IS A DECISION WITH
+// AN EXPIRY DATE. Lax blocks a cookie on a cross-SITE request, and the front end
+// at :5173 calling this at :5080 is cross-ORIGIN but same-site — SameSite is
+// blind to the port, so the browser sends it and 11.1c works. A deployed front
+// end on a different domain from the API would be genuinely cross-site, and the
+// cookie would silently stop being attached: signed in, then anonymous, with
+// nothing wrong on either side to find. The fix then is SameSite=None, which
+// REQUIRES Secure and therefore HTTPS — so it cannot be set here today without
+// breaking local development over http. Set it when a host is chosen, alongside
+// the CORS origin list that is already config.
 builder.Services
     .AddIdentityApiEndpoints<JobkeepUser>()
     .AddEntityFrameworkStores<IdentityDbContext>();

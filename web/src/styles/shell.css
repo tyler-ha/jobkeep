@@ -123,11 +123,82 @@
   background: var(--pop);
 }
 
+/* PHASE 11.1c put the signed-in address and the way out here, under the build
+   line. A grid rather than a paragraph, because it now holds three things and
+   they stack. */
 .nav-foot {
   margin-top: auto;
   font-size: var(--t-xs);
   color: var(--nav-muted);
   padding: 0 var(--s-3);
+  display: grid;
+  gap: var(--s-1);
+  justify-items: start;
+}
+
+/* Not .btn: a button in the nav has to be legible on --nav-ground, and .btn is
+   built for --card. Underlined rather than boxed, because this is the one
+   control down here and a box would make it the loudest thing in the sidebar. */
+.nav-signout {
+  color: var(--nav-muted);
+  font-size: var(--t-xs);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.nav-signout:hover {
+  color: var(--pop);
+}
+
+/* ---- Sign in ------------------------------------------------------------ */
+
+/* The whole page when nobody is signed in — it replaces the shell rather than
+   sitting inside it, so it owns the viewport and centres in it. */
+.signin {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: var(--s-5) var(--s-4);
+  background: var(--ground);
+}
+
+.signin-card {
+  width: 100%;
+  max-width: 25rem;
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  padding: var(--s-6);
+  display: grid;
+  gap: var(--s-3);
+}
+
+/* The nav's .wordmark is deliberately not reused: its colour is --pop, measured
+   against --nav-ground, and this card is --card. Same face, a colour that is
+   actually legible on it. */
+.signin-card .wordmark {
+  color: var(--pri);
+  padding: 0;
+}
+
+.signin-form {
+  display: grid;
+  gap: var(--s-4);
+  margin-top: var(--s-2);
+}
+
+/* A button that reads as a link, for an action that changes the form rather
+   than navigating. Inherits the surrounding sentence's size on purpose — it is
+   part of the sentence. */
+.linkish {
+  color: var(--pri);
+  font-size: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.linkish:hover {
+  color: var(--pri-dark);
 }
 
 /* ---- Main --------------------------------------------------------------- */

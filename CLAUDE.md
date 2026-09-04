@@ -764,6 +764,37 @@ load-bearing, **not a dependency** — nothing in the phase needs a host, only t
 CORS named origin does, and that is config. It is **split into five runnable
 sub-steps** (11.1a, 11.1b, 11.1c, 11.2, 11.3) in `phase-11-auth.md`.
 
+**11.1c LANDED 2026-09-04**: **the front end is behind the sign-in.** Web suite
+55 → 62, five files, no backend change but a comment. Five things from it:
+
+- **The sign-in is NOT A ROUTE**, deviating from the plan on purpose. `App` holds
+  one `Account | null | undefined` and renders `<SignIn>` *instead of* the shell
+  when signed out, whatever the address — so signing in lands you on the page you
+  opened, with no `?returnUrl` and no code to carry one. **`undefined` is the
+  third state and it matters**: the cookie is `HttpOnly`, so "am I signed in" is a
+  round trip, and the first paint waits rather than flashing the wrong screen.
+- **The 401 handler lives in `request()`** (`onUnauthenticated`, a module-level
+  slot `App` fills), not in eight screens. A session expires between requests,
+  not between screens. `ApiError.isUnauthenticated` exists for the ONE place that
+  must tell 401s apart: the form, where it means *wrong password*.
+- **`request()` had two latent bugs this found.** A **200 with no body threw** —
+  `res.json()`'s `SyntaxError` escapes the fetch try/catch, so a successful login
+  would have said "Could not reach the API"; it reads text first now. And
+  **`ValidationProblemDetails` was read wrong** — the sentence is in `errors`,
+  `title` is "One or more validation errors occurred.".
+- **A hint inside a `<label>` becomes part of the label.** `.field-hint` as a
+  `<span>` in `.field` made the input's accessible name "Password At least six
+  characters, with an…". Use `aria-describedby` — and note `.field-hint` is used
+  that way elsewhere in `web/`.
+- **`SameSite` is `Lax` and that has an expiry date.** `:5173` → `:5080` is
+  cross-origin but same-site, so it works. A deployed front end on another domain
+  is cross-site and the cookie **silently stops being attached**. The fix is
+  `SameSite=None`, which needs `Secure`/HTTPS and so cannot be set while local dev
+  is http. Argued in `Program.cs`.
+
+**Registration is OPEN** — right for localhost, first thing to close when a host
+is chosen (`ponytail:` note on `register` in `web/src/lib/api.ts`).
+
 **11.1b LANDED 2026-09-04**: **you can register and sign in.**
 `AddIdentityApiEndpoints<JobkeepUser>()` + `MapIdentityApi<JobkeepUser>()` in a
 `/identity` group, plus a hand-written `/identity/logout`. Suite 332 → 338, no

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
 import {
   BarChart3,
@@ -18,8 +18,10 @@ import Insights from './routes/Insights';
 import JobPost from './routes/JobPost';
 import Pipeline from './routes/Pipeline';
 import Resumes from './routes/Resumes';
+import SignIn from './routes/SignIn';
 import Today from './routes/Today';
 import Upload from './routes/Upload';
+import { onUnauthenticated, signOut, whoAmI, type Account } from './lib/api';
 
 /* Seven destinations, not eight: "Job post" is the detail view of an
  * application and is reached by opening a row, so it has a route but no nav
@@ -36,6 +38,35 @@ const NAV = [
 
 export default function App() {
   const [navOpen, setNavOpen] = useState(false);
+
+  /* PHASE 11.1c — the route guard, and it is one piece of state rather than a
+   * <ProtectedRoute> per route.
+   *
+   * THREE values, not two, and the third is the one that matters: `undefined` is
+   * "not asked yet". There is no token in the client to inspect — the cookie is
+   * HttpOnly by design — so the only honest way to know whether a session is
+   * live is to ask the server, and that is a round trip. Rendering the shell
+   * during it would flash the app at someone who is about to be shown a sign-in
+   * form; rendering the form would flash a sign-in at someone already signed in,
+   * which is worse. So the first paint waits.
+   */
+  const [account, setAccount] = useState<Account | null | undefined>(undefined);
+
+  useEffect(() => {
+    /* Registered before the first call, so a 401 from the check itself takes the
+     * same path as a 401 from anywhere else. Both land on setAccount(null),
+     * which is why this is safe to fire more than once. */
+    onUnauthenticated(() => setAccount(null));
+    whoAmI().then(setAccount, () => setAccount(null));
+  }, []);
+
+  /* Deliberately blank rather than a spinner. This is one request against
+   * localhost, and a spinner that appears for 20ms is a flicker, not feedback. */
+  if (account === undefined) return null;
+
+  /* Not a route. The address is left untouched, so signing in lands the user on
+   * whatever they opened — see the header comment in routes/SignIn.tsx. */
+  if (account === null) return <SignIn onSignedIn={setAccount} />;
 
   return (
     <div className="shell">
@@ -79,7 +110,20 @@ export default function App() {
           ))}
         </ul>
 
-        <p className="nav-foot">Local build · API on :5080</p>
+        <div className="nav-foot">
+          <p>Local build · API on :5080</p>
+          <p>{account.email}</p>
+          {/* Clears the state whatever the server said. A sign-out that failed
+              because the API is down should still sign you out of this tab —
+              the alternative is a user who cannot leave. */}
+          <button
+            type="button"
+            className="nav-signout"
+            onClick={() => void signOut().finally(() => setAccount(null))}
+          >
+            Sign out
+          </button>
+        </div>
       </nav>
 
       <main className="main">
