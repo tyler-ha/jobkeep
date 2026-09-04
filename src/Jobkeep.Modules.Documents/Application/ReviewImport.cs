@@ -39,6 +39,14 @@ public class ReviewImportHandler : IRequestHandler<ReviewImport, SliceResult<Imp
         // become a resume would be editing a receipt: the rows exist and this
         // column no longer describes them. The resume itself is the thing to
         // edit at that point.
+        // Parsing is refused too, but it is the one refusal here that is
+        // temporary, so it does not get the "no longer" sentence: the draft is
+        // being written by the model right now and saving over it would race a
+        // write the user cannot see. Every other refusal is permanent.
+        if (import.Status == ImportStatus.Parsing)
+            return SliceResult<ImportResponse>.Invalid(
+                "This import is still being read. Wait for the draft, then edit it.");
+
         if (import.Status != ImportStatus.AwaitingReview)
             return SliceResult<ImportResponse>.Invalid(
                 $"This import is {import.Status.ToString().ToLowerInvariant()} and can no longer be edited.");

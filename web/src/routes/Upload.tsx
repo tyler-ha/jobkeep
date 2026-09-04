@@ -72,8 +72,17 @@ export default function Upload() {
 
 /* ---- The queue ----------------------------------------------------------- */
 
+/* "Still reading" is where a document lives between upload and draft. The server
+ * owns that work now — ImportParseWorker picks these rows up, including ones left
+ * behind by a crash or a restart — so this tab is a WINDOW ON THE QUEUE rather
+ * than the recovery mechanism it was in the first version of group 6.
+ *
+ * It still earns its place: a parse is the one thing in this app that takes real
+ * time, and a status a user cannot see is a status that reads as "nothing
+ * happened". */
 const VIEWS: { status: ImportStatus; label: string }[] = [
   { status: 'AwaitingReview', label: 'Waiting on you' },
+  { status: 'Parsing', label: 'Still reading' },
   { status: 'Committed', label: 'Confirmed' },
   { status: 'Discarded', label: 'Discarded' },
   { status: 'CommitFailed', label: 'Needs another go' },
@@ -224,6 +233,17 @@ function Uploader({
   const [error, setError] = useState<ApiError | null>(null);
   const input = useRef<HTMLInputElement>(null);
 
+  /* Whether this form is still mounted. Set in the effect body rather than only
+   * at declaration because StrictMode mounts, unmounts and remounts — the
+   * cleanup from the first pass would otherwise leave it false for good. */
+  const live = useRef(true);
+  useEffect(() => {
+    live.current = true;
+    return () => {
+      live.current = false;
+    };
+  }, []);
+
   /* The value the box SHOWS. The value it SENDS is still `label`, so an
    * untouched box sends nothing and the server's own fallback stays the single
    * source of truth. This makes an existing default visible; it does not move
@@ -273,8 +293,21 @@ function Uploader({
       onUploaded();
       /* Straight to the review. The upload is not the thing the user came to
        * do — confirming what was read is — and a queue with one new row on it
-       * is a screen asking them to click the row they just created. */
-      navigate(`/upload/${created.id}`);
+       * is a screen asking them to click the row they just created.
+       *
+       * Honest since group 6: this used to happen up to 180 seconds after the
+       * click, because the POST blocked on the model. It now happens in about a
+       * second, and the review screen drives the model itself.
+       *
+       * GUARDED ANYWAY. react-router 7's useNavigate sets activeRef.current in
+       * a layout effect with NO cleanup, so the ref stays true after unmount and
+       * this fires from a resolved promise even when the user has gone
+       * elsewhere. The old symptom was memorable — upload a CV, click another
+       * nav link, and three minutes later the app yanked you onto the review
+       * screen. Shrinking the window to a second makes it unreachable in
+       * practice, not impossible; a latent bug that is merely hard to hit is
+       * still a bug. */
+      if (live.current) navigate(`/upload/${created.id}`);
     } catch (err) {
       setError(asApiError(err));
     } finally {
@@ -407,9 +440,12 @@ function Uploader({
       <div className="add-actions">
         <button type="submit" className="btn btn-primary" disabled={busy || !file}>
           <UploadIcon size={15} aria-hidden />
-          {busy ? 'Reading the document…' : 'Upload and read'}
+          {busy ? 'Uploading…' : 'Upload and read'}
         </button>
-        {busy && <Parsing />}
+        {/* The progress bar used to live here, because the wait did. Since group
+            6 this button is a file upload and nothing else — a bar modelling a
+            three-minute model call has no business under a one-second POST. It
+            moved to the review screen, which is where the model now runs. */}
       </div>
     </form>
   );
@@ -480,17 +516,53 @@ function Review({ id }: { id: string }) {
   const [saved, setSaved] = useState(false);
   const [confirming, setConfirming] = useState(false);
 
+  /* Load, then WATCH while the server parses. Phase 6.5 group 6.
+   *
+   * This screen used to DRIVE the parse — it fired POST /imports/{id}/reparse
+   * when it saw a Parsing row, and the model ran inside that request. That was
+   * replaced: it meant a browser tab owned the work, so closing the tab stranded
+   * the row for ever. ImportParseWorker owns it now, and the client's only job
+   * is to notice when the row stops saying Parsing.
+   *
+   * So the poll is not a fallback for something better — it is the honest read
+   * of a state the server changes on its own. It costs one indexed lookup by
+   * primary key every 1.5 seconds, for the seconds a parse takes.
+   *
+   * No liveness ref is needed for it: the interval is cleared on unmount and
+   * `live` gates every setState, so navigating away stops the polling and the
+   * worker carries on regardless. That is the whole point — nothing about
+   * finishing the parse depends on this component still being mounted. */
   useEffect(() => {
     let live = true;
+    let timer: number | undefined;
+
+    const apply = (r: ImportResponse) => {
+      if (!live) return;
+      setImported(r);
+      setDraft(r.draft);
+      if (r.status === 'Parsing') timer = window.setTimeout(poll, 1500);
+    };
+
+    const poll = () => {
+      getImport(id)
+        .then(apply)
+        /* A failed poll is not a failed import. The row is still being parsed by
+         * the server, and a transient blip here should not paint an error over a
+         * screen that is about to succeed — so it retries rather than reporting.
+         * The initial load below does report, because that one failing means
+         * there is nothing to show at all. */
+        .catch(() => {
+          if (live) timer = window.setTimeout(poll, 1500);
+        });
+    };
+
     getImport(id)
-      .then((r) => {
-        if (!live) return;
-        setImported(r);
-        setDraft(r.draft);
-      })
+      .then(apply)
       .catch((e) => live && setError(asApiError(e)));
+
     return () => {
       live = false;
+      window.clearTimeout(timer);
     };
   }, [id]);
 
@@ -632,11 +704,25 @@ function Review({ id }: { id: string }) {
         </p>
       )}
 
+      {imported.status === 'Parsing' && (
+        <p className="refusal" role="status">
+          <strong>Still reading it.</strong> The text is saved — that part is safe. A local
+          model is turning it into a draft now. You can leave this screen; it carries on
+          without you, and the queue keeps the row under “Still reading”.
+        </p>
+      )}
+
       {error && <Failure error={error} what="save this import" />}
 
       <div className="review">
         <div className="review-draft">
-          {draft.resume && (
+          {/* The progress bar moved here from the upload form, which is where
+              the wait used to be. The extracted text stays visible beside it —
+              reading what came out of the document is the one useful thing to
+              do while the model works, and it is the same question the screen
+              asks afterwards. */}
+          {imported.status === 'Parsing' && <Parsing />}
+          {imported.status !== 'Parsing' && draft.resume && (
             <ResumeForm
               draft={draft.resume}
               editable={editable}
@@ -646,7 +732,7 @@ function Review({ id }: { id: string }) {
               }}
             />
           )}
-          {draft.posting && (
+          {imported.status !== 'Parsing' && draft.posting && (
             <PostingForm
               draft={draft.posting}
               editable={editable}

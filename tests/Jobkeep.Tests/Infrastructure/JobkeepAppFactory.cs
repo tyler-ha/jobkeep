@@ -50,6 +50,22 @@ public sealed class JobkeepAppFactory(string connectionString) : WebApplicationF
         // off builder.Configuration before Build().
         builder.UseSetting("Skills:SeedOnStartup", "false");
 
+        // PHASE 6.5 GROUP 6 — no background parsing under test, for the same
+        // reason and by the same mechanism.
+        //
+        // ImportParseWorker sweeps every Parsing row on startup and parses it.
+        // Under Respawn that is actively hostile: the sweep races truncation, and
+        // a test that uploads a document would have its row structured out from
+        // under it by a worker on another thread. Every assertion about an import
+        // would then depend on which of the two got there first.
+        //
+        // The tests drive POST /imports/{id}/reparse explicitly instead, which is
+        // exactly what the worker calls — so the slice under test is identical
+        // and only the trigger differs. ImportParseWorkerTests turns this back on
+        // for itself, because the trigger is the one thing that would otherwise
+        // never run.
+        builder.UseSetting("Documents:ParseInBackground", "false");
+
         // PHASE 13.3b — the test-only aggregate context, added to the app's own
         // container rather than to a second one, so tests keep resolving it from a
         // scope exactly as they resolved AppDbContext before.

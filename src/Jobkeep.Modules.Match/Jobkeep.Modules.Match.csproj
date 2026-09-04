@@ -1,9 +1,15 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- The Ats module. A plain class library on purpose: the handlers never
+  <!-- The Match module — the CV-vs-ad comparison, called the "ATS check" until
+       the 2026-09-04 rename. A plain class library on purpose: the handlers never
        knew about HTTP — only the route-mapping half of MatchModule.cs did, and
        Phase 13.1 lifted that into Jobkeep.Api/Endpoints/. Keeping ASP.NET out of
        here is what makes the layering claim checkable rather than decorative.
+
+       The Postgres SCHEMA is still `ats`, deliberately, and that is not an
+       oversight of the rename — MatchResultConfiguration.cs argues it: each
+       module's __EFMigrationsHistory lives in its own schema, and EF resolves
+       that table before applying anything.
 
        REFERENCE RULE, enforced by tests/Jobkeep.Tests/Architecture/: this project
        may reference SharedKernel, Contracts and Persistence. It may NOT reference

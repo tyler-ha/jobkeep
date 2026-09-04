@@ -53,6 +53,20 @@ public class DocumentOptions
     // The review queue is not paged — it is a list of things you have not
     // finished. This caps it so an unbounded query can never be issued.
     public int MaxListSize { get; set; } = 200;
+
+    // Whether ImportParseWorker runs. Phase 6.5 group 6.
+    //
+    // THIS IS A TEST SEAM, NOT A TUNING KNOB — nothing outside JobkeepAppFactory
+    // ever sets it, and it is the same seam and the same reasoning as
+    // Skills:SeedOnStartup. The suite truncates every table between tests
+    // (Respawn), so a worker running alongside would parse rows out from under
+    // unrelated arranges and make the whole suite depend on timing. The tests
+    // drive /reparse explicitly instead, which is what the worker does anyway.
+    //
+    // Turned back ON by the one test that covers the worker itself, because a
+    // background mechanism nobody exercises is a background mechanism that has
+    // never run.
+    public bool ParseInBackground { get; set; } = true;
 }
 
 // Module wiring for Documents: DI plus the /imports routes.
@@ -102,6 +116,17 @@ public static class DocumentsModule
         // a contract registered by whichever consumer happens to be wired first
         // is a dependency nothing in Program.cs shows.
         services.AddScoped<IResumeContract, ResumeContract>();
+
+        // PHASE 6.5 GROUP 6 — the import parse queue and its worker.
+        //
+        // The queue is registered unconditionally because ImportDocumentHandler
+        // injects it and enqueues into it whether or not anything is reading:
+        // the durable queue is the Parsing status, so an unread channel loses
+        // nothing that the startup sweep would not have found anyway. Only the
+        // WORKER is behind the flag, which keeps the seam to one moving part.
+        services.AddSingleton<ImportParseQueue>();
+        if (options.ParseInBackground)
+            services.AddHostedService<ImportParseWorker>();
 
         // PHASE 13.4 — the AddScoped<XHandler>() lines that were here are gone.
         // AddMediator() in Program.cs registers every IRequestHandler<,> and

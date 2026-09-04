@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Jobkeep.Contracts.Applications;
@@ -127,7 +127,10 @@ public class ImportTests(PostgresFixture fixture) : IntegrationTestBase(fixture)
         return form;
     }
 
-    private async Task<JsonDocument> PostImportAsync(
+    // The raw upload, and nothing after it. Since Phase 6.5 group 6 this leaves
+    // the row in Parsing with no draft on it — use it only when the split itself
+    // is what is under test.
+    private async Task<JsonDocument> UploadOnlyAsync(
         HttpClient client, string fixtureName, DocumentKind kind, string? label = null)
     {
         var response = await client.PostAsync(
@@ -136,21 +139,82 @@ public class ImportTests(PostgresFixture fixture) : IntegrationTestBase(fixture)
         return JsonDocument.Parse(await response.Content.ReadAsStringAsync(Ct));
     }
 
+    // An import with a DRAFT on it, which is what most tests here mean by "an
+    // import". Group 6 made that two requests instead of one: the upload saves
+    // the text and returns, and the model runs in /reparse. The real client does
+    // exactly this pair (Upload.tsx drives the second call from the review
+    // screen), so this helper is the sequence under test, not a shortcut past it.
+    private async Task<JsonDocument> PostImportAsync(
+        HttpClient client, string fixtureName, DocumentKind kind, string? label = null)
+    {
+        using var uploaded = await UploadOnlyAsync(client, fixtureName, kind, label);
+        var id = uploaded.RootElement.GetProperty("id").GetGuid();
+
+        var parsed = await client.PostAsync($"/imports/{id}/reparse", null, Ct);
+        parsed.EnsureSuccessStatusCode();
+        return JsonDocument.Parse(await parsed.Content.ReadAsStringAsync(Ct));
+    }
+
     // ---------------------------------------------------------------- upload
 
     [Fact]
-    public async Task Upload_ProducesADraft_AndWritesNoRecordsAtAll()
+    public async Task Upload_ReturnsWithoutCallingTheModel_AndWritesNoRecordsAtAll()
     {
-        var client = AppWithModel(ResumeReply);
+        // Phase 6.5 group 6. The upload used to block on the model for up to 180
+        // seconds and hand back a finished draft; it now returns as soon as the
+        // text is extracted and saved, leaving the row in Parsing for the client
+        // to drive through /reparse. This test pins the half that got faster.
+        var fake = new FakeChatClient(ResumeReply);
+        var client = Fixture.App
+            .WithWebHostBuilder(b => b.ConfigureServices(s => s.AddSingleton<IChatClient>(fake)))
+            .CreateClient();
 
-        using var body = await PostImportAsync(client, "resume.pdf", DocumentKind.Resume);
+        using var body = await UploadOnlyAsync(client, "resume.pdf", DocumentKind.Resume);
         var root = body.RootElement;
 
-        Assert.Equal("AwaitingReview", root.GetProperty("status").GetString());
+        Assert.Equal("Parsing", root.GetProperty("status").GetString());
         Assert.Equal("Pdf", root.GetProperty("format").GetString());
+
+        // THE THING THE PHASE BOUGHT: the upload did not talk to the model at
+        // all. Everything it does is byte work, and byte work is fast.
+        Assert.Null(fake.LastPrompt);
+        Assert.True(root.GetProperty("modelUsed").ValueKind == JsonValueKind.Null);
+
         // The extracted text is returned, because the review screen's job is to
-        // let a human compare the draft against the document.
+        // let a human compare the draft against the document — and since the
+        // draft arrives later, the text is the only thing that screen has to
+        // show while the model runs.
         Assert.Contains("University of Melbourne", root.GetProperty("extractedText").GetString());
+
+        // THE POINT OF THE PHASE: an upload has written one document_imports row
+        // and nothing else. No resume, no skills, no application.
+        await WithDbAsync(async db =>
+        {
+            Assert.Equal(1, await db.DocumentImports.CountAsync(Ct));
+            Assert.Equal(0, await db.Resumes.CountAsync(Ct));
+            Assert.Equal(0, await db.Skills.CountAsync(Ct));
+            Assert.Equal(0, await db.JobApplications.CountAsync(Ct));
+        });
+    }
+
+    [Fact]
+    public async Task Reparse_FinishesTheUpload_ProducingTheDraftAndLeavingParsing()
+    {
+        // The other half of the split: the model runs in the second request, and
+        // the row leaves Parsing when it succeeds. The draft assertions live here
+        // now because this is where the draft is first produced.
+        var client = AppWithModel(ResumeReply);
+        using var created = await UploadOnlyAsync(client, "resume.pdf", DocumentKind.Resume);
+        var id = created.RootElement.GetProperty("id").GetGuid();
+
+        var response = await client.PostAsync($"/imports/{id}/reparse", null, Ct);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync(Ct));
+        var root = body.RootElement;
+
+        // Parsing is closed by the parse itself, not by a sweeper.
+        Assert.Equal("AwaitingReview", root.GetProperty("status").GetString());
 
         var resume = root.GetProperty("draft").GetProperty("resume");
         Assert.Equal("Jane Doe", resume.GetProperty("fullName").GetString());
@@ -163,15 +227,34 @@ public class ImportTests(PostgresFixture fixture) : IntegrationTestBase(fixture)
         // user as a blank card to fix.
         Assert.Single(resume.GetProperty("experience").EnumerateArray());
 
-        // THE POINT OF THE PHASE: an upload has written one document_imports row
-        // and nothing else. No resume, no skills, no application.
+        // Still nothing but the import row. The gate is unmoved by the split.
         await WithDbAsync(async db =>
         {
             Assert.Equal(1, await db.DocumentImports.CountAsync(Ct));
             Assert.Equal(0, await db.Resumes.CountAsync(Ct));
-            Assert.Equal(0, await db.Skills.CountAsync(Ct));
-            Assert.Equal(0, await db.JobApplications.CountAsync(Ct));
         });
+    }
+
+    [Fact]
+    public async Task Reparse_IsRefused_ForAnImportThatIsStillParsing_OnlyWhenItIsNotParsing()
+    {
+        // The guard that had to change. /reparse used to demand AwaitingReview,
+        // which would have refused every row the new upload creates — the plan
+        // for this group assumed the endpoint already accepted Parsing, and it
+        // did not. Confirm and edit still refuse a Parsing row, because the
+        // draft it would act on does not exist yet.
+        var client = AppWithModel(ResumeReply);
+        using var created = await UploadOnlyAsync(client, "resume.pdf", DocumentKind.Resume);
+        var id = created.RootElement.GetProperty("id").GetGuid();
+
+        var confirm = await client.PostAsync($"/imports/{id}/confirm", null, Ct);
+        Assert.Equal(HttpStatusCode.BadRequest, confirm.StatusCode);
+        Assert.Contains("still being read", await confirm.Content.ReadAsStringAsync(Ct));
+
+        // And the refusal says "not yet", never "already" or "no longer" — the
+        // wording every other refusal here uses would be a lie about a state
+        // that clears itself.
+        Assert.DoesNotContain("already", await confirm.Content.ReadAsStringAsync(Ct));
     }
 
     [Fact]
@@ -207,11 +290,26 @@ public class ImportTests(PostgresFixture fixture) : IntegrationTestBase(fixture)
         // not be thrown away because the model was down or answered rubbish —
         // the text is saved first, so /reparse can retry the half that failed
         // without the user finding the file again.
+        //
+        // Group 6 moved WHERE this failure happens, not what it costs: the model
+        // is called by /reparse now, so the bad answer arrives there. The
+        // user-visible outcome is deliberately unchanged — the row lands in
+        // AwaitingReview with the extraction intact and a warning attached,
+        // exactly as POST /imports used to leave it.
         var client = AppWithModel("{ this is not json");
 
-        using var body = await PostImportAsync(client, "resume.pdf", DocumentKind.Resume);
+        using var created = await UploadOnlyAsync(client, "resume.pdf", DocumentKind.Resume);
+        var id = created.RootElement.GetProperty("id").GetGuid();
+
+        var response = await client.PostAsync($"/imports/{id}/reparse", null, Ct);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync(Ct));
         var root = body.RootElement;
 
+        // NOT left in Parsing. A row that claims a parse nobody is running is
+        // the invisible-orphan state this status exists to remove, so a failure
+        // while finishing an upload has to close it out.
         Assert.Equal("AwaitingReview", root.GetProperty("status").GetString());
         Assert.Contains("Jane Doe", root.GetProperty("extractedText").GetString());
         Assert.False(root.GetProperty("warning").ValueKind == JsonValueKind.Null);
@@ -219,9 +317,33 @@ public class ImportTests(PostgresFixture fixture) : IntegrationTestBase(fixture)
         await WithDbAsync(async db =>
         {
             var import = await db.DocumentImports.SingleAsync(Ct);
+            Assert.Equal(ImportStatus.AwaitingReview, import.Status);
             Assert.NotEmpty(import.ExtractedText);
             Assert.Null(import.ModelUsed);
         });
+    }
+
+    [Fact]
+    public async Task Reparse_AskedForByAHuman_ReportsAModelFailureRatherThanSwallowingIt()
+    {
+        // The other side of that branch, and the reason it is a branch at all.
+        // Finishing an upload must not leave the row stuck, so a failure there
+        // becomes a warning. A re-parse a human PRESSED is a question, so a
+        // failure is the answer to it — Invalid, and the existing draft is left
+        // exactly as it was rather than being replaced by a worse one.
+        var good = AppWithModel(ResumeReply);
+        using var created = await PostImportAsync(good, "resume.pdf", DocumentKind.Resume);
+        var id = created.RootElement.GetProperty("id").GetGuid();
+
+        var bad = AppWithModel("{ not json at all");
+        var response = await bad.PostAsync($"/imports/{id}/reparse", null, Ct);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var after = await good.GetAsync($"/imports/{id}", Ct);
+        using var body = JsonDocument.Parse(await after.Content.ReadAsStringAsync(Ct));
+        Assert.Equal("Jane Doe",
+            body.RootElement.GetProperty("draft").GetProperty("resume")
+                .GetProperty("fullName").GetString());
     }
 
     [Fact]
@@ -243,6 +365,13 @@ public class ImportTests(PostgresFixture fixture) : IntegrationTestBase(fixture)
         using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync(Ct));
         Assert.Contains("scan", body.RootElement.GetProperty("warning").GetString()!,
             StringComparison.OrdinalIgnoreCase);
+
+        // AwaitingReview, NOT Parsing. This import is finished the moment it is
+        // saved: there is no text to send, so nothing will ever be driven for
+        // it, and marking it Parsing would strand it in a state whose only exit
+        // is a parse that cannot happen. It is the one upload path that still
+        // completes in a single request.
+        Assert.Equal("AwaitingReview", body.RootElement.GetProperty("status").GetString());
     }
 
     // ---------------------------------------------------------------- review
@@ -329,7 +458,7 @@ public class ImportTests(PostgresFixture fixture) : IntegrationTestBase(fixture)
         // The dividend of storing the extracted text between the two stages: a
         // better prompt or a better model costs no re-upload.
         var client = AppWithModel("{ not json either");
-        using var created = await PostImportAsync(client, "resume.pdf", DocumentKind.Resume);
+        using var created = await UploadOnlyAsync(client, "resume.pdf", DocumentKind.Resume);
         var id = created.RootElement.GetProperty("id").GetGuid();
 
         var better = AppWithModel(ResumeReply);

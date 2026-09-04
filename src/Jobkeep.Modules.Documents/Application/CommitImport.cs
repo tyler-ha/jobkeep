@@ -91,6 +91,13 @@ public class CommitImportHandler : IRequestHandler<CommitImport, SliceResult<Com
         // state that MEANS "try again" — see ImportStatus, and see the recovery
         // path in CommitPostingAsync, which reads CommittedEntityId to decide
         // whether a retry starts over or only finishes.
+        // Parsing says "not yet", not "already" — see ReviewImport for the same
+        // distinction. Confirming a draft the model has not written yet would
+        // commit the empty placeholder.
+        if (import.Status == ImportStatus.Parsing)
+            return SliceResult<CommitResponse>.Invalid(
+                "This import is still being read. Wait for the draft before confirming it.");
+
         if (import.Status is not (ImportStatus.AwaitingReview or ImportStatus.CommitFailed))
             return SliceResult<CommitResponse>.Invalid(
                 $"This import is already {import.Status.ToString().ToLowerInvariant()}.");

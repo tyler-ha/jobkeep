@@ -377,7 +377,7 @@ The only group with a backend half. Plan, for the session that picks it up:
   in `lib/api.ts`, `stubFetch` branches for **both** `POST /imports` and
   `POST /imports/text`, and one `user-event` test that types and submits.
 
-### Group 6 — the upload stops blocking (not started)
+### Group 6 — the upload stops blocking (DONE, 2026-09-04)
 
 **This REVERSES a decision written into Group 3 above and into the header comment
 of `web/src/lib/progress.ts`**, at the user's instruction on 2026-09-03: *"upload is
@@ -409,7 +409,61 @@ extraction is worth more than the structuring. So the change is not "make this
 async" — it is "return at the line that already exists", and the reasoning for that
 early save transfers unchanged.
 
-#### Who runs the model, then — and why it is not a background service
+#### Who runs the model, then — REVERSED, twice
+
+**READ THIS BEFORE THE TWO SUBSECTIONS BELOW.** They argue for a client-driven
+parse and against a background worker. That was built, shipped, and then
+**replaced by a background worker on the same day** at the user's instruction:
+*"not blocking then why don't you use queue to make it happen?"*
+
+The objection is correct, and it is the same objection this whole group started
+from. A client-driven parse does not stop the work being owned by a browser — it
+only moves which request holds it open. Close the tab and the row is stranded in
+`Parsing` for ever, and the accepted recovery was "the user notices and clicks it
+again", which is not the server finishing a job it accepted.
+
+The refusal below argued from AWS Lambda freezing the execution environment after
+a response is returned. **That argument was sound, and it was also stronger than
+the commit message that first shipped it claimed** — `phase-10-aws-deploy.md:84`
+keeps the Lambda out of a VPC *precisely so* the AI call works there, over a
+hosted `IChatClient` rather than Ollama, so the model call really would be an
+ordinary in-request outbound call on that target and a background thread really
+would be frozen.
+
+What voided it is not a flaw in the reasoning but a change in the premise: **Phase
+10 is parked and tenth in the order, and the user has said the AWS plan itself may
+be dropped for an alternative service.** On any long-running host a worker is
+simply the ordinary answer. The argument is kept below rather than deleted,
+because it is the correct argument to re-make the day a serverless target is
+chosen again.
+
+**What was built instead** — `ImportParseQueue` and `ImportParseWorker`, both in
+`Modules.Documents/Infrastructure/`:
+
+- **The durable queue is `document_imports.Status == Parsing`**, a column that was
+  already there. `ImportParseQueue`'s `Channel<Guid>` sits on top purely so the
+  worker does not have to poll for a row the request thread already knew about.
+  Losing a channel message costs nothing.
+- **Crash recovery falls out of that choice.** The worker sweeps every `Parsing`
+  row on startup, so a kill mid-parse, a `docker compose restart api` or a deploy
+  during an upload all resolve on the next boot. A channel alone could not do
+  this, and the client-driven version could not do it at all.
+- **Not a mediator notification.** `AddMediator` is registered
+  `ServiceLifetime.Scoped` and `IPublisher.Publish` awaits handlers inline, so a
+  notification would run the model *inside* the upload request and reinstate the
+  block.
+- **The remaining ceiling is concurrency, not durability.** Two instances would
+  both parse the same row; there is no lease. One instance runs today. A lease
+  column and a reaper stay Phase 15's, next to the outbox.
+- **`Documents:ParseInBackground` is a test seam**, exactly like
+  `Skills:SeedOnStartup` — a worker racing Respawn's truncation would structure
+  documents out from under unrelated arranges. `ImportParseWorkerTests` turns it
+  back on for itself, because a background mechanism nobody exercises has never
+  run.
+
+The original argument, kept:
+
+#### (superseded) Why it is not a background service
 
 The obvious answer is an `IHostedService` with a `Channel<Guid>` queue: about forty
 lines, no new dependency, works locally and in Compose.
@@ -447,7 +501,14 @@ too.
 `Warning` on model failure, so steps 1 and 3 need no new agreement between them
 beyond the one new enum value.
 
-#### `Parsing` is a claim, not a lock
+#### (superseded) `Parsing` is a claim, not a lock
+
+**Superseded by the reversal above.** `Parsing` is now a work item on a queue the
+server owns, and the startup sweep is exactly the "sweeper" this section refused.
+What survives is the narrower ceiling: no *lease*, so two instances would double
+up. The reasoning below is kept because its shape was right — the cheap recovery
+already existing is still the argument, it just turned out the cheap recovery was
+a `WHERE Status = 'Parsing'` rather than a user clicking a button.
 
 **The known ceiling, written down rather than engineered away.** If the user closes
 the tab while step 3 is in flight, the request is cancelled and the row stays in
@@ -507,6 +568,69 @@ The tests that change: anything asserting `POST /imports` returns a populated dr
 now asserts `202` and `Parsing`, and the round trip through `/reparse` becomes the
 test that a draft eventually appears.
 
+#### What the plan got wrong — deviations, written down
+
+Four, and the first is the one that would have shipped a broken feature.
+
+**1. `/reparse` did NOT already accept a `Parsing` row.** The plan said steps 1
+and 3 "need no new agreement between them beyond the one new enum value", and
+that was wrong three times over. `RestructureImport` guarded on
+`Status != AwaitingReview`, so it would have refused every row the new upload
+creates; it never *set* `Status` at all, because the row was already
+`AwaitingReview` when it ran; and its model-failure path returns `Invalid`
+writing nothing, so a failed parse would have left the row in `Parsing` for ever
+with no explanation — strictly worse than the silent empty draft this group set
+out to fix. All three are now handled, and the failure path branches on
+`finishingUpload`: finishing an upload closes the row out into `AwaitingReview`
+with a warning (exactly what `POST /imports` used to return), while a re-parse a
+human pressed still reports `Invalid` and leaves the existing draft alone.
+
+**2. The scanned-PDF path does not go through `Parsing`.** A document with no
+text layer is finished the moment it is saved — nothing will ever be driven for
+it — so marking it `Parsing` would strand it in a state whose only exit is a
+parse that cannot happen. It stays `AwaitingReview`, and it is now the one upload
+path that still completes in a single request.
+
+**3. `POST /imports` still returns `201 Created`, not `202 Accepted`.** The plan
+asked for 202. It was not taken, because a resource genuinely *is* created and
+does have a URL — 202 is for "accepted, nothing to point at yet" — and because
+deviation 2 means the status would otherwise have to vary by document, making the
+wire contract depend on whether a PDF happened to have a text layer. The client
+branches on the `status` field, which is unambiguous either way.
+
+**4. The poller was skipped, then built after all.** The first version had no
+poll — the model ran inside the client's own `/reparse` request, so its response
+*was* the completion event. Once the worker took ownership (see the reversal
+above) there was genuinely something to poll for, and the plan's original step 4
+turned out to be right: the review screen now polls `GET /imports/{id}` every 1.5s
+while `Parsing` and stops on unmount. A failed poll retries rather than painting
+an error, because a transient blip is not a failed import.
+
+Also done as planned: the `useNavigate` liveness guard (still latent, now
+guarded), the `progress.ts` header rewritten rather than deleted, and the bar
+moved from under the upload button to the review screen — the wait did not
+disappear, it moved, and the bar moved with it.
+
+#### Cost, as built
+
+No migration, as predicted. One enum value, one slice shortened by ~30 lines, one
+existing endpoint taught a second caller, one new queue tab. Suite **285 → 288**.
+The two shared test helpers (`ImportTests.PostImportAsync`,
+`ImportHardeningTests.ImportAsync`) now upload *and* reparse, because that pair is
+what "an import with a draft" means from here — 17 downstream tests were failing
+on a `Parsing` row until they did, which is the split proving it is real.
+
+**Part two, the worker: 288 → 290.** Two new files (~80 lines), one new package
+(`Microsoft.Extensions.Hosting.Abstractions` — the GENERIC host, not ASP.NET, so
+the module stays a plain class library), one config flag, one enqueue line, and
+the review screen's effect swapped from driving to watching. No migration here
+either, because the queue was a column that already existed.
+
+The two new tests are the ones that could not exist before: **the worker finishes
+an upload with nobody driving it**, and **the worker recovers a row left `Parsing`
+by a previous run** — the second arranged by writing a stranded row straight to
+the database, so no channel message for it ever existed.
+
 ---
 
 ## Deviations from the plan
@@ -543,9 +667,7 @@ test that a draft eventually appears.
 
 ## What is still outstanding
 
-- **Group 4**, above.
-- **Group 6**, above — the upload stops blocking. Opened 2026-09-03; it
-  reverses a Group 3 decision at the user's instruction.
+- **Group 4**, above. It is now the only group left.
 - **The Phase 6 visual pass on the other seven screens.** Still blocked on the
   user's eyes: the Chrome extension has been disconnected for five sessions, so
   nothing in this phase has been *seen*, only reasoned about from the CSS.
