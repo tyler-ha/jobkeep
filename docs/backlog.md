@@ -6,6 +6,14 @@ so nothing is lost — **without** flooding the committed phase plan. A CLAUDE.m
 priority is small, runnable phases; this doc is where scope goes to wait, not to
 grow.
 
+> **2026-09-04 — read every "Phase 10" below as "the deploy that replaces it".**
+> The AWS deploy was **dropped** (`architecture.md` decision 22); a free host is
+> still to be chosen. The *triggers* are unchanged — these findings still come due
+> when the API first becomes reachable — but any **AWS-specific mitigation named
+> below is moot** (RDS `StorageEncrypted`, SSM Parameter Store, the Lambda
+> specifics); its replacement is chosen with the host. **Phase 11 (auth) also moved
+> to last** on the roadmap, keeping its number.
+
 **Nothing here is a commitment.** Pull an item into a numbered phase doc only
 when we actually decide to build it. Committed work lives in `phase-N-*.md` and
 the README status table — not here.

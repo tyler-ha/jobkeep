@@ -36,15 +36,21 @@ phase doc is a historical record, not a description of the current tree.
 | 4.5 | [Document import: upload, parse, confirm, save](phases/phase-4.5-resume-import.md) | **Done** — PDF/DOCX/text → draft → human confirm → rows |
 | 5 | [ATS compatibility check](phases/phase-5-ats-check.md) | **Done** — skill gap is a SQL join, not a model call; degrades when the model is down |
 | 6 | [Front end](phases/phase-6-frontend.md) | **In progress** — 6.1–6.3 done (eight screens); the visual pass on the other seven screens and 6.4 (README) remain |
-| 6.5 | [The upload experience](phases/phase-6.5-upload-experience.md) | **In progress** — the rename, the drop zone, the progress bar and the spacing are done; group 4 (paste text, the only backend half) is not started |
+| 6.5 | [The upload experience](phases/phase-6.5-upload-experience.md) | **Done in full** (2026-09-04) — the rename, the drop zone, the progress bar, the spacing, the background parse (group 6) and paste-an-ad (group 4) |
 | 6.6 | [The ad goes somewhere](phases/phase-6.6-the-ad-goes-somewhere.md) | **Done** (2026-09-01) — the add form collected the ad into `Notes`, which nothing reads; the job post told you to paste the ad in and offered nowhere to do it |
 | 7 | [Data integrity & the dedup key](phases/phase-7-data-integrity.md) | **Done** (2026-09-01) — one migration; ERD redraw still outstanding. Formerly "Phase 2.7" |
 | 8 | [Soft delete / archive](phases/phase-8-soft-delete.md) | **Planned.** Rides Phase 7's index migration; highest front-end blast radius on the roadmap |
 | 9 | [The three reads the front end could not get](phases/phase-9-api-gaps.md) | **Planned.** Found by building the screens in 6.3 |
-| 10 | [Deploy to AWS Lambda (Function URL)](phases/phase-10-aws-deploy.md) | **Parked** — plan done, $0/month. Formerly "Phase 3" |
-| 11 | [Authentication & owner scoping](phases/phase-11-auth.md) | **Planned.** Gated on the deploy and on confirming decision 9 |
+| 10 | [Deploy to AWS Lambda (Function URL)](phases/phase-10-aws-deploy.md) | **DROPPED** (2026-09-04) — AWS is not the target; a free host is to be chosen later. Kept as a researched record. Decision 22 |
 | 12 | [Feature expansion after the front end](phases/phase-12-feature-expansion.md) | **Placeholder** — not a feature list; what changes about *building* one once there are two halves. Formerly "Phase 7" |
-| 13 | [Module-owned Clean Architecture](phases/phase-13-clean-architecture.md) | **In progress** — 13.1, 13.2a–e and 13.3a–c done (2026-09-01 to 09-02). Ten projects, six modules, five schemas; 13.4 dispatch, 13.5 controllers and 13.6 namespaces/docs remain. Reverses decisions 5, 7 and 17. **Started before Phase 6.5 group 4, not after** — the microservice destination was confirmed 2026-09-01 and this became the boundary that group 4 waits on |
+| **11, last** | [Authentication & owner scoping](phases/phase-11-auth.md) | **Planned, and deliberately last** (2026-09-04). Decision 9 is now confirmed; the deploy that gated it is dropped, which removed its date rather than its reason. ASP.NET Core Identity in full, no third-party login — both settled in the phase doc |
+| 13 | [Module-owned Clean Architecture](phases/phase-13-clean-architecture.md) | **Done** (2026-09-01 to 09-03) — all of 13.1–13.6. Ten projects, six modules, five schemas, controllers, namespaces. Reverses decisions 5, 7 and 17 |
+| 14 | [Skill vocabulary](phases/phase-14-skill-vocabulary.md) | **Done** (2026-09-03) — one migration, `skills.skill_aliases` resolved inside `SkillCatalog`; 228 skills and 322 aliases seeded |
+
+**Phase 11 is the one row that does not sort.** It runs *after* 12, and it kept
+the number 11 anyway — swapping two numbers would have touched 15 references
+across five documents to reorder a real phase and a placeholder. `architecture.md`
+decision 22 accepts that cost out loud; this line is where it is paid.
 
 **Numbers are build order for unbuilt work, and history for built work.**
 Phases 1–6 keep the numbers they shipped under. The remaining work was

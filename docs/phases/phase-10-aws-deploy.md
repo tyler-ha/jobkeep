@@ -7,20 +7,38 @@
 > "Phase 3"; those are dated records and were deliberately not rewritten. See
 > `architecture.md` decision 18.
 
-**Status: Parked (2026-08-27) — plan is complete and researched; not being built yet.**
+**Status: DROPPED (2026-09-04), at the user's instruction. AWS is not the
+deployment target. Everything below is kept as a researched record, not a plan.**
 
-> **Parked deliberately, not blocked.** The plan below costs $0/month and is ready
-> to execute; what it costs is *time*, and the decision was that time is better
-> spent on local feature work first. The reasoning, so it isn't re-argued:
-> deploying is the cheapest test of whether this becomes a daily-use tool, but it
-> is only worth running that test once there is enough tool to test. Nothing here
-> expires — the always-free grants have no clock, which is the property the whole
-> design was selected for. **Unpark when there is a reason to click the link.**
+> **Dropped, not parked.** Parked meant "unpark when there is a reason to click
+> the link"; the decision on 2026-09-04 was that the target itself is wrong —
+> *"we are going to drop the AWS deploy, we gonna use different free tools later
+> on."* So this doc stops being a queue item.
 >
-> One consequence to carry: CLAUDE.md schedules the **doc/security-audit sweep**
-> "before Phase 3 ships to AWS" (this phase, under its old number). That
-> trigger moves with the phase — it is due
-> when this unparks, not on the calendar.
+> **What survives the drop, and is worth not re-deriving when a host is picked:**
+>
+> - **The rule this phase produced still stands: nothing in the deployed
+>   architecture may bill per hour.** It was never an AWS rule. It is what
+>   rejected RDS, Aurora Serverless v2 and a NAT Gateway below, and it is the
+>   test any replacement host has to pass.
+> - **Neon's free tier was chosen on its own merits** — serverless Postgres,
+>   scales to zero, $0, no clock — and nothing about it was AWS-specific. It
+>   remains the leading candidate for the database wherever the API ends up.
+> - **The research below is still an answer to "why not X".** The Aurora and
+>   API Gateway rejections, the cold-start numbers and the "this account has no
+>   free tier left" finding are dated facts, not opinions. Read them before
+>   proposing an AWS variant again.
+> - **The container is the portable half.** `src/Dockerfile` and `compose.yaml`
+>   already build and run the API without any AWS-specific hosting code, which
+>   is why dropping the target costs no source changes. Whatever host is chosen
+>   (Fly.io, Railway, Render, Azure Container Apps, a small VPS) starts from
+>   that image, and only a Lambda entry point would have been thrown away —
+>   it was never written.
+>
+> Two things that were due "when the deploy unparks" now have no trigger and
+> need a new one: the **doc/security-audit sweep** and the audit's **transport &
+> secrets hardening**. Both are re-scheduled to *before whatever deploy replaces
+> this one*. See `architecture.md` decision 22.
 
 > **Rewritten 2026-08-26**, then **revised 2026-08-27** after a pricing/latency
 > research pass. The original plan targeted API Gateway in front of Lambda, with

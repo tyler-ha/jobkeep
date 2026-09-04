@@ -29,11 +29,14 @@ can. Prefer the defensible choice over the impressive-sounding one.
    tier or on-demand/serverless pricing. Never suggest always-on
    infrastructure (e.g. a provisioned EC2 instance or provisioned-capacity
    DynamoDB) without flagging the cost tradeoff explicitly. Note: storage is
-   PostgreSQL (see Architecture). Local dev uses Postgres in Docker (free);
-   the deployed DB is **Neon's free tier** (serverless Postgres, scales to
-   zero, $0). This replaced RDS free-tier in the deploy phase (now Phase 10, see
-   `docs/phases/phase-10-aws-deploy.md`) — see that doc for why,
-   and for the rule it produced: **nothing in the deployed architecture may
+   PostgreSQL (see Architecture). Local dev uses Postgres in Docker (free).
+   **There is no deployed DB, because there is no deploy** — the AWS phase was
+   **dropped on 2026-09-04** (`architecture.md` decision 22) and a free host is
+   still to be chosen. **Neon's free tier** (serverless Postgres, scales to zero,
+   $0) remains the leading candidate and was never AWS-specific; it replaced RDS
+   free-tier in `docs/phases/phase-10-aws-deploy.md`, which is now a researched
+   record rather than a plan. Read it for the rejected alternatives and for the
+   rule that outlived the target: **nothing in the deployed architecture may
    bill per hour.**
 2. **Each phase should end in something runnable.** The person has a
    history of abandoning projects when scope gets fuzzy. Don't let a
@@ -176,10 +179,13 @@ Full reasoning, the extraction triggers, and the decision record are in
   Phase 4.5 made Documents a second caller, and the rule that produced is that
   **`Ai` owns the `ai_analyses` table, not the technology**. `IChatClient` is a
   shared dependency any module may inject, like `AppDbContext`.
-- **Deployment target**: AWS Lambda behind a **Function URL** (no API Gateway
-  — see the Phase 10 doc), with PostgreSQL on **Neon's free tier**. The Lambda
-  deliberately stays *out* of a VPC, so no NAT Gateway is ever needed. Both the
-  REST and GraphQL endpoints ride the same Lambda.
+- **Deployment target**: **undecided — AWS was dropped 2026-09-04** (decision 22).
+  The API is a container (`src/Dockerfile`, `compose.yaml`) and no hosting-specific
+  code was ever written, so the drop cost zero source changes and the next choice
+  costs none either. The constraint that survives: **nothing may bill per hour**,
+  which is what rejected RDS, Aurora and a NAT Gateway. Neon's free tier is still
+  the leading candidate for the database. `docs/phases/phase-10-aws-deploy.md` keeps
+  the Lambda/Function-URL research as a dated answer to "why not AWS".
 
 ### Where new code goes
 
@@ -202,7 +208,7 @@ src/Jobkeep.Api/Program.cs                         wiring only
 ```
 
 Modules: `Applications` (core), `Analytics` (read-only), `Ai`, `Documents`, `Match`,
-`Skills`, `Identity` (later, Phase 11).
+`Skills`, `Identity` (Phase 11, now **last** on the roadmap).
 
 **A new slice is one file plus two lines**: register the handler in `<X>Module.cs`,
 add an action to `<X>Controller.cs`. `Program.cs` only ever calls `Add*Module()`;
@@ -328,7 +334,8 @@ Prefer putting the detail in the **phase doc** — one accurate place beats four
 half-synchronised ones.
 
 **On a cadence, never per feature.** Doc audits and consistency sweeps run at
-phase-group boundaries only — before the AWS deploy (Phase 10) and before Phase 6
+phase-group boundaries only — before whatever deploy replaces the dropped Phase 10,
+and before Phase 6
 — and **always in a fresh session**. The cadence and the session boundary do the
 saving together: the same sweep late in a long session costs roughly 3x what it
 costs early.
@@ -627,8 +634,9 @@ about that date — verify it before relying on it.
   textarea to `Notes`, which is why a pasted advertisement produced no skills.
 - `docs/security-and-data-audit.md` — schema/config exposure, F1-F18, and the
   phased remediation plan. **Refresh on a cadence, not per phase:** once before
-  the AWS deploy ships (Phase 10), and once before auth lands (Phase 11). Those are the points where a
-  stale finding would actually cost something.
+  whatever deploy replaces the dropped Phase 10 ships, and once before auth lands
+  (Phase 11, now last). Those are the points where a stale finding would actually
+  cost something.
 - `docs/user-journeys.md` — what the user actually does, step by step, and where
   that procedure has holes. The counterpart to `architecture.md`: that one
   describes the system from the code's side, this one from the user's.
@@ -719,6 +727,17 @@ migration; **no schema moved, so EF reports no drift** — the five model snapsh
 name entity types by CLR full name and were rewritten with the rename, which is the
 one trap in that step. Two rules from it are in "Where new code goes" above; the
 whole record is `docs/phases/phase-13-clean-architecture.md` §13.6.
+
+**THE ROADMAP CHANGED ON 2026-09-04 — no code, docs only** (`architecture.md`
+decision 22). **Phase 10, the AWS deploy, is DROPPED**; a free host is to be
+chosen later. **Phase 11, auth, moves to LAST** — after 8, 9 and 12 — and **keeps
+its number**, which knowingly breaks decision 18's "numbers are build order".
+Three questions were settled at the same time and are recorded in
+`docs/phases/phase-11-auth.md` so they are not re-asked: **decision 9 is CONFIRMED**
+(`skills` stays global; status moved *Proposed* → *Accepted*), auth will use
+**ASP.NET Core Identity in full** (one new package, approved — chosen over the
+smaller hand-rolled option **the ponytail ladder argued for**, deliberately, for
+the platform answer an interviewer expects), and there is **no third-party login**.
 
 **Nothing is scheduled next.** The live candidates, none started: **Phase 6 step
 6.4** (the README), the **Phase 6 visual pass** on the other seven screens, and the
@@ -957,8 +976,8 @@ Six things worth not re-deriving:
   tab and the row stranded. **The refusal it rested on — Lambda freezes background
   threads after a response — was sound**, and `phase-10-aws-deploy.md:84` makes it
   stronger than it first looked (the Lambda avoids a VPC *so that* the AI call
-  works there). It is moot only because Phase 10 is parked and **the AWS plan may
-  be dropped**. Re-make that argument if a serverless target returns.
+  works there). It is moot because **the AWS plan was dropped on 2026-09-04**.
+  Re-make that argument if a serverless target ever returns.
 - **Enqueue AFTER `SaveChangesAsync`, and not as a mediator notification.**
   `AddMediator` is `ServiceLifetime.Scoped` and `IPublisher.Publish` awaits inline,
   so a notification would run the model *inside* the upload request and reinstate
@@ -1089,22 +1108,27 @@ were written but **never executed** — Docker was down that session — and wer
 for the first time during Phase 4.5, passing 10/10 unchanged. Don't repeat the
 pattern: a phase whose tests have not run is not verified, whatever the doc says.
 
-**The deploy — now Phase 10, formerly Phase 3 — is parked, not blocked**
-(2026-08-27). Its plan is complete, researched and costs $0/month; the decision
-was that *time* is better spent on local feature work first, and that deploying is
-only worth doing once there is enough tool to justify clicking the link. Nothing
-about it expires — the always-free grants have no clock. Read
-`docs/phases/phase-10-aws-deploy.md` before reopening it; the Aurora
-and API Gateway alternatives are already rejected there with reasons, and the
-account has **no free tier left**, so "t3.micro is free" style advice does not
-apply. Being built past by four phases is what triggered the 2026-09-01 renumber:
-the number said "third" and the schedule said "tenth".
+**THE AWS DEPLOY IS DROPPED (2026-09-04), at the user's instruction** — *"we are
+going to drop the AWS deploy, we gonna use different free tools later on."* Phase
+10 went from *Parked* to *Dropped*; `architecture.md` decision 3 is superseded and
+decision 22 records it. **It cost zero source changes, which is the whole point:**
+the Lambda entry point was never written, so four phases were built past the deploy
+without accumulating any AWS coupling, and the container the compose stack already
+runs is the portable half. Don't propose an AWS variant without reading
+`docs/phases/phase-10-aws-deploy.md` first — the Aurora and API Gateway rejections,
+the cold-start figures and "this account has **no free tier left**" are still valid
+dated findings, so "t3.micro is free" style advice still does not apply.
 
-Two things are due **when the deploy unparks**, not on a calendar: the
-**doc/security-audit sweep** (see "Documenting as you go" — cadence, and in a
-fresh session) and the audit's **transport & secrets hardening**. Both were tied
-to "before Phase 3 ships to AWS", so the trigger moved with the phase — and moved
-again with its number, to Phase 10.
+Three things survive the target and should not be re-derived: **the rule**
+(*nothing in the deployed architecture may bill per hour* — it was never an AWS
+rule and it is the test any replacement host must pass), **Neon's free tier** (a
+database choice, not an AWS one), and **the research as a "why not X"**.
+
+**The real hazard is a trigger hung off an event that will now never happen.**
+Two things were due "when the deploy unparks": the **doc/security-audit sweep**
+(see "Documenting as you go" — cadence, fresh session) and the audit's **transport
+& secrets hardening**. Both are re-hung on **before whatever deploy replaces Phase
+10**. Same failure mode decision 18 named about unowned numbers.
 
 Phase 2.6 is done (2026-08-26): `net10.0` everywhere, EF/Npgsql/`dotnet-ef` on
 the 10.x line, CI down to one SDK. **No C# changed** — the whole upgrade is four

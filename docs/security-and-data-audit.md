@@ -3,6 +3,15 @@
 **Status:** Audit complete 2026-08-25. Remediation **not started** — see §5.
 **Scope:** The 8-table PostgreSQL schema as of migration `20260819115119_InitialCreate`,
 plus the config and API surfaces that expose it.
+
+> **2026-09-04 — read every "Phase 10" below as "the deploy that replaces it".**
+> The AWS deploy was **dropped** (`architecture.md` decision 22); a free host is
+> still to be chosen. The *triggers* are unchanged — these findings still come due
+> when the API first becomes reachable — but any **AWS-specific mitigation named
+> below is moot** (RDS `StorageEncrypted`, SSM Parameter Store, the Lambda
+> specifics); its replacement is chosen with the host. **Phase 11 (auth) also moved
+> to last** on the roadmap, keeping its number.
+
 **Method:** Schema read from `AppDbContextModelSnapshot.cs` (the DDL ground truth),
 not from `Models/*.cs`. GraphQL exposure verified against the emitted SDL from a
 running instance, not inferred from attributes.
