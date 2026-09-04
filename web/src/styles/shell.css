@@ -2,37 +2,59 @@
  * one screen uses. Anything that belongs to a single screen lives in
  * screens.css instead; this file stays the shared layer. */
 
-/* Capped and centred as ONE slab — nav and content travel together.
+/* The rail is anchored to the viewport edge; the content column is centred in
+ * whatever is left.
  *
- * `main` carries max-width: var(--shell-max) with no auto margin, so before this
- * the whole app pinned to the left edge: on a 2560px display that left a measured
- * 904px void down the right of every screen, which is what the first real look at
- * the app (2026-09-03) found. Centring `main` alone would fix the void and open a
- * second gap between the nav and the content, so the cap belongs here.
+ * This is the third arrangement and the reasoning for each is worth keeping.
+ * Originally `main` was capped with no auto margin, so the whole app pinned left
+ * and a 2560px display showed a measured 904px void down the right (found
+ * 2026-09-03). That was fixed by capping and centring the shell as one slab —
+ * which cured the void but detached the nav from the edge, leaving ~452px of
+ * dead ground to its LEFT at 2560. A navigation rail that floats inboard of the
+ * window edge reads as a misaligned page rather than as app chrome, so on
+ * 2026-09-04 the user asked for it back on the edge.
  *
- * Deliberately NOT widening --shell-max instead: the eight artboards were composed
+ * The cap therefore moves back to `main`, but WITH margin-inline: auto, which is
+ * the combination neither earlier version had: the rail sits at x=0 and the
+ * content centres in the remaining column, so no single edge collects all the
+ * slack. The cost is that content no longer touches the nav on very wide
+ * screens. That gap is symmetric and reads as margin, which is the trade the
+ * lopsided 904px void could not offer.
+ *
+ * Still deliberately NOT widening --shell-max: the eight artboards were composed
  * at 1440, and letting the column grow re-flows every one of them. That is a
  * redesign; this is a fix. */
 .shell {
   display: grid;
   grid-template-columns: var(--nav-w) minmax(0, 1fr);
   min-height: 100vh;
-  max-width: calc(var(--shell-max) + var(--nav-w));
-  margin-inline: auto;
 }
 
 /* ---- Navigation --------------------------------------------------------- */
 
+/* The one committed field in this redesign: a solid dark-teal rail rather
+ * than an accent scattered thin over a neutral ground. Bounded to the nav
+ * column on purpose — the content area next to it stays quiet and light,
+ * because this is an Operate surface and the task, not the chrome, has to
+ * win the eye. */
 .nav {
   display: flex;
   flex-direction: column;
   gap: var(--s-6);
   padding: var(--s-5) var(--s-4);
-  border-right: 1px solid var(--rule);
-  background: var(--ground);
+  background: var(--nav-ground);
   position: sticky;
   top: 0;
   height: 100vh;
+}
+
+/* Wraps the wordmark and the mobile-only toggle. On desktop this is just the
+ * wordmark with an invisible (display: none) sibling — no layout change. */
+.nav-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
 }
 
 .wordmark {
@@ -42,9 +64,22 @@
   font-weight: 800;
   letter-spacing: var(--track-display);
   padding: var(--s-1) var(--s-2);
-  color: var(--ink);
+  color: var(--pop); /* 9.66 on --nav-ground */
   text-decoration: none;
   align-self: flex-start;
+}
+
+/* Hidden above 900px — the sidebar never collapses on a screen wide enough
+ * to hold it open. */
+.nav-toggle {
+  display: none;
+  color: var(--nav-muted);
+  border-radius: var(--r-sm);
+  padding: var(--s-1);
+}
+
+.nav-toggle:hover {
+  color: #fff;
 }
 
 .nav-list {
@@ -53,11 +88,16 @@
   gap: 1px;
 }
 
+/* Icon + label, Creatica-style. The icon takes its color from currentColor
+ * (lucide's default stroke), so it rides the same --nav-muted / hover /
+ * aria-current rules as the text below instead of needing its own. */
 .nav-link {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
   padding: var(--s-2) var(--s-3);
   border-radius: var(--r-sm);
-  color: var(--muted);
+  color: var(--nav-muted);
   text-decoration: none;
   font-size: var(--t-sm);
   font-weight: 500;
@@ -66,47 +106,42 @@
     background-color var(--dur-fast) var(--ease-out);
 }
 
-.nav-link:hover {
-  color: var(--ink);
-  background: color-mix(in srgb, var(--rule) 45%, transparent);
+.nav-link svg {
+  flex: none;
 }
 
-/* The active item is marked, not tabbed. The swipe is the brand's own device
- * and it is the one place amber is allowed to take a surface in the chrome —
- * ink on amber is 11.25, so the label gets more legible, not less. */
+.nav-link:hover {
+  color: #fff;
+  background: color-mix(in srgb, #fff 12%, transparent);
+}
+
+/* The active item is the one lime moment in the chrome — ink on lime is
+ * 11.33, so it reads clearly regardless of what sits behind the rail. */
 .nav-link[aria-current='page'] {
   color: var(--ink);
   font-weight: 600;
-  background: none;
-}
-
-.nav-link[aria-current='page'] .nav-label {
-  position: relative;
-  isolation: isolate;
-}
-
-.nav-link[aria-current='page'] .nav-label::before {
-  content: '';
-  position: absolute;
-  z-index: -1;
-  inset: 0.1em -0.3em 0.04em -0.26em;
   background: var(--pop);
-  border-radius: 0.55em 0.35em 0.5em 0.3em / 0.5em 0.6em 0.35em 0.45em;
-  transform: rotate(-0.5deg);
 }
 
 .nav-foot {
   margin-top: auto;
   font-size: var(--t-xs);
-  color: var(--muted);
+  color: var(--nav-muted);
   padding: 0 var(--s-3);
 }
 
 /* ---- Main --------------------------------------------------------------- */
 
+/* width:100% is load-bearing, not belt-and-braces: auto inline margins make a
+ * grid item shrink-to-fit, so without it the column sizes to its CONTENT and
+ * every screen gets a different width (Applications measured 1062px against
+ * Today's 1440). Explicit width fills the track, max-width caps it, and the auto
+ * margins then centre what is left over. */
 .main {
   padding: var(--s-6) var(--s-7);
+  width: 100%;
   max-width: var(--shell-max);
+  margin-inline: auto;
 }
 
 .screen-head {
@@ -168,6 +203,21 @@
   color: var(--muted);
 }
 
+/* A label for content a model wrote rather than the user. Same pop-tint /
+ * pop-dark pairing as .refusal, .degraded and the AI-extracted skill pills —
+ * not a new color, just naming an existing one for this use. */
+.badge-ai {
+  display: inline-block;
+  padding: 2px var(--s-2);
+  border-radius: var(--r-pill);
+  background: var(--pop-tint);
+  color: var(--pop-dark);
+  font-size: var(--t-xs);
+  font-weight: 600;
+  letter-spacing: var(--track-tight);
+  white-space: nowrap;
+}
+
 /* ---- States ------------------------------------------------------------- */
 
 .state {
@@ -206,7 +256,7 @@
 }
 
 /* An unreachable API is not the user's mistake, so it is stated plainly and
- * on a card — red text never sits directly on the warm ground (4.18, under AA). */
+ * on a card — red text never sits directly on the warm ground (4.00, under AA). */
 .error {
   background: var(--card);
   border: 1px solid color-mix(in srgb, var(--alert) 35%, var(--rule));
@@ -270,8 +320,8 @@
   background: var(--ground);
 }
 
-/* White on --pri is 5.92 — a filled blue button with a white label is safe.
- * The hover goes to --pri-dark at 9.77, so it gets more legible under the
+/* White on --pri is 6.13 — a filled button with a white label is safe.
+ * The hover goes to --pri-dark at 10.00, so it gets more legible under the
  * pointer rather than less. */
 .btn-primary {
   background: var(--pri);
@@ -370,7 +420,7 @@
 
 /* A destructive action. The alert red is reserved for genuine failures and for
    this — a button that removes something. Filled rather than red-on-warm:
-   --alert is 4.18 on --ground and fails there, but white on --alert is 4.55. */
+   --alert is 4.00 on --ground and fails there, but white on --alert is 4.55. */
 .btn-danger {
   background: var(--alert);
   border-color: var(--alert);
@@ -550,20 +600,40 @@
 /* ---- Responsive --------------------------------------------------------- */
 
 @media (max-width: 900px) {
+  /* Stacked, so the nav is now a ROW rather than a column. It has to be told to
+   * hug its content: .shell carries min-height:100vh, and a grid's default
+   * stretch hands the leftover height to the rows -- which on a short screen
+   * inflated the collapsed nav from its 84px of content to 185px of dark teal.
+   * Measured on Applications with one result; Upload hid it by being tall
+   * enough to leave nothing over. auto/1fr gives the slack to .main instead. */
   .shell {
     grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
   }
   .nav {
     position: static;
     height: auto;
-    border-right: none;
-    border-bottom: 1px solid var(--rule);
-    gap: var(--s-4);
+    gap: var(--s-3);
   }
+  .nav-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+  }
+  /* Collapsed by default — a dropdown, not the old horizontal wrap, which
+   * pushed every screen's content below seven wrapped nav items (measured:
+   * over half the first mobile viewport, before any content). Opening it
+   * reveals a plain vertical list instead, which is the standard mobile
+   * pattern and never needs more than one column's width. */
   .nav-list {
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: var(--s-1);
+    display: none;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .nav[data-open] .nav-list {
+    display: flex;
   }
   .nav-foot {
     display: none;

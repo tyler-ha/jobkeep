@@ -75,6 +75,20 @@
   gap: var(--s-1);
 }
 
+/* Both screens that use .tabs put it somewhere different, so the spacing cannot
+ * live on .tabs itself. On Applications it sits inside .toolbar, a flex row that
+ * already gaps it; a margin there would double up. On Upload it is a bare child
+ * of .main, which is display:block with no gap, so it had none at all and sat
+ * flush against the form above and the list below. Hence the child combinator —
+ * it names the context that lacks rhythm rather than the component.
+ *
+ * Asymmetric on purpose: --s-5 above matches the screen-head-to-panel step, and
+ * --s-4 below is tighter so the filter reads as belonging to the list it
+ * filters rather than floating between the two blocks. */
+.main > .tabs {
+  margin: var(--s-5) 0 var(--s-4);
+}
+
 .tab {
   display: inline-flex;
   align-items: center;
@@ -183,9 +197,9 @@
   background: var(--ground);
 }
 
-/* The one authored motion on this screen, and one of the two functional uses of
- * amber the brief allows: the row that just landed. Ink on amber is 11.25, so
- * the row gets more legible while it is marked, not less. */
+/* The one authored motion on this screen: the row that just landed gets a
+ * lime flash. Ink on lime is 11.33, so the row gets more legible while it's
+ * highlighted, not less. */
 @keyframes landed {
   0%,
   40% {
@@ -580,9 +594,9 @@
 }
 
 .stage[data-complete] .stage-value {
-  /* --sec is 4.36 on white, under AA for body text but fine here: this is
-     22px semibold, which is large text at 3:1. The -dark is still safer, and
-     it is what the ramp rule says to reach for. */
+  /* --sec now clears AA text on its own (4.98 on white), but --sec-dark is
+     still what the ramp rule says to reach for, and it stays the safer
+     choice at 8.08. */
   color: var(--sec-dark);
 }
 
@@ -714,7 +728,7 @@
 
 /* ---- The drop zone ------------------------------------------------------ */
 
-/* Amber cannot carry this state alone: --pop is 1.45 on the ground, under the
+/* Lime cannot carry this state alone: --pop is 1.38 on the ground, under the
  * 3.0 non-text threshold. So the zone changes its outline AND its label as well
  * as its ground, and every cue works with colour removed. */
 .board-cv {
@@ -844,15 +858,14 @@
   font-size: var(--t-xs);
 }
 
-/* The one held moment on this screen. Display face at display size, with the
-   marker swipe behind the figure — amber as a ground, never as ink. */
+/* The one held moment on this screen: display face, display size. */
 .insight-figure {
   display: flex;
   align-items: baseline;
   gap: var(--s-3);
 }
 
-.insight-figure .marked {
+.insight-figure .figure-num {
   font-family: var(--font-display);
   font-variation-settings: 'wdth' var(--display-wdth);
   font-size: var(--t-2xl);
@@ -1098,7 +1111,7 @@
 
 /* Armed and over are two states, not one: the board says where a card MAY land
    before the cursor arrives. Amber cannot carry either on its own — --pop is
-   1.45 on the ground, under the 3.0 non-text threshold — so both change the
+   1.38 on the ground, under the 3.0 non-text threshold — so both change the
    outline, and both put a word on the column as well. */
 .col[data-armed] {
   border-color: var(--rule-strong);
@@ -1254,7 +1267,7 @@
   font-size: var(--t-xs);
   color: var(--muted);
   padding: 2px var(--s-1);
-  /* --rule is 1.21 on this ground and tokens.css says in as many words that it is
+  /* --rule is 1.16 on this ground and tokens.css says in as many words that it is
    * a decorative hairline and never an input's sole border. This is a select, and
    * this border is its only boundary. --rule-strong is 3.05 and clears the 3.0
    * threshold WCAG puts on non-text UI boundaries — it is what every other control
@@ -1316,9 +1329,9 @@
   border-color: var(--rule);
 }
 
-/* The selected version gets the marker, not a coloured left border — the
-   device is a highlighter stroke, and the border pattern was removed from this
-   design deliberately. */
+/* The selected version stands on its own card treatment — background,
+   border and shadow — plus a teal label, the same active pairing used for
+   nav and tabs. */
 .shelf-item[aria-current] {
   background: var(--card);
   border-color: var(--rule-strong);
@@ -1326,18 +1339,7 @@
 }
 
 .shelf-item[aria-current] .shelf-label {
-  position: relative;
-  isolation: isolate;
-}
-
-.shelf-item[aria-current] .shelf-label::before {
-  content: '';
-  position: absolute;
-  z-index: -1;
-  inset: 0.1em -0.24em 0.04em -0.2em;
-  background: var(--pop);
-  border-radius: 0.55em 0.35em 0.5em 0.3em / 0.5em 0.6em 0.35em 0.45em;
-  transform: rotate(-0.4deg);
+  color: var(--pri-dark);
 }
 
 .shelf-label {
@@ -1584,8 +1586,8 @@
   background: var(--sec-tint);
 }
 
-/* THREE cues, and this is not decoration: --pop is 1.45 on the ground, well
-   under WCAG's 3.0 for a non-text boundary, so amber is not allowed to carry
+/* THREE cues, and this is not decoration: --pop is 1.38 on the ground, well
+   under WCAG's 3.0 for a non-text boundary, so lime is not allowed to carry
    this state alone. The ground changes, the border goes solid and dark, and the
    label text changes to "Drop it here" — the last one works with colour removed
    entirely. Same construction as .board-cv above. */
@@ -1656,9 +1658,9 @@
   max-width: var(--measure);
 }
 
-/* Blue on blue-tint. Blue may take a whole surface and --pri is 5.92 on white,
+/* Teal on teal-tint. --pri may take a whole surface and is 6.13 on white,
    so the fill clears the 3.0 non-text threshold against its own track — which
-   amber would not have done. */
+   lime would not have done. */
 .progress {
   height: 6px;
   width: 100%;
@@ -1887,8 +1889,8 @@
 
 /* ---- The held moment ----------------------------------------------------- */
 
-/* One per screen, in the display face, under the marker — the same shape as
-   .today-figure and .insight-figure. It is the extracted character count
+/* One per screen, in the display face — the same shape as .today-figure and
+   .insight-figure. It is the extracted character count
    because that is the question this screen exists to ask: did the machine read
    your document at all? A CV that extracts to 40 characters is a scanned
    picture, and knowing that here is the difference between "the model is bad"
@@ -1901,7 +1903,7 @@
   width: 100%;
 }
 
-.upload-figure .marked {
+.upload-figure .figure-num {
   font-family: var(--font-display);
   font-variation-settings: 'wdth' var(--display-wdth);
   font-size: var(--t-2xl);
@@ -1992,7 +1994,7 @@
   margin-bottom: var(--s-5);
 }
 
-.today-figure .marked {
+.today-figure .figure-num {
   font-family: var(--font-display);
   font-variation-settings: 'wdth' var(--display-wdth);
   font-size: var(--t-2xl);
