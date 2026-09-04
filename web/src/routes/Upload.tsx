@@ -4,10 +4,12 @@ import {
   Briefcase,
   Check,
   ChevronRight,
+  ClipboardPaste,
   FileCheck2,
   FileDown,
   FileText,
   FileUp,
+  Paperclip,
   RefreshCw,
   Save,
   Trash2,
@@ -23,6 +25,7 @@ import {
   confirmImport,
   discardImport,
   getImport,
+  importText,
   listImports,
   reparseImport,
   reviewImport,
@@ -222,6 +225,12 @@ function Uploader({
 }) {
   const navigate = useNavigate();
   const [kind, setKind] = useState<DocumentKind>('Resume');
+  /* Where the document comes from. Some ads are never a file — the user selects
+   * the page, copies it, and has nothing to upload. Both sources reach the same
+   * pipeline (ImportText.cs delegates to the upload's own handler), so this
+   * chooses which box to show and which call to make, and nothing else. */
+  const [source, setSource] = useState<'file' | 'text'>('file');
+  const [text, setText] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [label, setLabel] = useState('');
   /* Whether the user has touched the label box. Without it, choosing a second
@@ -275,17 +284,26 @@ function Uploader({
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!file) return;
+    if (!ready) return;
     setBusy(true);
     setError(null);
     try {
-      const created = await uploadImport(
-        file,
-        kind,
-        label.trim() || undefined,
-        sourceUrl.trim() || undefined,
-      );
+      const created =
+        source === 'file'
+          ? await uploadImport(
+              file!,
+              kind,
+              label.trim() || undefined,
+              sourceUrl.trim() || undefined,
+            )
+          : await importText(
+              text,
+              kind,
+              label.trim() || undefined,
+              sourceUrl.trim() || undefined,
+            );
       clearFile();
+      setText('');
       setLabel('');
       setLabelTouched(false);
       setSourceUrl('');
@@ -315,6 +333,14 @@ function Uploader({
     }
   }
 
+  /* The paste threshold, and it is a MIRROR of DocumentOptions.MinTextChars —
+   * the server refuses below it with a sentence naming the number. Duplicated
+   * on purpose rather than fetched: the client copy only decides when the
+   * button lights up, and a disabled button that agrees with the server is
+   * worth more than a round trip to learn a constant. If the server's value
+   * moves, this becomes merely optimistic, not wrong. */
+  const ready = source === 'file' ? !!file : text.trim().length >= 40;
+
   /* Three cues, not one. --pop is 1.45 on the ground, under WCAG's 3.0 non-text
    * threshold, so the amber ground CANNOT carry this state by itself: the zone
    * also changes its outline and its wording, and every cue survives colour
@@ -330,10 +356,63 @@ function Uploader({
     <form className="panel uploader" onSubmit={submit}>
       <div className="panel-head">
         <h2>Upload a document</h2>
-        <span className="quiet">PDF, Word or plain text · up to 5 MB</span>
+        <span className="quiet">
+          {source === 'file' ? 'PDF, Word or plain text · up to 5 MB' : 'Paste it as you copied it'}
+        </span>
       </div>
 
       <div className="upload-grid">
+        <fieldset className="field upload-wide">
+          <legend>Where is it?</legend>
+          <div className="segmented">
+            {(['file', 'text'] as const).map((s) => (
+              <label key={s} className="segment">
+                <input
+                  type="radio"
+                  name="source"
+                  value={s}
+                  checked={source === s}
+                  onChange={() => {
+                    setSource(s);
+                    setError(null);
+                  }}
+                />
+                <span>
+                  {s === 'file' ? (
+                    <Paperclip size={14} aria-hidden />
+                  ) : (
+                    <ClipboardPaste size={14} aria-hidden />
+                  )}
+                  {s === 'file' ? 'Choose a file' : 'Paste text'}
+                </span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+
+        {source === 'text' ? (
+          <label className="field upload-wide">
+            <span>Paste the advertisement</span>
+            <textarea
+              rows={10}
+              value={text}
+              onChange={(e) => {
+                setText(e.target.value);
+                setError(null);
+              }}
+              placeholder="Select the whole ad on the job board, copy, and paste it here."
+            />
+            {/* The counter is the whole affordance for the 40-character floor:
+                without it a disabled button has no explanation. It counts what
+                the server counts — trimmed — so the two never disagree by a
+                stray newline. */}
+            <span className="quiet paste-count">
+              {text.trim().length < 40
+                ? `${text.trim().length} of 40 characters — paste a bit more`
+                : `${text.trim().length.toLocaleString()} characters`}
+            </span>
+          </label>
+        ) : (
         <div className="dropzone-wrap">
           {/* A label wrapping the real input, not a div with a click handler.
               The native control keeps its own keyboard path, its file picker and
@@ -391,6 +470,7 @@ function Uploader({
             </button>
           )}
         </div>
+        )}
 
         <fieldset className="field">
           <legend>What is it?</legend>
@@ -438,9 +518,13 @@ function Uploader({
       {error && <Failure error={error} what="upload that document" />}
 
       <div className="add-actions">
-        <button type="submit" className="btn btn-primary" disabled={busy || !file}>
-          <UploadIcon size={15} aria-hidden />
-          {busy ? 'Uploading…' : 'Upload and read'}
+        <button type="submit" className="btn btn-primary" disabled={busy || !ready}>
+          {source === 'file' ? (
+            <UploadIcon size={15} aria-hidden />
+          ) : (
+            <ClipboardPaste size={15} aria-hidden />
+          )}
+          {busy ? 'Reading…' : source === 'file' ? 'Upload and read' : 'Read this text'}
         </button>
         {/* The progress bar used to live here, because the wait did. Since group
             6 this button is a file upload and nothing else — a bar modelling a

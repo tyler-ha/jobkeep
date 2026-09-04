@@ -1,6 +1,6 @@
 # Phase 6.5 — the upload experience
 
-**Status: in progress.** Numbered 6.5 rather than 13 because it finishes Phase 6's
+**Status: DONE (2026-09-04).** Numbered 6.5 rather than 13 because it finishes Phase 6's
 front end and leaves the 7–12 build order undisturbed.
 
 | Group | | Status |
@@ -10,10 +10,11 @@ front end and leaves the 7–12 build order undisturbed.
 | 2 | The drop zone, the icons, the label default | **Done** (2026-09-01) |
 | 3 | The progress indicator | **Done** (2026-09-01) |
 | 5 | Spacing and layout, upload screens only | **Done** (2026-09-01) |
-| 4 | Paste text — the only group with a backend half | **Not started** |
-| | Front-end suite | **46 green**, up from 35. `src/` untouched, so the backend suite was not run |
+| 6 | The upload stops blocking on the model | **Done** (2026-09-04) |
+| 4 | Paste text — the only group with a backend half | **Done** (2026-09-04) |
+| | Suites | .NET **299**, up from 290. Web **50**, up from 49 |
 
-Group 4 is deliberately last and in its own session. It is the only group that
+Group 4 was deliberately last and in its own session. It is the only group that
 touches `src/` — a new slice, a GraphQL field and five tests — and the token
 ledger says a session's back half costs +75–87% per turn over its front half,
 measured on four phases running. Nothing about deferring it makes it bigger.
@@ -337,9 +338,10 @@ the same CSS block as groups 2 and 3.
   `.source-body` audited against `--s-1`…`--s-8`. **The other six screens' blocks
   were not touched.**
 
-### Group 4 — paste text (not started)
+### Group 4 — paste text (DONE, 2026-09-04)
 
-The only group with a backend half. Plan, for the session that picks it up:
+The only group with a backend half. **The plan below is kept as written; what
+actually shipped, and the three places it differs, are in the section after it.**
 
 - **`src/Modules/Documents/ImportText.cs`** — `POST /imports/text`, JSON body
   `ImportTextRequest(DocumentKind Kind, string Text, string? Label, string?
@@ -376,6 +378,47 @@ The only group with a backend half. Plan, for the session that picks it up:
   (`ClipboardPaste`) — a `<textarea>` with a mono character counter, `importText()`
   in `lib/api.ts`, `stubFetch` branches for **both** `POST /imports` and
   `POST /imports/text`, and one `user-event` test that types and submits.
+
+#### What group 4 actually shipped
+
+`POST /imports/text` and the `importText` mutation, a source toggle on the
+uploader, and the description clip. Suite 290 → 299, web 49 → 50, **no
+migration** — nothing about a paste is a new column.
+
+Three deviations from the plan above, and the first is the one worth carrying:
+
+- **The slice DELEGATES rather than calling the extractor itself.**
+  `ImportTextHandler` validates the one rule a paste has that a file does not,
+  then sends an ordinary `ImportDocument` through the mediator. The plan said to
+  call `IDocumentTextExtractor.Extract` directly, which would have been correct
+  and would have left two code paths that *agree by inspection* — each restating
+  the filename truncation, the label resolution, the content hash, the
+  save-before-parse ordering and the enqueue. Delegating makes "a paste and an
+  uploaded .txt are the same import" a fact about the call graph instead of a
+  claim in a comment, and `ImportTextTests` can then assert it as identity:
+  same `contentHash`, same `extractedText`, same `format`, same `status`.
+- **The paste is trimmed before it is hashed.** Not in the plan. Selecting an ad
+  in a browser drags in leading and trailing whitespace that belongs to the drag,
+  not to the document — so two pastes of one ad that differ only in how far the
+  selection went are now the same bytes, and a paste matches a `.txt` of the same
+  words rather than missing it by a newline.
+- **The path is `src/Jobkeep.Modules.Documents/Application/ImportText.cs`.** The
+  plan predates the 13.1 project split and named `src/Modules/Documents/`.
+
+Everything else landed as planned: the sibling route (not an optional `file`),
+`SourceFormat.PlainText` through the real extractor, the 40-character refusal
+naming its own threshold, `DraftLimits.MaxDescriptionLength` clipping the
+description on confirm rather than 500ing, and the GraphQL field — the
+file-upload exception covers *receiving bytes*, and a string is not bytes.
+
+On the front end: a `Where is it?` segmented control reusing the existing
+`.segmented` pattern, a textarea with a trimmed character counter (the counter is
+the whole affordance for the disabled button — a floor with no explanation is the
+defect), `importText()` in `lib/api.ts`, and one `user-event` test that types a
+short paste, checks the button stays down, types a real ad and asserts the
+keywords reach the wire. `stubFetch` also had to learn that `/imports` is two
+routes: it was matching the list handler for **any** method, so a POST would have
+been answered with the queue.
 
 ### Group 6 — the upload stops blocking (DONE, 2026-09-04)
 
@@ -667,7 +710,6 @@ the database, so no channel message for it ever existed.
 
 ## What is still outstanding
 
-- **Group 4**, above. It is now the only group left.
 - **The Phase 6 visual pass on the other seven screens.** Still blocked on the
   user's eyes: the Chrome extension has been disconnected for five sessions, so
   nothing in this phase has been *seen*, only reasoned about from the CSS.

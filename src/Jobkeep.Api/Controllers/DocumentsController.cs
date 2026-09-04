@@ -1,4 +1,4 @@
-using Jobkeep.Modules.Documents;
+﻿using Jobkeep.Modules.Documents;
 using Jobkeep.Modules.Documents.Domain;
 using Jobkeep.SharedKernel;
 using Mediator;
@@ -112,6 +112,21 @@ public class DocumentsController : ControllerBase
             new ImportDocument(buffer.ToArray(), file.FileName, kind, label, sourceUrl), ct))
             .ToHttpResult(created => Results.Created($"/imports/{created.Id}", created));
     }
+
+    // POST /imports/text - the same import, pasted rather than uploaded.
+    //
+    // A sibling route rather than making `file` optional above; ImportText.cs
+    // argues why, and it is the only reason this is a second action instead of
+    // a second parameter. Everything past the bytes is the same handler, so the
+    // response, the status codes and the Location header are identical.
+    [HttpPost("text")]
+    [EndpointSummary("Paste a job ad or CV as text; returns a draft to review.")]
+    public async Task<IResult> UploadText(
+        [FromBody] ImportText body,
+        [FromServices] ISender sender,
+        CancellationToken ct)
+        => (await sender.Send(body, ct))
+            .ToHttpResult(created => Results.Created($"/imports/{created.Id}", created));
 
     // GET /imports?status=AwaitingReview — the review queue. Defaults to what
     // is still waiting on you.
