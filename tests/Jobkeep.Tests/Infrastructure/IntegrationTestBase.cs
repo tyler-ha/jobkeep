@@ -40,10 +40,19 @@ public abstract class IntegrationTestBase(PostgresFixture fixture) : IAsyncLifet
         Converters = { new JsonStringEnumConverter() },
     };
 
+    /// <summary>
+    /// Phase 11.2a — whether <see cref="Client"/> arrives signed in as
+    /// <see cref="TestAuthHandler.DefaultUserId"/>. True for every test but the
+    /// ones whose subject IS authentication: <c>IdentityTests</c> turns it off so
+    /// its client reaches the real cookie handler and a 401 still means a 401.
+    /// </summary>
+    protected virtual bool AuthenticateClient => true;
+
     public async ValueTask InitializeAsync()
     {
         await Fixture.ResetAsync();
         Client = Fixture.App.CreateClient();
+        if (AuthenticateClient) Client.AsTestUser();
         GraphQL = new GraphQLClient(Client);
     }
 

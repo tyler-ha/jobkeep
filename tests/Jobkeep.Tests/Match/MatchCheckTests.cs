@@ -45,7 +45,7 @@ public class MatchCheckTests(PostgresFixture fixture) : IntegrationTestBase(fixt
     {
         var client = Fixture.App
             .WithWebHostBuilder(b => b.ConfigureServices(s => s.AddSingleton<IChatClient>(fake)))
-            .CreateClient();
+            .CreateClient().AsTestUser();
         return (client, fake);
     }
 

@@ -36,7 +36,7 @@ public class ImportTextTests(PostgresFixture fixture) : IntegrationTestBase(fixt
         Fixture.App
             .WithWebHostBuilder(b => b.ConfigureServices(s =>
                 s.AddSingleton<IChatClient>(new FakeChatClient(json))))
-            .CreateClient();
+            .CreateClient().AsTestUser();
 
     private const string PostingReply = """
         {
@@ -188,7 +188,7 @@ public class ImportTextTests(PostgresFixture fixture) : IntegrationTestBase(fixt
         var fake = new FakeChatClient(PostingReply);
         var client = Fixture.App
             .WithWebHostBuilder(b => b.ConfigureServices(s => s.AddSingleton<IChatClient>(fake)))
-            .CreateClient();
+            .CreateClient().AsTestUser();
 
         using var created = await PasteAsync(client, PastedAd);
         var id = created.RootElement.GetProperty("id").GetGuid();

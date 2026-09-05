@@ -2,6 +2,7 @@ using Jobkeep.Modules.Documents;
 using Jobkeep.Modules.Documents.Domain;
 using Jobkeep.SharedKernel;
 using Mediator;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Jobkeep.Api.Controllers;
@@ -15,6 +16,13 @@ namespace Jobkeep.Api.Controllers;
 // this controller's [Route] with a leading ~, which is what the second MapGroup
 // used to do — and it keeps both halves under the Swagger tag the endpoint file
 // gave them, "Documents".
+// PHASE 11.2a - every action here requires an authenticated caller. The
+// attribute is on the class rather than a fallback policy in Program.cs,
+// because a fallback would also catch /identity/login and /identity/register
+// and those have to stay open. AuthorizationTests asserts that no action on
+// any controller is reachable without it, so a sixth controller that forgets
+// this line fails the build rather than shipping an open route.
+[Authorize]
 [ApiController]
 [Route("imports")]
 public class DocumentsController : ControllerBase

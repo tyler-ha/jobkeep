@@ -1,6 +1,6 @@
 # Phase 11 — authentication and owner scoping
 
-**Status: IN PROGRESS. 11.1a, 11.1b and 11.1c landed 2026-09-04.** It was to run immediately
+**Status: IN PROGRESS. 11.1a, 11.1b and 11.1c landed 2026-09-04; 11.2a on 2026-09-05.** It was to run immediately
 after [Phase 10](phase-10-aws-deploy.md) and be coupled to it; **Phase 10 was
 dropped on 2026-09-04** and this phase was pushed to the end of the roadmap in
 the same decision. See `architecture.md` decision 22.
@@ -23,11 +23,13 @@ here has been (13.1–13.6, 6.1–6.5). Each ends in something runnable.
 | **11.1a** | The Identity module exists and migrates. Sixth `DbContext`, `identity` schema, seven tables, its own `__EFMigrationsHistory`. **No sign-in yet, nothing enforced.** | **Done 2026-09-04** |
 | **11.1b** | Register and sign in. `AddIdentity*` wiring in `Jobkeep.Api`, the endpoints, and the **named-origin CORS policy** — the trap below, which fires here and not later | **Done 2026-09-04** |
 | **11.1c** | The client half: a login route, a route guard in `App.tsx`, `credentials: 'include'` on the one `request()`, and a 401 branch on `ApiError` | **Done 2026-09-04** |
-| **11.2** | Owner scoping. `OwnerUserId`, the EF global query filter, ~two dozen slices re-scoped, `CreatedBy`/`UpdatedBy` become real foreign keys | |
+| **11.2a** | Lock the doors. Every controller `[Authorize]`d, GraphQL behind `RequireAuthorization()`, and a suite that can satisfy both. **No schema change, no owner column yet.** | **Done 2026-09-05** |
+| **11.2b** | Owner scoping. `OwnerUserId`, the EF global query filter, the slices re-scoped, the three published views re-cut | |
 | **11.3** | Postgres RLS — the second layer — plus the test that disables the EF filter and proves the database still refuses | |
 
 **The split is along "what can be verified", not "what is convenient".** 11.1a is
-a schema you can look at; 11.1b is an account you can create; 11.2 is a second
+a schema you can look at; 11.1b is an account you can create; **11.2a is a
+signed-out browser that gets nothing**; 11.2b is a second
 user who cannot see the first's rows; 11.3 is that same guarantee with the
 application's own filter switched off.
 
@@ -224,6 +226,121 @@ session that built it, so what is proven is the suite (which renders the real
 `App` through the real gate) plus 11.1b's curl round trip against the running
 stack. **The appearance of the sign-in card is unreviewed** — it belongs in the
 Phase 6 visual pass that is already waiting on the user.
+
+### 11.2a, as built
+
+**Nine files, no migration, no `web/` change, suite 338 → 341.** The whole of it
+is five attributes, one `RequireAuthorization()`, and a test double that lets the
+other 338 tests keep working. It is the smallest step in the phase and it is the
+one that closes F1's actual hole: before it, every route in this application
+answered an anonymous caller in full.
+
+**The split from 11.2b was made here, not in the plan**, and the line is between
+*"is anyone there"* and *"whose row is this"*. Locking the doors needs no column,
+no migration and no re-scoped query; scoping needs all three and touches twenty
+tables. Doing them together would have meant a session that could not be verified
+in halves — and the two questions fail differently, so they are worth being able
+to answer separately.
+
+**Six things from it.**
+
+- **`[Authorize]` on each controller, NOT a fallback policy.** A fallback policy
+  in `Program.cs` is one line and covers every future route, which is the version
+  that looks lazier. It was refused because it also covers `/identity/login` and
+  `/identity/register`, and the escape — `.AllowAnonymous()` on the identity group
+  — is applied to a route GROUP whose members already carry their own
+  `RequireAuthorization()` (`manage/info`, `manage/2fa`, our `logout`). Whether
+  the group's convention or the endpoint's own metadata wins is a detail of how
+  conventions are ordered, and betting the lock on it is the wrong bet. Five
+  attributes cannot be misread.
+- **The test that makes the five attributes safe reads the ROUTING TABLE, not the
+  controllers.** `AuthorizationTests.Every_endpoint_outside_identity_requires_authorization`
+  asks the app's own `EndpointDataSource` for every endpoint and fails on any
+  outside `/identity/` with no `IAuthorizeData`. A reflection test over
+  `ControllerBase` subclasses would have passed just as well today and would not
+  have covered the GraphQL mount, a hand-written minimal API, or the sixth
+  controller. **A test that only inspects the doors it was told about is not a
+  lock.** It also asserts the endpoint list is non-empty, because the interesting
+  way for this test to break is to stop finding anything.
+- **GraphQL is locked at the ENDPOINT, which avoided a new package.**
+  `[Authorize]` on a resolver needs `HotChocolate.AspNetCore.Authorization`, and
+  it buys per-field policies this app has no use for — there is one rule and it is
+  "be signed in". `app.MapGraphQL().RequireAuthorization()` uses the authorization
+  services already registered, covers the surface at once, and cannot be forgotten
+  on a new resolver. The one visible cost is that a signed-out browser gets a 401
+  from the Nitro IDE instead of the IDE.
+- **BOTH SURFACES ARE ASKED OVER THE WIRE, and that is deliberate rather than
+  thorough.** The metadata test would still pass if `UseAuthorization()` were
+  deleted from the pipeline: metadata is a declaration, and only a request proves
+  something enforces it. Two more tests send an anonymous REST GET and an
+  anonymous GraphQL POST and require 401 from each. F5 was a GraphQL-only exposure
+  — "REST is locked" has never been an answer in this repo.
+- **THE ANTIFORGERY PARAGRAPH WAS RE-READ, AS 11.1b PROMISED, AND ANTIFORGERY
+  STAYS OFF.** The condition it rested on is genuinely gone: there are credentials
+  for a browser to attach now. What holds it off is the cookie's **`SameSite=Lax`**
+  — Lax attaches a cookie to top-level GET navigations and to nothing else, so a
+  cross-site POST, PUT or DELETE arrives anonymous and is refused before any
+  handler runs, the multipart upload included. That is CSRF protection; it is just
+  not the token kind. **Its expiry date is the cookie's own**: a deployed front end
+  on another site forces `SameSite=None`, which is precisely "attach this cookie
+  cross-site", and antiforgery becomes mandatory in the same change that sets it —
+  not in a later one. The two notes are written next to each other in `Program.cs`
+  so they are found together.
+- **Swagger UI and `swagger.json` are still open, deliberately.** Both are
+  Development-only, so a deployed app serves neither, and requiring a sign-in for
+  the document a person reads *in order to sign in* is a circle. The endpoint test
+  does not see them because they are middleware rather than endpoints, which is
+  luck rather than design — worth knowing before someone "fixes" the exemption
+  that is not there.
+
+**How the suite gets past the lock: `TestAuthHandler`.** An authentication scheme
+registered by `JobkeepAppFactory` only, which turns an `X-Test-User` header into a
+principal with a `NameIdentifier` claim. `IntegrationTestBase` puts the header on
+`Client`; `IdentityTests` overrides `AuthenticateClient` to false so its client
+still meets the real cookie.
+
+The alternative — register and log in a real user in every arrange — was measured
+rather than dismissed: Respawn truncates the `identity` schema between tests so no
+account survives, and Identity hashes a password in roughly a tenth of a second,
+which is a minute added to a forty-second suite to re-prove what `IdentityTests`
+proves once. **It is not a bypass of the authorization rule — every request still
+has to satisfy it — only of the login round trip.**
+
+**The trap inside the test double, which cost a wrong fix to `Program.cs` before
+the cause was found.** The scheme registers itself as `DefaultScheme` and forwards
+every request without the header back to Identity, and the first version forwarded
+to `IdentityConstants.ApplicationScheme` — the application cookie, the obvious
+target. It is the wrong one. Identity's real default is a **composite** scheme
+that forwards an unmet challenge to the *bearer* handler, which answers **401**;
+the cookie handler on its own **redirects** to `LoginPath`, which is
+`/Account/Login`, a Razor page this application does not have. So the suite saw a
+404 where the running app sends a 401 — a test double lying about the thing it
+exists to stand in for. It was diagnosed as a production defect first, and
+`ConfigureApplicationCookie` was written to turn that redirect into a 401 before
+the real cause surfaced; **that change was then deleted, because production never
+had the defect.** The forward target is now read off `AuthenticationOptions`
+rather than retyped, since `IdentityConstants`' field for the composite is
+`internal`.
+
+**Verified against the running stack as well as the suite**, because a
+pipeline-order mistake is exactly the kind that a `WebApplicationFactory` and a
+browser can disagree about: anonymous `GET /applications` 401, anonymous
+`POST /graphql` 401, anonymous `GET /stats/skill-demand` 401, then login 200 and
+both surfaces 200 with the cookie, and `swagger.json` still 200.
+
+**Not verified in a browser.** The Chrome extension is still not connected. The
+front end needed no change — 11.1c's `credentials: 'include'` and its
+`onUnauthenticated` slot were built for exactly this day — and its own suite is
+unaffected, so what is unproven is only that the sign-in screen appears when a
+session expires mid-session rather than at first paint.
+
+**A pre-existing web-suite failure was found and deliberately left alone.**
+`web/src/routes/screens.test.tsx > the add form offers the ad, and sends it as the
+description` fails in a full-file run and **passes in isolation**, so it is order
+dependent: something earlier in the file leaves `App`'s account probe resolving to
+signed-out, and the add form renders the sign-in card instead. It is on `develop`
+at `a575630` with no `web/` file touched by this step, it is 11.1c's, and the web
+suite is not in CI. Recorded rather than folded into this step's diff.
 
 ## Decided 2026-09-04, before any code — do not re-litigate
 

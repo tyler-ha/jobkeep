@@ -57,7 +57,7 @@ public class ImportParseWorkerTests(PostgresFixture fixture) : IntegrationTestBa
                 b.UseSetting("Documents:ParseInBackground", "true");
                 b.ConfigureServices(s => s.AddSingleton<IChatClient>(new FakeChatClient(modelReply)));
             })
-            .CreateClient();
+            .CreateClient().AsTestUser();
 
     private static byte[] FixtureBytes(string name) =>
         File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", name));

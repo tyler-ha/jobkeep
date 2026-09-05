@@ -25,6 +25,14 @@ namespace Jobkeep.Tests.Rest;
 /// </summary>
 public sealed class IdentityTests(PostgresFixture fixture) : IntegrationTestBase(fixture)
 {
+    /// <summary>
+    /// PHASE 11.2a — the one class that opts OUT of the test authentication
+    /// header. Everything below is an assertion about the real cookie: that a
+    /// login sets one, that a request without one is a 401. A client the suite had
+    /// pre-authenticated would make every one of those pass for the wrong reason.
+    /// </summary>
+    protected override bool AuthenticateClient => false;
+
     // Satisfies Identity's default password policy — digit, upper, lower,
     // non-alphanumeric, six characters. Left at the defaults deliberately: a
     // relaxed policy is a decision, and this phase had no reason to make one.

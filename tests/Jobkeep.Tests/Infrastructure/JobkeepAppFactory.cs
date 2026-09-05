@@ -79,8 +79,21 @@ public sealed class JobkeepAppFactory(string connectionString) : WebApplicationF
         // or the Phase 7 audit tests would be asserting against a different writer
         // than the app is. Resolved from the container rather than constructed, so a
         // test that swaps the clock swaps it here too.
-        builder.ConfigureServices(services => services.AddDbContext<TestDbContext>((sp, options) => options
-            .UseNpgsql(connectionString)
-            .AddInterceptors(sp.GetRequiredService<AuditSaveChangesInterceptor>())));
+        builder.ConfigureServices(services =>
+        {
+            services.AddDbContext<TestDbContext>((sp, options) => options
+                .UseNpgsql(connectionString)
+                .AddInterceptors(sp.GetRequiredService<AuditSaveChangesInterceptor>()));
+
+            // PHASE 11.2a — a header-driven authentication scheme, so the suite can
+            // satisfy [Authorize] without paying a password hash per test. It
+            // forwards to Identity's real cookie whenever the header is absent, so
+            // IdentityTests still exercises the genuine article. TestAuthHandler
+            // has the full argument.
+            //
+            // Registered here rather than in Program.cs for the obvious reason: it
+            // is a way in, and it must not exist in anything that ships.
+            TestAuthHandler.Register(services);
+        });
     }
 }

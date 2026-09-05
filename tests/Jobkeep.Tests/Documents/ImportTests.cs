@@ -44,7 +44,7 @@ public class ImportTests(PostgresFixture fixture) : IntegrationTestBase(fixture)
         Fixture.App
             .WithWebHostBuilder(b => b.ConfigureServices(s =>
                 s.AddSingleton<IChatClient>(new FakeChatClient(json))))
-            .CreateClient();
+            .CreateClient().AsTestUser();
 
     // The model's proposal for the fixture resume. Two details are deliberate
     // and are asserted on below: "C#" appears TWICE (a real model does this, and
@@ -167,7 +167,7 @@ public class ImportTests(PostgresFixture fixture) : IntegrationTestBase(fixture)
         var fake = new FakeChatClient(ResumeReply);
         var client = Fixture.App
             .WithWebHostBuilder(b => b.ConfigureServices(s => s.AddSingleton<IChatClient>(fake)))
-            .CreateClient();
+            .CreateClient().AsTestUser();
 
         using var body = await UploadOnlyAsync(client, "resume.pdf", DocumentKind.Resume);
         var root = body.RootElement;
@@ -354,7 +354,7 @@ public class ImportTests(PostgresFixture fixture) : IntegrationTestBase(fixture)
         var fake = new FakeChatClient(ResumeReply);
         var client = Fixture.App
             .WithWebHostBuilder(b => b.ConfigureServices(s => s.AddSingleton<IChatClient>(fake)))
-            .CreateClient();
+            .CreateClient().AsTestUser();
 
         var response = await client.PostAsync(
             "/imports", Upload(FixtureBytes("scanned.pdf"), "scanned.pdf", DocumentKind.Resume), Ct);

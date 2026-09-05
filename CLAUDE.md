@@ -556,7 +556,9 @@ You can still exercise endpoints by hand via Swagger, the Nitro IDE, or
 
 ## Known gaps (don't re-discover these)
 
-No health check, no auth. These are **recorded**, not forgotten — see the gap
+No health check. **Auth came off this line on 2026-09-05** — Phase 11.1b gave it
+a sign-in and 11.2a made every route require one; what is still missing is
+*scoping*, which is 11.2b. The rest is **recorded**, not forgotten — see the gap
 register in `docs/architecture.md`. (`docker-compose` used to be on this line;
 `compose.yaml` landed 2026-09-01.)
 
@@ -761,8 +763,48 @@ deliberately cannot tell a stale check from a fresh one.
 2026-09-04.** The phase doc's gate said *"this ships before whatever deploy
 replaces Phase 10, and not before"*; that is an argument about when auth becomes
 load-bearing, **not a dependency** — nothing in the phase needs a host, only the
-CORS named origin does, and that is config. It is **split into five runnable
-sub-steps** (11.1a, 11.1b, 11.1c, 11.2, 11.3) in `phase-11-auth.md`.
+CORS named origin does, and that is config. It is **split into six runnable
+sub-steps** (11.1a, 11.1b, 11.1c, **11.2a**, **11.2b**, 11.3) in
+`phase-11-auth.md` — 11.2 was split at 11.2a, along the line between *"is anyone
+there"* and *"whose row is this"*.
+
+**11.2a LANDED 2026-09-05: NOTHING IS REACHABLE WITHOUT SIGNING IN.** Suite
+338 → 341, nine files, no migration, no `web/` change. Five things from it:
+
+- **Every controller carries `[Authorize]` and GraphQL is behind
+  `app.MapGraphQL().RequireAuthorization()`.** Not a fallback policy — it would
+  also catch `/identity/login`, and the escape hatch (`AllowAnonymous` on the
+  identity group) collides with the `RequireAuthorization()` those framework
+  routes already carry. Not `[Authorize]` on resolvers either: that needs
+  `HotChocolate.AspNetCore.Authorization`, a new package, for per-field policies
+  this app has no use for.
+- **The guard is `AuthorizationTests`, and it reads the app's own
+  `EndpointDataSource`** — every endpoint outside `/identity/` must carry
+  `IAuthorizeData`. So a sixth controller, a minimal API or a second GraphQL
+  mount are covered on the day they are added. Two more tests ask **both
+  surfaces** over the wire, because metadata is a declaration and only a request
+  proves enforcement.
+- **`TestAuthHandler` is how the other 338 tests still pass** — an
+  `X-Test-User` header becomes a principal, registered by `JobkeepAppFactory`
+  only. **Its forward target is Identity's COMPOSITE default scheme, not the
+  application cookie**: the cookie alone REDIRECTS an unmet challenge to
+  `/Account/Login` (a Razor page this app lacks), where the composite answers
+  401. Getting that wrong made the suite see a 404 where the app sends a 401, and
+  cost a wrong "fix" to `Program.cs` before the cause was found.
+- **ANTIFORGERY WAS RE-READ AND STAYS OFF.** What holds it off is now
+  `SameSite=Lax`, which refuses to attach the cookie to any cross-site
+  POST/PUT/DELETE — the upload included. **Its expiry date is the cookie's own**:
+  the change that sets `SameSite=None` for a cross-site deploy is the change that
+  must add antiforgery tokens, not a later one. Both notes are in `Program.cs`.
+- **Swagger UI and `swagger.json` stay open**, deliberately — Development-only,
+  and they are what a person reads in order to sign in. They are middleware, not
+  endpoints, so the endpoint test does not see them; that is luck, not an
+  exemption someone should "fix".
+
+**11.2b is next: `OwnerUserId`, the query filter, the re-scoped slices, the three
+published views re-cut.** Note `HasQueryFilter` does not reach raw SQL, and the
+five existing `IgnoreQueryFilters()` call sites would drop an owner filter too —
+EF 10's **named** query filters are the way out.
 
 **11.1c LANDED 2026-09-04**: **the front end is behind the sign-in.** Web suite
 55 → 62, five files, no backend change but a comment. Five things from it:
@@ -819,9 +861,8 @@ migration. Four things from it change how new code is written:
 
 Two ceilings written down, not fixed: `forgotPassword`/`resendConfirmationEmail`
 answer 200 against a **no-op `IEmailSender`** (nothing is mailed; confirmation is
-not required to log in), and **antiforgery is still off** — it stays off while
-nothing is `[Authorize]`d, and 11.2 is where `DocumentsModule.cs`'s paragraph
-gets re-read.
+not required to log in), and **antiforgery is still off** — re-read at 11.2a and
+kept off, held off now by `SameSite=Lax` rather than by there being no cookie.
 
 **11.1a LANDED 2026-09-04**: `src/` is now **eleven projects**, there is a
 **sixth migrating context** and a **sixth schema, `identity`**, holding ASP.NET

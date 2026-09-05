@@ -290,11 +290,23 @@ builder.Services
 // exclusive, so the wildcard this comment refused in Phase 6.1 would have had to
 // be unpicked here instead.
 //
-// Still open, and named so it is not re-discovered: the antiforgery paragraph in
-// DocumentsModule.cs turns antiforgery OFF because there were no cookies for a
-// browser to attach. There are now. It stays off for as long as nothing is
-// [Authorize]d — 11.2 is when a forged cross-site POST can actually do
-// something, and that is where it gets re-read.
+// PHASE 11.2a RE-READ THE ANTIFORGERY PARAGRAPH, as promised — every controller
+// is [Authorize]d now, so a forged cross-site POST can finally do something, and
+// "there are no credentials for a browser to attach" has stopped being true.
+//
+// It stays off, and the thing holding it off is the cookie's SameSite=Lax. Lax
+// means the browser attaches the cookie to top-level GET navigations and to
+// nothing else — so a cross-site POST, PUT or DELETE from evil.example arrives
+// anonymous and gets a 401 before any handler runs. Every state-changing route in
+// this app is one of those verbs, the upload included. That is CSRF protection;
+// it is just not the antiforgery-token kind.
+//
+// THE EXPIRY DATE IS THE SAME ONE THE COOKIE ALREADY HAS. The day a deployed
+// front end sits on a different site from this API, SameSite has to become None
+// to work at all — and None is precisely "attach this cookie to cross-site
+// requests", which deletes the paragraph above. Antiforgery tokens become
+// mandatory in the same change that sets it, not in a later one, and the two
+// notes are deliberately written to be found together.
 const string DevCorsPolicy = "localdev";
 var allowedOrigins = builder.Configuration
     .GetSection("Cors:AllowedOrigins").Get<string[]>()
@@ -467,8 +479,10 @@ if (app.Environment.IsDevelopment())
 // error with nothing on the server to explain it. Calling them here also marks
 // them as set, so the framework does not add a second pair further up.
 //
-// Nothing is [Authorize]d yet except /identity/logout below. These two are what
-// turn the cookie into a ClaimsPrincipal, which is what 11.2 will scope on.
+// PHASE 11.2a: everything is [Authorize]d now — the five controllers by an
+// attribute on each class, GraphQL by RequireAuthorization() on its endpoint.
+// These two lines are what turn the cookie into a ClaimsPrincipal, which is what
+// 11.2b will read an owner out of.
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -561,7 +575,23 @@ identity.MapPost("/logout", async (SignInManager<JobkeepUser> signIn) =>
 }).RequireAuthorization();
 
 // Serves POST /graphql for queries + the Nitro (Banana Cake Pop) IDE at GET /graphql.
-app.MapGraphQL();
+//
+// PHASE 11.2a — RequireAuthorization() on the endpoint, NOT [Authorize] on the
+// resolvers. The attribute version needs HotChocolate.AspNetCore.Authorization, a
+// new package, to buy per-field policies this app has no use for: there is one
+// rule here and it is "be signed in". ASP.NET's own endpoint authorization is
+// already registered, applies to the whole surface at once, and cannot be
+// forgotten on a new resolver the way a per-field attribute can.
+//
+// It covers the Nitro IDE at GET /graphql too, which is the one visible cost — a
+// signed-out browser gets a 401 instead of the IDE. Signing in on :5173 sets the
+// cookie for localhost, and the IDE then loads, so this is not the dead end it
+// looks like. Development-only either way.
+//
+// F5 is the reason this line is not an afterthought: the last surface-specific
+// exposure in this app was GraphQL-only, so "REST is locked" is not an answer.
+// AuthorizationTests asks both surfaces the same question over the wire.
+app.MapGraphQL().RequireAuthorization();
 
 app.Run();
 
