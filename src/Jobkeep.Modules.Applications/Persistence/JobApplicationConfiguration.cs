@@ -3,6 +3,7 @@ using Jobkeep.Modules.Applications.Domain;
 using Jobkeep.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Jobkeep.SharedKernel;
 
 namespace Jobkeep.Modules.Applications.Persistence;
 
@@ -23,7 +24,7 @@ public class JobApplicationConfiguration : IEntityTypeConfiguration<JobApplicati
         // Escaping it is deliberate and explicit: IgnoreQueryFilters(), used by
         // the list reads when `includeArchived` is set and by the restore slice,
         // which has to find a row the filter hides.
-        e.HasQueryFilter(a => !a.IsDeleted);
+        e.HasQueryFilter(QueryFilters.SoftDelete, a => !a.IsDeleted);
 
         // NO INDEX ON IsDeleted, and none added to the two below either. An index
         // whose every entry holds the same value answers nothing, and making the

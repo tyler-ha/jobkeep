@@ -2,6 +2,7 @@ using Jobkeep.Modules.Applications.Domain;
 using Jobkeep.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Jobkeep.SharedKernel;
 
 namespace Jobkeep.Modules.Applications.Persistence;
 
@@ -29,7 +30,12 @@ public class CompanyConfiguration : IEntityTypeConfiguration<Company>
         e.Property(c => c.NameNormalized)
             .HasMaxLength(200)
             .HasComputedColumnSql("lower(\"Name\")", stored: true);
-        e.HasIndex(c => c.NameNormalized).IsUnique();
+        // PHASE 11.2b — the owner joins the key. "Google" was globally unique, so
+        // the second user to apply there would have been refused by an index over
+        // a row they cannot see: a 500 with no explanation available to them.
+        // CompanyLookup's find-or-create reads through the owner filter, so the
+        // C# side already asks the per-user question; this is the index agreeing.
+        e.HasIndex(c => new { c.OwnerUserId, c.NameNormalized }).IsUnique();
 
         // F13 — the three columns that were unbounded `text`.
         e.Property(c => c.Website).HasMaxLength(500);

@@ -22,6 +22,17 @@ namespace Jobkeep.Modules.Ai;
 // ExecuteDelete for the same two reasons as the Match handler: `ai_analyses` is a
 // leaf with nothing to cascade, and deleting zero rows must be a success so a
 // redelivered event is harmless.
+//
+// PHASE 11.2b — ExecuteDelete WALKS PAST THE OWNER FILTER, and that is left
+// alone deliberately. Both events are unpublished since Phase 8 (archiving must
+// not destroy a derived record about a row that survived), so nothing reaches
+// this handler through the app today. Their real caller is the F18 purge, which
+// runs as the system with no principal — an owner predicate would make it delete
+// nothing at all. The id it is given already came from the owner's own delete.
+//
+// ponytail: unscoped by design while the only caller is a purge. If an event
+// ever carries an id from anywhere but the owner's own request, this needs the
+// owner in the predicate.
 public class OnPostingDeleted : INotificationHandler<PostingDeleted>
 {
     private readonly AiDbContext _db;

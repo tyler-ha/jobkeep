@@ -33,6 +33,17 @@ namespace Jobkeep.Modules.Match;
 // rows is a success. That matters because a retry of a half-delivered event, or
 // a second delete of an application already gone, must not turn into an error
 // the caller cannot act on.
+//
+// PHASE 11.2b — ExecuteDelete WALKS PAST THE OWNER FILTER, and that is left
+// alone deliberately. Both events are unpublished since Phase 8 (archiving must
+// not destroy a derived record about a row that survived), so nothing reaches
+// this handler through the app today. Their real caller is the F18 purge, which
+// runs as the system with no principal — an owner predicate would make it delete
+// nothing at all. The id it is given already came from the owner's own delete.
+//
+// ponytail: unscoped by design while the only caller is a purge. If an event
+// ever carries an id from anywhere but the owner's own request, this needs the
+// owner in the predicate.
 public class OnApplicationDeleted : INotificationHandler<ApplicationDeleted>
 {
     private readonly MatchDbContext _db;

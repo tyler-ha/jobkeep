@@ -2,6 +2,7 @@ using Jobkeep.Contracts.Skills;
 using Jobkeep.Modules.Applications.Domain;
 using Jobkeep.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Jobkeep.SharedKernel;
 
 // Deliberately the module's own namespace and not Jobkeep.Modules.Applications
 // .Persistence: every handler in this module is in this namespace, so the type
@@ -35,9 +36,28 @@ namespace Jobkeep.Modules.Applications;
 // review. Every configuration names the `applications` schema in its ToTable,
 // which is what lets the test-only aggregate context apply all six modules'
 // configurations at once and still be right.
-public class ApplicationsDbContext(DbContextOptions<ApplicationsDbContext> options)
-    : DbContext(options)
+public class ApplicationsDbContext : DbContext
 {
+    // PHASE 11.2b — the owner of everything this context will read or write.
+    //
+    // CAPTURED ONCE, IN THE CONSTRUCTOR, and that is the documented EF shape for
+    // a tenant filter rather than a shortcut: the MODEL is cached per context
+    // type, so a filter that closed over anything but a field of the executing
+    // context instance would bake the first request's user into every later
+    // one's queries. EF re-roots `_ownerId` onto whichever context is running
+    // the query, which is exactly the indirection needed and the only one that
+    // is safe.
+    //
+    // Null means nobody, and `OwnerUserId == null` is NULL in SQL, so an
+    // unauthenticated or background scope sees no rows rather than all of them.
+    // ImportParseWorker is the one caller that legitimately has no principal;
+    // it assigns ICurrentUser.UserId from the row it is about to work on BEFORE
+    // it resolves a context, so by the time this constructor runs the value is
+    // the real owner's.
+    private readonly Guid? _ownerId;
+
+    public ApplicationsDbContext(DbContextOptions<ApplicationsDbContext> options, ICurrentUser currentUser)
+        : base(options) => _ownerId = currentUser.UserId;
     public DbSet<Company> Companies => Set<Company>();
     public DbSet<JobPosting> JobPostings => Set<JobPosting>();
     public DbSet<PostingSkill> PostingSkills => Set<PostingSkill>();
@@ -57,6 +77,31 @@ public class ApplicationsDbContext(DbContextOptions<ApplicationsDbContext> optio
     protected override void OnModelCreating(ModelBuilder model)
     {
         model.ApplyConfigurationsFromAssembly(typeof(ApplicationsDbContext).Assembly);
+
+
+        // -------------------------------------------------------------------
+        // PHASE 11.2b — the owner filter, applied HERE and not in the entity
+        // configurations
+        // -------------------------------------------------------------------
+        // The soft-delete filter lives with its entity, because it is a fact
+        // about the entity. This one is a fact about the CONTEXT — it needs
+        // `_ownerId`, and an IEntityTypeConfiguration cannot reach the context
+        // that will run the query. Naming both filters (QueryFilters.SoftDelete,
+        // QueryFilters.Owner) is what keeps them independent: the five callers
+        // that want to see archived rows drop one filter by name and keep this
+        // one, where the old unnamed `IgnoreQueryFilters()` would have dropped
+        // both and handed them somebody else's data.
+        //
+        // Listed one entity at a time rather than reflected over IOwned, for the
+        // same reason ISoftDeletable states its three filters explicitly: a
+        // generic version would have to build the expression tree by hand, and
+        // an unreadable line is a worse guard than 3 readable ones.
+        model.Entity<Company>().HasQueryFilter(
+            QueryFilters.Owner, x => x.OwnerUserId == _ownerId);
+        model.Entity<JobPosting>().HasQueryFilter(
+            QueryFilters.Owner, x => x.OwnerUserId == _ownerId);
+        model.Entity<JobApplication>().HasQueryFilter(
+            QueryFilters.Owner, x => x.OwnerUserId == _ownerId);
 
         // LAST, deliberately. It reads the finished model, so anything
         // configured after it would silently miss the defaults.

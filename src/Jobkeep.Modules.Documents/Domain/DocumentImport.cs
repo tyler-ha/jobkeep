@@ -146,8 +146,14 @@ public enum SourceFormat
 //
 // Keeping the original file is on the backlog as "document versions", where it
 // belongs — it is a storage decision with a bill attached, not part of parsing.
-public class DocumentImport : IAuditable
+public class DocumentImport : IAuditable, IOwned
 {
+    // PHASE 11.2b — the owner. Stamped once, on insert, by
+    // AuditSaveChangesInterceptor; never assigned by a slice, and never sent by
+    // a client. Enforced on read by the `Owner` global query filter in
+    // DocumentsDbContext. See IOwned for why the children do not carry it.
+    public Guid OwnerUserId { get; set; }
+
     public Guid Id { get; set; } = Guid.NewGuid();
 
     public DocumentKind Kind { get; set; }

@@ -28,8 +28,14 @@ namespace Jobkeep.Modules.Documents.Domain;
 // mentions" is one join rather than a text search. That is also exactly what
 // Phase 5's match check needs, and it is why the skills table was made shared in
 // the first place.
-public class Resume : IAuditable, ISoftDeletable
+public class Resume : IAuditable, ISoftDeletable, IOwned
 {
+    // PHASE 11.2b — the owner. Stamped once, on insert, by
+    // AuditSaveChangesInterceptor; never assigned by a slice, and never sent by
+    // a client. Enforced on read by the `Owner` global query filter in
+    // DocumentsDbContext. See IOwned for why the children do not carry it.
+    public Guid OwnerUserId { get; set; }
+
     public Guid Id { get; set; } = Guid.NewGuid();
 
     // What you call this version — "backend-focused", "generalist". Unique, so

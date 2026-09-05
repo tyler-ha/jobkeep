@@ -42,14 +42,29 @@ namespace Jobkeep.Persistence;
 // two have a required ORDER — an archive must be converted to a modification
 // before the audit loop sees it — and expressing that as registration order in
 // Program.cs would be a rule enforced by a line nobody would think to protect.
+// PHASE 11.2b ADDED A THIRD JOB — stamping IOwned.OwnerUserId — and with it a
+// dependency on who is asking, so this is SCOPED now rather than singleton. The
+// old comment argued singleton from "it holds a clock and nothing else"; that
+// stopped being true, and a captive scoped dependency inside a singleton is the
+// unsafe direction. AddDbContext resolves it from the scoped provider either
+// way, so nothing at the call site changed.
+//
+// Owner belongs here for the same reason CreatedAtUtc does: it is one write
+// path that no slice can forget, and it is the only writer of the column. A
+// client cannot set it — nothing binds it from a request — and a slice that
+// assigned it by hand would be overwritten on the way out.
 public sealed class AuditSaveChangesInterceptor : SaveChangesInterceptor
 {
     // Injectable so a test can control "now" rather than sleeping to make two
     // timestamps differ. Defaults to the real clock in production.
     private readonly Func<DateTime> _now;
+    private readonly ICurrentUser _currentUser;
 
-    public AuditSaveChangesInterceptor(Func<DateTime>? now = null)
-        => _now = now ?? (() => DateTime.UtcNow);
+    public AuditSaveChangesInterceptor(ICurrentUser currentUser, Func<DateTime>? now = null)
+    {
+        _currentUser = currentUser;
+        _now = now ?? (() => DateTime.UtcNow);
+    }
 
     public override InterceptionResult<int> SavingChanges(
         DbContextEventData eventData, InterceptionResult<int> result)
@@ -109,6 +124,39 @@ public sealed class AuditSaveChangesInterceptor : SaveChangesInterceptor
             entry.State = EntityState.Modified;
             entry.Entity.IsDeleted = true;
             entry.Entity.DeletedAtUtc = now;
+        }
+
+        // PHASE 11.2b — the owner, on insert only.
+        //
+        // ONLY WHEN THE ROW DOES NOT ALREADY NAME ONE. Two callers rely on that:
+        // a test arranging a second user's rows, and any future importer acting
+        // on someone's behalf. Neither can be served by "always overwrite", and
+        // a row that already names an owner is never a row this scope invented.
+        //
+        // A NULL CURRENT USER THROWS RATHER THAN WRITING Guid.Empty, and the
+        // difference matters more than it looks. Writing the empty Guid succeeds:
+        // the row is committed, the owner filter then matches it for nobody, and
+        // the user gets a 201 followed by an empty list with nothing in the logs.
+        // A save that quietly produces unreachable data is worse than a 500.
+        //
+        // The realistic trigger is not an anonymous request — 11.2a answers those
+        // with a 401 long before here — it is the id claim moving: a bearer/JWT
+        // setup where `sub` is not inbound-mapped, or IdentityOptions'
+        // UserIdClaimType changed. Both would make CurrentUser return null for a
+        // perfectly authenticated caller, and this is the line that says so.
+        //
+        // ImportParseWorker is the one legitimate principal-less writer and it
+        // assigns the owner before resolving a context, so it never reaches this.
+        foreach (var entry in context.ChangeTracker.Entries<IOwned>())
+        {
+            if (entry.State is not EntityState.Added) continue;
+            if (entry.Entity.OwnerUserId != Guid.Empty) continue;
+
+            entry.Entity.OwnerUserId = _currentUser.UserId
+                ?? throw new InvalidOperationException(
+                    $"Cannot insert {entry.Entity.GetType().Name}: there is no current user to own "
+                    + "it. Either the request is unauthenticated (which authorization should have "
+                    + "refused) or the user-id claim is not where CurrentUser looks for it.");
         }
 
         foreach (var entry in context.ChangeTracker.Entries<IAuditable>())

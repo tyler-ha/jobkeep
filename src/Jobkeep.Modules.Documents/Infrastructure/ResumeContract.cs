@@ -56,6 +56,11 @@ public class ResumeContract : IResumeContract
             MapFormat(row.SourceFormat), row.SourceText, row.ExperienceCount);
     }
 
+    // ponytail: same shape as IPostingContract.GetSkillsAsync — `resume_skills`
+    // has no owner column, so this is scoped only by the caller having resolved
+    // the résumé through a filtered read first. RunMatchCheck takes a
+    // CLIENT-SUPPLIED ResumeId and is safe because GetContentAsync runs before
+    // this; that ordering is the protection, and it is worth knowing that it is.
     public async Task<IReadOnlyList<Guid>> GetSkillIdsAsync(
         Guid resumeId, CancellationToken ct = default)
         // Ids only, unordered. Both are deliberate: the name lives in the skills

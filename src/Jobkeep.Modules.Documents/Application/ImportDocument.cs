@@ -1,4 +1,4 @@
-﻿using System.Security.Cryptography;
+using System.Security.Cryptography;
 using System.Text.Json;
 using Jobkeep.Modules.Documents.Domain;
 using Jobkeep.SharedKernel;
@@ -178,7 +178,7 @@ public class ImportDocumentHandler : IRequestHandler<ImportDocument, SliceResult
         // inline, so a notification would run the model INSIDE this request and
         // reinstate the block this whole group exists to remove. The channel is
         // the point: it is the boundary the request thread does not cross.
-        if (willParse) _queue.Enqueue(import.Id);
+        if (willParse) _queue.Enqueue(import.Id, import.OwnerUserId);
 
         return SliceResult<ImportResponse>.Ok(ToResponse(import, EmptyDraft(kind, resolvedLabel, sourceUrl)));
     }

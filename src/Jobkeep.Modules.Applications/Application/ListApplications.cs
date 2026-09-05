@@ -216,7 +216,7 @@ public class ListApplicationsHandler : IRequestHandler<ListApplications, SliceRe
         // a caller asking to see archived rows would be handed a page missing some
         // of them, with no indication that anything was withheld.
         if (query.IncludeArchived == true)
-            applications = applications.IgnoreQueryFilters();
+            applications = applications.IgnoreQueryFilters([QueryFilters.SoftDelete]);
 
         // Contains over an array translates to SQL `IN`, so this stays one round
         // trip whether the caller named one stage or five.

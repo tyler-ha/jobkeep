@@ -35,7 +35,7 @@ public class RestorePostingHandler : IRequestHandler<RestorePosting, SliceResult
         var id = message.Id;
 
         var posting = await _db.JobPostings
-            .IgnoreQueryFilters()
+            .IgnoreQueryFilters([QueryFilters.SoftDelete])
             .FirstOrDefaultAsync(p => p.Id == id && p.IsDeleted, ct);
 
         if (posting is null)

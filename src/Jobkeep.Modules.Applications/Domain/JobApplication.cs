@@ -10,8 +10,14 @@ namespace Jobkeep.Modules.Applications.Domain;
 // it now lives in Jobkeep.Modules.Match. Two classes in one file was fine while
 // one project held every entity; it is not fine when the file has to be in two
 // assemblies at once.
-public class JobApplication : IAuditable, ISoftDeletable
+public class JobApplication : IAuditable, ISoftDeletable, IOwned
 {
+    // PHASE 11.2b — the owner. Stamped once, on insert, by
+    // AuditSaveChangesInterceptor; never assigned by a slice, and never sent by
+    // a client. Enforced on read by the `Owner` global query filter in
+    // ApplicationsDbContext. See IOwned for why the children do not carry it.
+    public Guid OwnerUserId { get; set; }
+
     public Guid Id { get; set; } = Guid.NewGuid();
 
     public Guid PostingId { get; set; }

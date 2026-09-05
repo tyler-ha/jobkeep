@@ -1,4 +1,6 @@
 using Jobkeep.Contracts.Applications;
+using Jobkeep.SharedKernel;
+
 namespace Jobkeep.Modules.Ai.Domain;
 
 // How senior the ad reads. Lives here rather than with the other posting enums
@@ -9,8 +11,14 @@ public enum SeniorityLevel { Unknown, Junior, Mid, Senior, Lead, Principal }
 // Phase 4 output — 1:1 with a posting (facts derived from its description).
 // Extracted skills are written to PostingSkill with Source = AiExtracted,
 // so they sit alongside human-entered skills instead of in a parallel list.
-public class AiAnalysis
+public class AiAnalysis : IOwned
 {
+    // PHASE 11.2b — the owner. Stamped once, on insert, by
+    // AuditSaveChangesInterceptor; never assigned by a slice, and never sent by
+    // a client. Enforced on read by the `Owner` global query filter in
+    // AiDbContext. See IOwned for why the children do not carry it.
+    public Guid OwnerUserId { get; set; }
+
     public Guid Id { get; set; } = Guid.NewGuid();
 
     // 13.3b CUT THE NAVIGATION AND THE FOREIGN KEY. `job_postings` is

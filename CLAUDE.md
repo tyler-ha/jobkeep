@@ -556,10 +556,11 @@ You can still exercise endpoints by hand via Swagger, the Nitro IDE, or
 
 ## Known gaps (don't re-discover these)
 
-No health check. **Auth came off this line on 2026-09-05** — Phase 11.1b gave it
-a sign-in and 11.2a made every route require one; what is still missing is
-*scoping*, which is 11.2b. The rest is **recorded**, not forgotten — see the gap
-register in `docs/architecture.md`. (`docker-compose` used to be on this line;
+No health check. **Auth came off this line on 2026-09-05** — 11.1b gave it a
+sign-in, 11.2a made every route require one, and 11.2b scoped every row to its
+owner; what is still missing is the second layer, Postgres RLS, which is 11.3.
+The rest is **recorded**, not forgotten — see the gap register in
+`docs/architecture.md`. (`docker-compose` used to be on this line;
 `compose.yaml` landed 2026-09-01.)
 
 Tests and CI landed in **Phase 2.2**, scheduled straight after 2.1 because the gap
@@ -801,10 +802,52 @@ there"* and *"whose row is this"*.
   endpoints, so the endpoint test does not see them; that is luck, not an
   exemption someone should "fix".
 
-**11.2b is next: `OwnerUserId`, the query filter, the re-scoped slices, the three
-published views re-cut.** Note `HasQueryFilter` does not reach raw SQL, and the
-five existing `IgnoreQueryFilters()` call sites would drop an owner filter too —
-EF 10's **named** query filters are the way out.
+**11.2b LANDED 2026-09-05: A SECOND USER SEES NOTHING OF THE FIRST'S.** Suite
+341 → 347, 28 files, four migrations (`OwnerScoping` in `applications`,
+`documents`, `ai`, `ats`), no `web/` change. Seven things from it:
+
+- **NO SLICE WAS RE-SCOPED.** Not one handler gained an owner predicate. Reads
+  are a global query filter on each module's context; writes are one line in
+  `AuditSaveChangesInterceptor`. The plan's "~two dozen slices" was wrong the
+  same way Phase 8's front-end estimate was. What cost the work was the places
+  the filter *cannot* reach.
+- **`IOwned` (SharedKernel) is on the seven ROOTS, not the five children.**
+  `JobApplication`, `JobPosting`, `Company`, `Resume`, `DocumentImport`,
+  `AiAnalysis`, `MatchResult`. Every slice touching `posting_skills`,
+  `job_requirements`, `resume_skills`, `resume_experiences` or
+  `resume_educations` resolves its parent first and that read is filtered - the
+  same argument, and the same ceiling, as Phase 8's soft delete. A future route
+  addressed by CHILD id breaks it silently.
+- **BOTH GLOBAL FILTERS ARE NAMED** - `QueryFilters.Owner` and
+  `QueryFilters.SoftDelete` (EF 10 named filters). The five `IgnoreQueryFilters()`
+  call sites now name `SoftDelete`; a bare one would turn *"show me my archived
+  rows"* into *"show me everyone's"*. **Never write a bare `IgnoreQueryFilters()`
+  again** - say which filter.
+- **The owner filter is in the CONTEXT, not the entity configuration**, because
+  it needs `_ownerId`, captured in the context's constructor from `ICurrentUser`.
+  That capture is the documented EF tenant shape: the MODEL IS CACHED per context
+  type, so closing over anything but a field of the executing context bakes the
+  first request's user into everyone's queries.
+- **`HasQueryFilter` STILL does not reach raw SQL.** All three Analytics views
+  gained `OwnerUserId` in their `SELECT` and `GROUP BY`; `AnalyticsDbContext`
+  filters on it, and the three slices did not change. `CREATE OR REPLACE` may
+  APPEND a view column and may not remove one, so the `Down` drops and recreates.
+  The two `ExecuteDelete` handlers (`OnPostingDeleted`, `OnApplicationDeleted`)
+  are left unscoped on purpose - unpublished since Phase 8, and their real caller
+  is the F18 purge, which has no principal.
+- **`ImportParseQueue` carries the OWNER as well as the id.** The worker has no
+  principal, so its startup sweep is the one read allowed
+  `IgnoreQueryFilters([QueryFilters.Owner])`; it reads the owner off the row and
+  the parse runs scoped. **Set `ICurrentUser.UserId` before anything else in the
+  scope resolves** - contexts capture it in their constructors.
+- **Existing rows are ORPHANED** (`NOT NULL` default `Guid.Empty`, which no user
+  id can be). No backfill: "the only account in the table" is a rule that hands
+  one user's data to whoever registered first. **F9 (`CreatedBy`/`UpdatedBy`) was
+  NOT built** and the plan's line about it is withdrawn - it cannot be an FK
+  (cross-schema), and with one owner per row it would always equal `OwnerUserId`.
+
+**11.3 is next: Postgres RLS** - the second layer, plus the test that disables
+the EF filter and proves the database still refuses.
 
 **11.1c LANDED 2026-09-04**: **the front end is behind the sign-in.** Web suite
 55 → 62, five files, no backend change but a comment. Five things from it:

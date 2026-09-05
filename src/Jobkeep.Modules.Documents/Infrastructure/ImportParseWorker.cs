@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Jobkeep.SharedKernel;
 
 namespace Jobkeep.Modules.Documents;
 
@@ -60,8 +61,8 @@ public class ImportParseWorker : BackgroundService
     {
         await SweepAsync(ct);
 
-        await foreach (var id in _queue.ReadAllAsync(ct))
-            await ParseAsync(id, ct);
+        await foreach (var work in _queue.ReadAllAsync(ct))
+            await ParseAsync(work, ct);
     }
 
     // Everything left claiming a parse nobody is running. On a clean boot this
@@ -82,12 +83,24 @@ public class ImportParseWorker : BackgroundService
             using var scope = _scopes.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<DocumentsDbContext>();
 
+            // PHASE 11.2b — ACROSS EVERY USER. Named rather than bare because
+            // naming the filter is the house rule, not because there is a second
+            // one to keep: `document_imports` is not ISoftDeletable, and Owner is
+            // the only filter on it. Written by name anyway so that adding one
+            // later does not silently widen this query.
+            //
+            // The sweep is the one read in the app that legitimately has
+            // no owner: it is recovering work for whoever left it, and this
+            // scope has no principal to be. It reads the owner off each row and
+            // hands it to the worker, so the parse itself runs scoped again —
+            // the exemption stops at the one query that needs it.
             var stranded = await db.DocumentImports
+                .IgnoreQueryFilters([QueryFilters.Owner])
                 .Where(d => d.Status == ImportStatus.Parsing)
-                .Select(d => d.Id)
+                .Select(d => new ImportParseQueue.Work(d.Id, d.OwnerUserId))
                 .ToListAsync(ct);
 
-            foreach (var id in stranded) _queue.Enqueue(id);
+            foreach (var work in stranded) _queue.Enqueue(work.ImportId, work.OwnerUserId);
 
             if (stranded.Count > 0)
                 _log.LogInformation(
@@ -103,8 +116,9 @@ public class ImportParseWorker : BackgroundService
         }
     }
 
-    private async Task ParseAsync(Guid id, CancellationToken ct)
+    private async Task ParseAsync(ImportParseQueue.Work work, CancellationToken ct)
     {
+        var id = work.ImportId;
         try
         {
             // A scope per item, because the handler chain is scoped — the
@@ -112,6 +126,17 @@ public class ImportParseWorker : BackgroundService
             // DocumentsDbContext is scoped. Resolving either into this singleton
             // would be the captive-dependency trap DocumentsModule warns about.
             using var scope = _scopes.CreateScope();
+
+            // PHASE 11.2b — become the row's owner BEFORE anything resolves a
+            // DbContext. Each context captures the current user in its
+            // constructor, so this assignment has to come first or the handler
+            // gets a context that can see nothing and reports the import
+            // missing. Setting it here rather than exempting RestructureImport
+            // is deliberate: the slice is shared with the "Read it again" button,
+            // and an IgnoreQueryFilters inside it would unscope the HTTP path
+            // too.
+            scope.ServiceProvider.GetRequiredService<ICurrentUser>().UserId = work.OwnerUserId;
+
             var sender = scope.ServiceProvider.GetRequiredService<ISender>();
 
             // The same slice the "Read it again" button calls. It knows this
