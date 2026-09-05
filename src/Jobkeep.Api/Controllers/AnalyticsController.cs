@@ -1,5 +1,6 @@
 using Jobkeep.Modules.Analytics;
 using Mediator;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Jobkeep.Api.Controllers;
@@ -10,6 +11,13 @@ namespace Jobkeep.Api.Controllers;
 // Named for the module rather than for the route prefix so Swagger's tag stays
 // "Analytics" — Swashbuckle tags by controller name, and the endpoint file it
 // replaces said WithTags("Analytics") over a /stats group.
+// PHASE 11.2a - every action here requires an authenticated caller. The
+// attribute is on the class rather than a fallback policy in Program.cs,
+// because a fallback would also catch /identity/login and /identity/register
+// and those have to stay open. AuthorizationTests asserts that no action on
+// any controller is reachable without it, so a sixth controller that forgets
+// this line fails the build rather than shipping an open route.
+[Authorize]
 [ApiController]
 [Route("stats")]
 public class AnalyticsController : ControllerBase

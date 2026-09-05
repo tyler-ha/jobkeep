@@ -40,7 +40,7 @@ public class ImportHardeningTests(PostgresFixture fixture) : IntegrationTestBase
         Fixture.App
             .WithWebHostBuilder(b => b.ConfigureServices(s =>
                 s.AddSingleton<IChatClient>(new FakeChatClient(json))))
-            .CreateClient();
+            .CreateClient().AsTestUser();
 
     private const string ResumeReply = """
         {

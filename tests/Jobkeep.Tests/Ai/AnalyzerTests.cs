@@ -29,7 +29,7 @@ public class AnalyzerTests(PostgresFixture fixture) : IntegrationTestBase(fixtur
         var fake = new FakeChatClient(json);
         var client = Fixture.App
             .WithWebHostBuilder(b => b.ConfigureServices(s => s.AddSingleton<IChatClient>(fake)))
-            .CreateClient();
+            .CreateClient().AsTestUser();
         return (client, fake);
     }
 

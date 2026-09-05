@@ -42,7 +42,7 @@ public class ResumeSkillTests(PostgresFixture fixture) : IntegrationTestBase(fix
     /// <summary>The app with the model swapped, for the match re-check at the end.</summary>
     private HttpClient AppWithModel(string json) => Fixture.App
         .WithWebHostBuilder(b => b.ConfigureServices(s => s.AddSingleton<IChatClient>(new FakeChatClient(json))))
-        .CreateClient();
+        .CreateClient().AsTestUser();
 
     /// <summary>
     /// Seeds a bare résumé with no skills. Unlike MatchCheckTests.SeedResumeAsync this does

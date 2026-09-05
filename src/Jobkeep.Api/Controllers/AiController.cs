@@ -1,5 +1,6 @@
 using Jobkeep.Modules.Ai;
 using Mediator;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Jobkeep.Api.Controllers;
@@ -18,6 +19,13 @@ namespace Jobkeep.Api.Controllers;
 // Applications itself). Attribute routing is fine with that as long as the
 // templates differ, and the controller NAME is what Swagger tags by — so the
 // grouping in the UI still follows the module, exactly as WithTags("Ai") did.
+// PHASE 11.2a - every action here requires an authenticated caller. The
+// attribute is on the class rather than a fallback policy in Program.cs,
+// because a fallback would also catch /identity/login and /identity/register
+// and those have to stay open. AuthorizationTests asserts that no action on
+// any controller is reachable without it, so a sixth controller that forgets
+// this line fails the build rather than shipping an open route.
+[Authorize]
 [ApiController]
 [Route("applications")]
 public class AiController : ControllerBase

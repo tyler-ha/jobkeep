@@ -12,6 +12,19 @@ namespace Jobkeep.Tests.Infrastructure;
 /// </summary>
 public static class ApiHelpers
 {
+    /// <summary>
+    /// Phase 11.2a — sign this client in as a test user, by adding the header
+    /// <see cref="TestAuthHandler"/> reads. Returns the client so it can be
+    /// chained onto a <c>CreateClient()</c> call.
+    /// </summary>
+    public static HttpClient AsTestUser(this HttpClient client, Guid? userId = null)
+    {
+        client.DefaultRequestHeaders.Remove(TestAuthHandler.UserHeader);
+        client.DefaultRequestHeaders.Add(
+            TestAuthHandler.UserHeader, (userId ?? TestAuthHandler.DefaultUserId).ToString());
+        return client;
+    }
+
     /// <summary>POST /applications and return the new application's id.</summary>
     public static async Task<Guid> CreateApplicationAsync(
         this HttpClient client,

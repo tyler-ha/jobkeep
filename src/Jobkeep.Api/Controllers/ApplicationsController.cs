@@ -1,11 +1,19 @@
 ﻿using Jobkeep.Modules.Applications;
 using Mediator;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Jobkeep.Api.Controllers;
 
 // The core module's routes. Phase 13.5 replaced ApplicationsEndpoints.cs with
 // this; the URLs, the responses and the slices behind them are unchanged.
+// PHASE 11.2a - every action here requires an authenticated caller. The
+// attribute is on the class rather than a fallback policy in Program.cs,
+// because a fallback would also catch /identity/login and /identity/register
+// and those have to stay open. AuthorizationTests asserts that no action on
+// any controller is reachable without it, so a sixth controller that forgets
+// this line fails the build rather than shipping an open route.
+[Authorize]
 [ApiController]
 [Route("applications")]
 public class ApplicationsController : ControllerBase

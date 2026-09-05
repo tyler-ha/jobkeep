@@ -1,6 +1,7 @@
 using Jobkeep.Modules.Ai;
 using Jobkeep.Modules.Match;
 using Mediator;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Jobkeep.Api.Controllers;
@@ -13,6 +14,13 @@ namespace Jobkeep.Api.Controllers;
 // while the code follows whichever module owns the table. Forcing an /ats/...
 // prefix would leak the module layout into the public API, which is the thing
 // module boundaries exist to be free to change.
+// PHASE 11.2a - every action here requires an authenticated caller. The
+// attribute is on the class rather than a fallback policy in Program.cs,
+// because a fallback would also catch /identity/login and /identity/register
+// and those have to stay open. AuthorizationTests asserts that no action on
+// any controller is reachable without it, so a sixth controller that forgets
+// this line fails the build rather than shipping an open route.
+[Authorize]
 [ApiController]
 [Route("applications")]
 public class MatchController : ControllerBase
