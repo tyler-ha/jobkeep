@@ -1,3 +1,5 @@
+using Jobkeep.SharedKernel;
+
 namespace Jobkeep.Modules.Match.Domain;
 
 // Phase 5 output — 1:1 with an application. The keyword lists map to Postgres
@@ -8,8 +10,14 @@ namespace Jobkeep.Modules.Match.Domain;
 // table, so it moved here, and both of its navigation properties went in the
 // move: `match_results` is now its own schema and neither `job_applications` nor
 // `resumes` is reachable from it.
-public class MatchResult
+public class MatchResult : IOwned
 {
+    // PHASE 11.2b — the owner. Stamped once, on insert, by
+    // AuditSaveChangesInterceptor; never assigned by a slice, and never sent by
+    // a client. Enforced on read by the `Owner` global query filter in
+    // MatchDbContext. See IOwned for why the children do not carry it.
+    public Guid OwnerUserId { get; set; }
+
     public Guid Id { get; set; } = Guid.NewGuid();
 
     // Which application this result judged. Still 1:1 — a unique index enforces

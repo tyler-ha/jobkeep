@@ -55,7 +55,7 @@ public class RestoreApplicationHandler : IRequestHandler<RestoreApplication, Sli
         var id = message.Id;
 
         var application = await _db.JobApplications
-            .IgnoreQueryFilters()
+            .IgnoreQueryFilters([QueryFilters.SoftDelete])
             .FirstOrDefaultAsync(a => a.Id == id && a.IsDeleted, ct);
 
         if (application is null)

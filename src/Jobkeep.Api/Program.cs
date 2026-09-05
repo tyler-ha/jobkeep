@@ -43,7 +43,17 @@ var connectionString = builder.Configuration.GetConnectionString("Postgres");
 // scope. AddDbContext is scoped, and a singleton dependency inside a scoped
 // service is the safe direction — the captive-dependency hazard runs the other
 // way.
-builder.Services.AddSingleton<AuditSaveChangesInterceptor>();
+// PHASE 11.2b — SCOPED, not singleton. It now stamps IOwned.OwnerUserId as
+// well as the two timestamps, so it depends on ICurrentUser, which is per
+// request. The AddDbContext factory below already resolves it from the scoped
+// provider, so the change is one word here and nothing at the call site.
+builder.Services.AddScoped<AuditSaveChangesInterceptor>();
+
+// PHASE 11.2b — who is asking, for the five module contexts and the interceptor.
+// Scoped, so one request is one answer; IHttpContextAccessor is how a plain
+// class library reaches the principal without referencing ASP.NET itself.
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 
 // ---------------------------------------------------------------------------
 // PHASE 13.3b — six contexts, six schemas, six migration histories

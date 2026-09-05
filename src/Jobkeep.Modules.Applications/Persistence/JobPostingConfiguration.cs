@@ -2,6 +2,7 @@ using Jobkeep.Modules.Applications.Domain;
 using Jobkeep.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Jobkeep.SharedKernel;
 
 namespace Jobkeep.Modules.Applications.Persistence;
 
@@ -20,7 +21,7 @@ public class JobPostingConfiguration : IEntityTypeConfiguration<JobPosting>
         // then silently drops rows. Both ends carry the filter, so an archived ad
         // and its live application cannot coexist — DeletePostingHandler still
         // refuses while any live application names it.
-        e.HasQueryFilter(p => !p.IsDeleted);
+        e.HasQueryFilter(QueryFilters.SoftDelete, p => !p.IsDeleted);
 
         e.Property(p => p.Title).HasMaxLength(300);
         e.Property(p => p.EmploymentType).HasConversion<string>().HasMaxLength(20);

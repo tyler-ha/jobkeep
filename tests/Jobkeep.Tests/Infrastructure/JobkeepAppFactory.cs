@@ -1,4 +1,7 @@
+using Jobkeep.Api;
 using Jobkeep.Persistence;
+using Jobkeep.SharedKernel;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
@@ -94,6 +97,36 @@ public sealed class JobkeepAppFactory(string connectionString) : WebApplicationF
             // Registered here rather than in Program.cs for the obvious reason: it
             // is a way in, and it must not exist in anything that ships.
             TestAuthHandler.Register(services);
+
+            // PHASE 11.2b — WithDbAsync has no HttpContext, and every row it
+            // arranges has to end up owned by the person the HTTP client is, or
+            // three hundred existing tests would arrange rows the request under
+            // test cannot see. Replacing ICurrentUser is how that is said once
+            // rather than in every arrange.
+            services.AddScoped<ICurrentUser, TestCurrentUser>();
         });
+    }
+}
+
+/// <summary>
+/// Phase 11.2b — the suite's current user.
+/// </summary>
+/// <remarks>
+/// Defers to the real <see cref="CurrentUser"/> first, so a request carrying an
+/// <c>X-Test-User</c> header is that user and the cross-user isolation tests
+/// mean something. Falls back to <see cref="TestAuthHandler.DefaultUserId"/>
+/// only when there is no principal at all — which is <c>WithDbAsync</c>, and
+/// which is the whole reason this exists. A test that needs to arrange somebody
+/// else's rows sets <c>OwnerUserId</c> on the entity; the interceptor only
+/// stamps a row that does not already name an owner.
+/// </remarks>
+internal sealed class TestCurrentUser(IHttpContextAccessor accessor) : ICurrentUser
+{
+    private readonly CurrentUser _inner = new(accessor);
+
+    public Guid? UserId
+    {
+        get => _inner.UserId ?? TestAuthHandler.DefaultUserId;
+        set => _inner.UserId = value;
     }
 }

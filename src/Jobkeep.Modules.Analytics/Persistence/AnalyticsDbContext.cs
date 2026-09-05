@@ -1,6 +1,7 @@
 using Jobkeep.Contracts.Applications;
 using Jobkeep.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Jobkeep.SharedKernel;
 
 namespace Jobkeep.Modules.Analytics;
 
@@ -25,9 +26,22 @@ namespace Jobkeep.Modules.Analytics;
 //     create. Program.cs migrates the five table-owning contexts and not this
 //     one, which is what makes "Analytics owns no tables" a fact about the
 //     deployment rather than a claim in a comment.
-public class AnalyticsDbContext(DbContextOptions<AnalyticsDbContext> options)
-    : DbContext(options)
+public class AnalyticsDbContext : DbContext
 {
+    // PHASE 11.2b — see ApplicationsDbContext for why this is captured in the
+    // constructor rather than read per query.
+    //
+    // This context owns no tables and never migrates, but it reads three VIEWS,
+    // and Phase 8 already learned what that means: raw SQL walks straight past a
+    // query filter. The views were re-cut to carry OwnerUserId, so the filter
+    // has a column to stand on and the three slices needed no edit — the same
+    // property the view abstraction bought in Phase 8, demonstrating itself a
+    // second time.
+    private readonly Guid? _ownerId;
+
+    public AnalyticsDbContext(DbContextOptions<AnalyticsDbContext> options, ICurrentUser currentUser)
+        : base(options) => _ownerId = currentUser.UserId;
+
     public DbSet<ApplicationStatusCount> ApplicationStatusCounts => Set<ApplicationStatusCount>();
     public DbSet<CompanyApplicationCount> CompanyApplicationCounts => Set<CompanyApplicationCount>();
     public DbSet<PostingSkillDemand> PostingSkillDemands => Set<PostingSkillDemand>();
@@ -39,5 +53,12 @@ public class AnalyticsDbContext(DbContextOptions<AnalyticsDbContext> options)
         // keyless view type has neither. Applying it here would be harmless and
         // meaningless, which is a worse combination than leaving it out.
         model.ApplyConfigurationsFromAssembly(typeof(AnalyticsDbContext).Assembly);
+
+        model.Entity<ApplicationStatusCount>().HasQueryFilter(
+            QueryFilters.Owner, x => x.OwnerUserId == _ownerId);
+        model.Entity<CompanyApplicationCount>().HasQueryFilter(
+            QueryFilters.Owner, x => x.OwnerUserId == _ownerId);
+        model.Entity<PostingSkillDemand>().HasQueryFilter(
+            QueryFilters.Owner, x => x.OwnerUserId == _ownerId);
     }
 }

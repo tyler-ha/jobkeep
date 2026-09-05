@@ -5,8 +5,14 @@ namespace Jobkeep.Modules.Applications.Domain;
 
 // The external job ad — the thing you found on Indeed/LinkedIn. This is the
 // unit the AI analyzer (Phase 4) reads, and AI-derived facts describe it.
-public class JobPosting : IAuditable, ISoftDeletable
+public class JobPosting : IAuditable, ISoftDeletable, IOwned
 {
+    // PHASE 11.2b — the owner. Stamped once, on insert, by
+    // AuditSaveChangesInterceptor; never assigned by a slice, and never sent by
+    // a client. Enforced on read by the `Owner` global query filter in
+    // ApplicationsDbContext. See IOwned for why the children do not carry it.
+    public Guid OwnerUserId { get; set; }
+
     public Guid Id { get; set; } = Guid.NewGuid();
 
     public Guid CompanyId { get; set; }

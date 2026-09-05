@@ -79,7 +79,7 @@ public class ListResumesHandler : IRequestHandler<ListResumes, SliceResult<List<
         // Nothing else on a résumé is filtered, so unlike the applications list
         // this drops exactly one predicate.
         if (message.IncludeArchived)
-            resumes = resumes.IgnoreQueryFilters();
+            resumes = resumes.IgnoreQueryFilters([QueryFilters.SoftDelete]);
 
         var items = await resumes
             // Most recently touched first. UpdatedAtUtc rather than CreatedAtUtc

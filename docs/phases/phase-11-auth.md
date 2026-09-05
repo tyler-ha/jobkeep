@@ -1,6 +1,6 @@
 # Phase 11 — authentication and owner scoping
 
-**Status: IN PROGRESS. 11.1a, 11.1b and 11.1c landed 2026-09-04; 11.2a on 2026-09-05.** It was to run immediately
+**Status: IN PROGRESS. 11.1a, 11.1b and 11.1c landed 2026-09-04; 11.2a and 11.2b on 2026-09-05.** It was to run immediately
 after [Phase 10](phase-10-aws-deploy.md) and be coupled to it; **Phase 10 was
 dropped on 2026-09-04** and this phase was pushed to the end of the roadmap in
 the same decision. See `architecture.md` decision 22.
@@ -24,7 +24,7 @@ here has been (13.1–13.6, 6.1–6.5). Each ends in something runnable.
 | **11.1b** | Register and sign in. `AddIdentity*` wiring in `Jobkeep.Api`, the endpoints, and the **named-origin CORS policy** — the trap below, which fires here and not later | **Done 2026-09-04** |
 | **11.1c** | The client half: a login route, a route guard in `App.tsx`, `credentials: 'include'` on the one `request()`, and a 401 branch on `ApiError` | **Done 2026-09-04** |
 | **11.2a** | Lock the doors. Every controller `[Authorize]`d, GraphQL behind `RequireAuthorization()`, and a suite that can satisfy both. **No schema change, no owner column yet.** | **Done 2026-09-05** |
-| **11.2b** | Owner scoping. `OwnerUserId`, the EF global query filter, the slices re-scoped, the three published views re-cut | |
+| **11.2b** | Owner scoping. `OwnerUserId`, the EF global query filter, the slices re-scoped, the three published views re-cut | **Done 2026-09-05** |
 | **11.3** | Postgres RLS — the second layer — plus the test that disables the EF filter and proves the database still refuses | |
 
 **The split is along "what can be verified", not "what is convenient".** 11.1a is
@@ -341,6 +341,126 @@ dependent: something earlier in the file leaves `App`'s account probe resolving 
 signed-out, and the add form renders the sign-in card instead. It is on `develop`
 at `a575630` with no `web/` file touched by this step, it is 11.1c's, and the web
 suite is not in CI. Recorded rather than folded into this step's diff.
+
+### 11.2b, as built
+
+**Twenty-eight files, four migrations, suite 341 -> 347, no `web/` change.** A
+second user cannot read, write or count the first's rows, through REST or
+GraphQL, and there are six tests over the wire that say so.
+
+**The plan's "~two dozen slices re-scoped" was wrong, and wrong the same way
+Phase 8's front-end estimate was: NO SLICE WAS RE-SCOPED.** Not one handler
+gained a `Where(x => x.OwnerUserId == ...)`. The read side is a global query
+filter on each module's context and the write side is one line in the audit
+interceptor, so every existing slice was already correct the moment those two
+existed. What actually cost the session was the five places the filter *cannot*
+reach - three views, two `ExecuteDelete`s - and the one place it has to be
+deliberately stood down, which is the background worker.
+
+**Ten things from it.**
+
+**1. `IOwned` is on the seven ROOTS and none of the five children.**
+`JobApplication`, `JobPosting`, `Company`, `Resume`, `DocumentImport`,
+`AiAnalysis` and `MatchResult` carry `OwnerUserId`. `PostingSkill`,
+`JobRequirement`, `ResumeSkill`, `ResumeExperience` and `ResumeEducation` do
+not, and it was checked rather than assumed: all six slices that touch a child
+table open with a lookup of the parent - four in `job_applications`, two with
+`Resumes.AnyAsync` - and that read carries the filter. It is the same argument
+Phase 8 made for leaving soft delete off those tables, and it inherits the same
+ceiling, now stated in `IOwned.cs`: a future route addressed by child id breaks
+it silently. `AChildRow_IsUnreachableThroughAnotherUsersParent` executes the
+claim rather than trusting it.
+
+**2. The owner filter lives in the CONTEXT, the soft-delete filter stays in the
+entity configuration, and BOTH ARE NAMED.** An `IEntityTypeConfiguration` cannot
+reach the context that will run the query, and the owner filter needs `_ownerId`
+from it. EF 10's named filters (`QueryFilters.Owner`, `QueryFilters.SoftDelete`)
+are what make the pair independent - **without them the five existing
+`IgnoreQueryFilters()` call sites would have turned "show me my archived rows"
+into "show me everyone's".** That is the defect this step was most likely to
+ship, and `IncludingArchivedRows_DoesNotAlsoIncludeAnotherUsers` is the test for
+it.
+
+**3. `_ownerId` is captured in the constructor, not read per query, and that is
+the documented EF shape rather than a shortcut.** The model is cached per
+context type, so a filter closing over anything but a field of the *executing*
+context instance would bake the first request's user into every later one's
+queries. EF re-roots the field onto whichever context runs the query.
+
+**4. The audit interceptor stamps the owner, and became SCOPED.** Its old
+comment argued singleton from "it holds a clock and nothing else"; that stopped
+being true. It stamps only when `OwnerUserId` is still `Guid.Empty`, which is
+what lets a test arrange a second user's rows. A null current user leaves
+`Guid.Empty` - written and immediately invisible, which is the honest failure and
+is unreachable anyway because 11.2a answers 401 first.
+
+**5. `HasQueryFilter` does not reach the three published views, and Phase 8's
+warning was the map.** Each view gained `OwnerUserId` in its `SELECT` and its
+`GROUP BY`; `AnalyticsDbContext` filters on it. `CREATE OR REPLACE` still works
+going up because Postgres lets a replace APPEND a column - and the `Down` has to
+`DROP` and recreate, because it may not remove one. **The three Analytics slices
+did not change**, which is the view abstraction paying for itself a second time:
+Phase 8 changed which rows are applications, this changes whose they are, and
+neither needed a consumer edit. `Insights_AreCountedPerUser` is the test.
+
+**6. `ImportParseWorker` runs outside any request, so the queue now carries the
+OWNER as well as the id.** Its startup sweep is the one read in the app that
+legitimately has no owner - it is recovering work for whoever left it - so it
+calls `IgnoreQueryFilters([QueryFilters.Owner])`, reads the owner off each row,
+and the parse itself runs scoped. **The exemption stops at the one query that
+needs it.** Setting `ICurrentUser.UserId` before anything else resolves in that
+scope is load-bearing: contexts capture the value in their constructors.
+Exempting `RestructureImport` instead was rejected - the slice is shared with the
+"Read it again" button, and an `IgnoreQueryFilters` inside it would unscope the
+HTTP path too.
+
+**7. Both unique indexes gained the owner.** `companies.NameNormalized` was
+globally unique, so the second person to apply at Canva would have been refused
+by an index over a row they cannot see - a 500 with no explanation available to
+them. `resumes.LabelNormalized` keeps its Phase 8 `NOT "IsDeleted"` filter and
+now frees the label for its owner only.
+
+**8. `OwnerUserId` IS NOT A FOREIGN KEY**, and could not be: every value points
+at `identity."AspNetUsers"` across a schema boundary, which 13.3b/13.3c made a
+contract check rather than a constraint. There is no contract check either, and
+none is needed - the only writer is the interceptor and the only value it can
+write is the id of a principal authorization already accepted.
+
+**9. Existing rows are ORPHANED, deliberately.** The column lands `NOT NULL`
+defaulting to the empty Guid, which no user id can be, so everything written
+before this migration belongs to nobody. There is no honest backfill: rows
+created before authentication existed have no owner to recover, and "the only
+account in the table" is a rule that silently hands one user's data to whoever
+registered first. The dev database is disposable and there is no deployment, so
+orphaning costs nothing and guessing would have been a bad habit.
+
+**10. `CreatedBy`/`UpdatedBy` (F9) WERE NOT BUILT, and the plan's line about
+them is withdrawn.** It calls for them as "real FKs to users", which point 8
+rules out anyway; more to the point the columns do not exist, nothing is shared,
+and with one owner per row `CreatedBy` would always equal `OwnerUserId`. **So
+this step closes F1's second half and does NOT close F9** - F9 becomes real the
+day two people can touch one row, and there is no plan for that.
+
+**Also written down rather than fixed: the two `ExecuteDelete` handlers walk
+past the owner filter.** `OnApplicationDeleted` and `OnPostingDeleted` are
+unpublished since Phase 8, and their real caller is the F18 purge, which runs as
+the system with no principal - an owner predicate would make it delete nothing.
+Both now carry a `ponytail:` comment naming the condition that would change it.
+
+**Verified against the running stack as well as the suite**, because a migration
+over non-empty tables and a `CREATE OR REPLACE` on views with live dependents
+are cases a fresh Testcontainers database never exercises: the API container
+rebuilt and migrated the dev database, the startup sweep ran its unfiltered
+query, then login 200, `GET /applications` empty (the orphan), `POST
+/applications` 201, and the same row back out of both `/applications` and
+`/stats/companies`.
+
+**Not verified in a browser**, and the front end needed no change - no shape
+moved, no new screen, no route.
+
+**Schema moved; the diagrams were deliberately not redrawn - frozen until 1.0.**
+The debt: seven tables gained `OwnerUserId`, two unique indexes gained a column,
+and all three published views gained one.
 
 ## Decided 2026-09-04, before any code — do not re-litigate
 

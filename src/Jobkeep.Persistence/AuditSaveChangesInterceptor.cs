@@ -42,14 +42,29 @@ namespace Jobkeep.Persistence;
 // two have a required ORDER — an archive must be converted to a modification
 // before the audit loop sees it — and expressing that as registration order in
 // Program.cs would be a rule enforced by a line nobody would think to protect.
+// PHASE 11.2b ADDED A THIRD JOB — stamping IOwned.OwnerUserId — and with it a
+// dependency on who is asking, so this is SCOPED now rather than singleton. The
+// old comment argued singleton from "it holds a clock and nothing else"; that
+// stopped being true, and a captive scoped dependency inside a singleton is the
+// unsafe direction. AddDbContext resolves it from the scoped provider either
+// way, so nothing at the call site changed.
+//
+// Owner belongs here for the same reason CreatedAtUtc does: it is one write
+// path that no slice can forget, and it is the only writer of the column. A
+// client cannot set it — nothing binds it from a request — and a slice that
+// assigned it by hand would be overwritten on the way out.
 public sealed class AuditSaveChangesInterceptor : SaveChangesInterceptor
 {
     // Injectable so a test can control "now" rather than sleeping to make two
     // timestamps differ. Defaults to the real clock in production.
     private readonly Func<DateTime> _now;
+    private readonly ICurrentUser _currentUser;
 
-    public AuditSaveChangesInterceptor(Func<DateTime>? now = null)
-        => _now = now ?? (() => DateTime.UtcNow);
+    public AuditSaveChangesInterceptor(ICurrentUser currentUser, Func<DateTime>? now = null)
+    {
+        _currentUser = currentUser;
+        _now = now ?? (() => DateTime.UtcNow);
+    }
 
     public override InterceptionResult<int> SavingChanges(
         DbContextEventData eventData, InterceptionResult<int> result)
@@ -109,6 +124,24 @@ public sealed class AuditSaveChangesInterceptor : SaveChangesInterceptor
             entry.State = EntityState.Modified;
             entry.Entity.IsDeleted = true;
             entry.Entity.DeletedAtUtc = now;
+        }
+
+        // PHASE 11.2b — the owner, on insert only.
+        //
+        // ONLY WHEN THE ROW DOES NOT ALREADY NAME ONE. Two callers rely on that:
+        // a test arranging a second user's rows, and any future importer acting
+        // on someone's behalf. Neither can be served by "always overwrite", and
+        // a row that already names an owner is never a row this scope invented.
+        //
+        // A null current user leaves Guid.Empty, which the owner query filter
+        // then matches for nobody — the row is written and immediately invisible.
+        // That is the honest failure: an unauthenticated writer should not be
+        // able to create readable rows, and 11.2a already makes such a request
+        // a 401 before it reaches here.
+        foreach (var entry in context.ChangeTracker.Entries<IOwned>())
+        {
+            if (entry.State is EntityState.Added && entry.Entity.OwnerUserId == Guid.Empty)
+                entry.Entity.OwnerUserId = _currentUser.UserId ?? Guid.Empty;
         }
 
         foreach (var entry in context.ChangeTracker.Entries<IAuditable>())

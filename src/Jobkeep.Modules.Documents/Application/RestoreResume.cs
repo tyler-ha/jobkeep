@@ -48,7 +48,7 @@ public class RestoreResumeHandler : IRequestHandler<RestoreResume, SliceResult<b
         var id = message.Id;
 
         var resume = await _db.Resumes
-            .IgnoreQueryFilters()
+            .IgnoreQueryFilters([QueryFilters.SoftDelete])
             .FirstOrDefaultAsync(r => r.Id == id && r.IsDeleted, ct);
 
         if (resume is null)

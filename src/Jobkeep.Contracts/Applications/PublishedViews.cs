@@ -62,6 +62,17 @@ namespace Jobkeep.Contracts.Applications;
 // enum, which is O(stages) rather than O(rows).
 public class ApplicationStatusCount
 {
+    // PHASE 11.2b — the grouping key that makes this view one user's answer.
+    //
+    // A view is raw SQL and the EF owner filter cannot reach it, so the column
+    // is in the SELECT and the GROUP BY and Analytics filters on it. It is part
+    // of the PUBLISHED shape rather than hidden behind a parameter because the
+    // view is a table to its consumer: giving it a column is how a table says
+    // "these rows are not all yours". The three Analytics slices did not change
+    // — AnalyticsDbContext applies the filter globally, exactly as the five
+    // module contexts do for their tables.
+    public Guid OwnerUserId { get; set; }
+
     public ApplicationStatus Status { get; set; }
     public int Count { get; set; }
 }
@@ -72,6 +83,17 @@ public class ApplicationStatusCount
 // useful.
 public class CompanyApplicationCount
 {
+    // PHASE 11.2b — the grouping key that makes this view one user's answer.
+    //
+    // A view is raw SQL and the EF owner filter cannot reach it, so the column
+    // is in the SELECT and the GROUP BY and Analytics filters on it. It is part
+    // of the PUBLISHED shape rather than hidden behind a parameter because the
+    // view is a table to its consumer: giving it a column is how a table says
+    // "these rows are not all yours". The three Analytics slices did not change
+    // — AnalyticsDbContext applies the filter globally, exactly as the five
+    // module contexts do for their tables.
+    public Guid OwnerUserId { get; set; }
+
     public string CompanyName { get; set; } = "";
     public int ApplicationCount { get; set; }
 }
@@ -89,6 +111,17 @@ public class CompanyApplicationCount
 // of postings: one posting contributes one row even if you applied to it twice.
 public class PostingSkillDemand
 {
+    // PHASE 11.2b — the grouping key that makes this view one user's answer.
+    //
+    // A view is raw SQL and the EF owner filter cannot reach it, so the column
+    // is in the SELECT and the GROUP BY and Analytics filters on it. It is part
+    // of the PUBLISHED shape rather than hidden behind a parameter because the
+    // view is a table to its consumer: giving it a column is how a table says
+    // "these rows are not all yours". The three Analytics slices did not change
+    // — AnalyticsDbContext applies the filter globally, exactly as the five
+    // module contexts do for their tables.
+    public Guid OwnerUserId { get; set; }
+
     public Guid SkillId { get; set; }
     public int PostingCount { get; set; }
 }

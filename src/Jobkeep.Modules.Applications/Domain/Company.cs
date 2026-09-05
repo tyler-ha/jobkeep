@@ -7,8 +7,14 @@ namespace Jobkeep.Modules.Applications.Domain;
 // An employer. Kept as its own row (unique Name) so multiple postings and
 // applications can share one company instead of duplicating it — that's what
 // enables company-level rollups like "3 roles at Canva".
-public class Company : IAuditable
+public class Company : IAuditable, IOwned
 {
+    // PHASE 11.2b — the owner. Stamped once, on insert, by
+    // AuditSaveChangesInterceptor; never assigned by a slice, and never sent by
+    // a client. Enforced on read by the `Owner` global query filter in
+    // ApplicationsDbContext. See IOwned for why the children do not carry it.
+    public Guid OwnerUserId { get; set; }
+
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Name { get; set; } = string.Empty;   // unique
     public string? Website { get; set; }

@@ -21,9 +21,19 @@ namespace Jobkeep.Modules.Documents;
 // language model can read them, by hand, which is not a load profile. A bounded
 // channel would buy backpressure nobody can generate at the cost of deciding
 // what to do when it is full.
+// PHASE 11.2b — the message carries the OWNER as well as the id.
+//
+// The worker runs outside any request, so its scope has no principal and the
+// owner query filter would hide every row it was sent to work on. It has to
+// state whose work it is doing, and the cheapest place to learn that is from
+// whoever queued it: the upload knows (it just saved the row) and the sweep
+// reads the column. The alternative — an extra scope and an extra query to look
+// the owner up — buys nothing, since the enqueuer had the value in hand.
 public class ImportParseQueue
 {
-    private readonly Channel<Guid> _channel = Channel.CreateUnbounded<Guid>(
+    public readonly record struct Work(Guid ImportId, Guid OwnerUserId);
+
+    private readonly Channel<Work> _channel = Channel.CreateUnbounded<Work>(
         // One reader (the worker) and, in principle, many writers (concurrent
         // uploads). Telling the channel so lets it use the cheaper single-reader
         // implementation.
@@ -33,8 +43,9 @@ public class ImportParseQueue
     // if the channel has been completed, which happens on shutdown — and a
     // dropped id at shutdown is exactly the case the startup sweep exists for,
     // so there is nothing useful to do with the false.
-    public void Enqueue(Guid importId) => _channel.Writer.TryWrite(importId);
+    public void Enqueue(Guid importId, Guid ownerUserId) =>
+        _channel.Writer.TryWrite(new Work(importId, ownerUserId));
 
-    public IAsyncEnumerable<Guid> ReadAllAsync(CancellationToken ct) =>
+    public IAsyncEnumerable<Work> ReadAllAsync(CancellationToken ct) =>
         _channel.Reader.ReadAllAsync(ct);
 }
