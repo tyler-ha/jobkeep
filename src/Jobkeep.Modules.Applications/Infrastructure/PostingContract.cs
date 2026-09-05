@@ -31,6 +31,14 @@ public class PostingContract : IPostingContract
             .Select(a => new PostingContent(a.PostingId, a.Posting.Description))
             .FirstOrDefaultAsync(ct);
 
+    // ponytail: reads a child table by a caller-supplied parent id, and
+    // `posting_skills` has no owner column — so this is scoped only because every
+    // caller resolves the posting through GetContentAsync (filtered) first. Same
+    // for GetRequirementsAsync below and IResumeContract.GetSkillIdsAsync. A
+    // caller that obtains a parent id any other way reads a stranger's rows. The
+    // write above checks; these do not, because a check on every read of a
+    // child list is a join on the hot path. Add one here the day a caller stops
+    // starting from an owner-checked parent.
     public async Task<IReadOnlyList<PostingSkillRef>> GetSkillsAsync(
         Guid postingId, CancellationToken ct = default)
         // No OrderBy. The caller needs these sorted by NAME, and the name is not
@@ -63,6 +71,21 @@ public class PostingContract : IPostingContract
         Guid postingId, IReadOnlyList<ExtractedSkill> skills, CancellationToken ct = default)
     {
         if (skills.Count == 0) return 0;
+
+        // PHASE 11.2b — the one WRITE on this contract, so the one that checks.
+        //
+        // `posting_skills` carries no owner column, by the argument in IOwned:
+        // every slice reaches it through an owner-checked parent. That argument
+        // holds for slices and does NOT hold for a contract method, which takes
+        // a posting id from another module and cannot see how it was obtained.
+        // Today's only caller derives it from GetContentAsync, which is filtered
+        // — but "safe because of what the caller happens to do first" is exactly
+        // the guarantee a cross-module boundary is supposed to stop relying on.
+        //
+        // `JobPostings` carries the owner filter, so this EXISTS is the whole
+        // check. One extra round trip on a path that has just finished waiting
+        // for a language model.
+        if (!await _db.JobPostings.AnyAsync(p => p.Id == postingId, ct)) return 0;
 
         // Distinct by name first: an LLM asked for a skill list will sometimes
         // return "C#" twice, and the composite PK on posting_skills would turn

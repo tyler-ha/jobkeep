@@ -19,6 +19,13 @@ namespace Jobkeep.SharedKernel;
 // owner-checked parent in the SAME schema, where the foreign key still exists
 // and still cascades.
 //
+// The CONTRACT methods are the exception to that enumeration, because they take
+// a parent id from another module and cannot see how it was obtained.
+// `IPostingContract.AddExtractedSkillsAsync` is the only one that WRITES, and it
+// checks the posting through the filtered set before it does. The three that read
+// (`GetSkillsAsync`, `GetRequirementsAsync`, `IResumeContract.GetSkillIdsAsync`)
+// do not, and each carries a `ponytail:` note saying what that rests on.
+//
 // This is the same argument Phase 8 made for leaving the soft-delete filter off
 // those five tables, and it inherits the same ponytail ceiling from Program.cs:
 // the safety rests on "every child slice routes through its parent". A future

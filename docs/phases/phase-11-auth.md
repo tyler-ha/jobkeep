@@ -441,6 +441,19 @@ and with one owner per row `CreatedBy` would always equal `OwnerUserId`. **So
 this step closes F1's second half and does NOT close F9** - F9 becomes real the
 day two people can touch one row, and there is no plan for that.
 
+**A `/code-review` pass before merge found five things and four were fixed in
+the same change.** The two worth carrying: **the interceptor now THROWS when an
+inserted `IOwned` has no current user**, where it used to write `Guid.Empty` —
+that version committed the row, hid it from its own creator, and logged nothing,
+and the realistic trigger is not an anonymous request but the id claim moving
+(a bearer setup where `sub` is not inbound-mapped). And
+**`IPostingContract.AddExtractedSkillsAsync` now checks the posting through the
+filtered set before writing**: it is the only contract method that WRITES a child
+table by a caller-supplied parent id, and "safe because of what today's caller
+does first" is the guarantee a cross-module boundary exists to stop relying on.
+The three read-side contract methods were left unchecked, with `ponytail:` notes
+saying what they rest on — a join on every read of a child list is the hot path.
+
 **Also written down rather than fixed: the two `ExecuteDelete` handlers walk
 past the owner filter.** `OnApplicationDeleted` and `OnPostingDeleted` are
 unpublished since Phase 8, and their real caller is the F18 purge, which runs as

@@ -83,8 +83,13 @@ public class ImportParseWorker : BackgroundService
             using var scope = _scopes.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<DocumentsDbContext>();
 
-            // PHASE 11.2b — ACROSS EVERY USER, and by name so archived rows stay
-            // hidden. The sweep is the one read in the app that legitimately has
+            // PHASE 11.2b — ACROSS EVERY USER. Named rather than bare because
+            // naming the filter is the house rule, not because there is a second
+            // one to keep: `document_imports` is not ISoftDeletable, and Owner is
+            // the only filter on it. Written by name anyway so that adding one
+            // later does not silently widen this query.
+            //
+            // The sweep is the one read in the app that legitimately has
             // no owner: it is recovering work for whoever left it, and this
             // scope has no principal to be. It reads the owner off each row and
             // hands it to the worker, so the parse itself runs scoped again —

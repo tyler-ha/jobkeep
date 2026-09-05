@@ -133,15 +133,30 @@ public sealed class AuditSaveChangesInterceptor : SaveChangesInterceptor
         // on someone's behalf. Neither can be served by "always overwrite", and
         // a row that already names an owner is never a row this scope invented.
         //
-        // A null current user leaves Guid.Empty, which the owner query filter
-        // then matches for nobody — the row is written and immediately invisible.
-        // That is the honest failure: an unauthenticated writer should not be
-        // able to create readable rows, and 11.2a already makes such a request
-        // a 401 before it reaches here.
+        // A NULL CURRENT USER THROWS RATHER THAN WRITING Guid.Empty, and the
+        // difference matters more than it looks. Writing the empty Guid succeeds:
+        // the row is committed, the owner filter then matches it for nobody, and
+        // the user gets a 201 followed by an empty list with nothing in the logs.
+        // A save that quietly produces unreachable data is worse than a 500.
+        //
+        // The realistic trigger is not an anonymous request — 11.2a answers those
+        // with a 401 long before here — it is the id claim moving: a bearer/JWT
+        // setup where `sub` is not inbound-mapped, or IdentityOptions'
+        // UserIdClaimType changed. Both would make CurrentUser return null for a
+        // perfectly authenticated caller, and this is the line that says so.
+        //
+        // ImportParseWorker is the one legitimate principal-less writer and it
+        // assigns the owner before resolving a context, so it never reaches this.
         foreach (var entry in context.ChangeTracker.Entries<IOwned>())
         {
-            if (entry.State is EntityState.Added && entry.Entity.OwnerUserId == Guid.Empty)
-                entry.Entity.OwnerUserId = _currentUser.UserId ?? Guid.Empty;
+            if (entry.State is not EntityState.Added) continue;
+            if (entry.Entity.OwnerUserId != Guid.Empty) continue;
+
+            entry.Entity.OwnerUserId = _currentUser.UserId
+                ?? throw new InvalidOperationException(
+                    $"Cannot insert {entry.Entity.GetType().Name}: there is no current user to own "
+                    + "it. Either the request is unauthenticated (which authorization should have "
+                    + "refused) or the user-id claim is not where CurrentUser looks for it.");
         }
 
         foreach (var entry in context.ChangeTracker.Entries<IAuditable>())
